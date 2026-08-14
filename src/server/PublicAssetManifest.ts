@@ -25,6 +25,9 @@ const HASHED_PUBLIC_ASSET_GLOBS = [
 const ROOT_PUBLIC_FILES = new Set([
   "LICENSE",
   "ads.txt",
+  "idle/app.js",
+  "idle/index.html",
+  "idle/style.css",
   "privacy-policy.html",
   "robots.txt",
   "terms-of-service.html",

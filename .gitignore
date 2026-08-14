@@ -4,6 +4,7 @@ node_modules/
 out/
 static/
 coverage/
+.data/
 TODO.txt
 resources/images/.DS_Store
 resources/.DS_Store

@@ -1,0 +1,14 @@
+**
+!.swcrc
+!index.html
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!LICENSE
+!LICENSE-ASSETS
+!LICENSING.md
+!resources/
+!resources/**
+!src/
+!src/**

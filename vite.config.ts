@@ -112,6 +112,24 @@ function steamLinkAliasRedirect(): Plugin {
   };
 }
 
+// Keep the standalone idle client on an explicit static document. Vite's SPA
+// fallback otherwise serves the OpenFront app shell for `/idle/`, which is
+// exactly the module-heavy path this iOS-safe preview is meant to bypass.
+function idleStandaloneRedirect(): Plugin {
+  return {
+    name: "idle-standalone-redirect",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || req.method !== "GET") return next();
+        const pathname = new URL(req.url, "http://x").pathname;
+        if (pathname !== "/idle" && pathname !== "/idle/") return next();
+        res.writeHead(302, { Location: "/idle/index.html" });
+        res.end();
+      });
+    },
+  };
+}
+
 // Dev-only stand-in for the nginx random-worker routing (the openfront_workers
 // upstream). Forwards these prefix-less POSTs to a randomly chosen worker port
 // so the worker can mint a self-owned id. Runs as direct middleware (before
@@ -270,6 +288,7 @@ export default defineConfig(({ mode }) => {
         ? [
             serveProprietaryDir(proprietaryDir, resourcesDir),
             randomWorkerCreateProxy(devNumWorkers),
+            idleStandaloneRedirect(),
             steamLinkAliasRedirect(),
           ]
         : []),

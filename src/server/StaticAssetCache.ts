@@ -1,4 +1,5 @@
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const REVALIDATE_CACHE_CONTROL = "no-cache";
 
 function stripQueryString(urlPath: string): string {
   return urlPath.split("?", 1)[0];
@@ -12,6 +13,9 @@ export function getStaticAssetCacheControl(
   }
 
   const normalizedPath = stripQueryString(urlPath);
+  if (normalizedPath === "/idle" || normalizedPath.startsWith("/idle/")) {
+    return REVALIDATE_CACHE_CONTROL;
+  }
   if (
     normalizedPath.startsWith("/assets/") ||
     normalizedPath.startsWith("/_assets/")

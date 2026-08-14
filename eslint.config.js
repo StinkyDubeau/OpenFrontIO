@@ -62,4 +62,13 @@ export default [
       ],
     },
   },
+  {
+    // These are deliberately standalone compatibility/runtime scripts rather
+    // than members of the TypeScript application project. Keeping them on the
+    // untyped parser also avoids exhausting projectService's intentionally
+    // small allowDefaultProject budget.
+    files: ["resources/idle/app.js", "scripts/idle-smoke.mjs"],
+    languageOptions: { parserOptions: { projectService: false } },
+    rules: { "@typescript-eslint/prefer-nullish-coalescing": "off" },
+  },
 ];

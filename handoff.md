@@ -65,3 +65,63 @@ Relevant entry points:
 3. Verify the page from the host and provide the LAN URL for phone preview.
 4. Inspect `sightings.today` before proposing the pacing/hosting plan.
 5. Produce a focused architecture decision record before implementing persistence or game-loop changes.
+
+## Defaults accepted for the first playable milestone
+
+The user accepted the recommended defaults on August 14, 2026:
+
+- Original working title and presentation rather than OpenFront branding or proprietary assets.
+- Eight to sixteen players on a seven-day seasonal map.
+- Passive `Supply` and active `Influence` as the initial economy.
+- Two to four short visits per day, meaningful progress after four to eight hours, and a 24-hour offline-production cap.
+- A distinct `pressure_tap` action. Tapping another territory creates visible, capped, decaying pressure and earns capped Influence; it never changes ownership, removes resources, or eliminates an AFK player.
+- Live pressure heat/ripples plus aggregated return summaries naming the attacker.
+- Durable server-side observation of accepted and rejected taps, with 30-day raw-event and 90-day derived-risk targets.
+- Silent risk scoring, reward suppression, shadow cooldowns, quarantine, and admin notification. Permanent bans require review.
+- Guest-first play with a future Discord identity upgrade. One device holds the active command lease; other signed-in devices are read-only.
+- First hosting target follows `sightings.today`: a single Debian/Proxmox VM, Node bound to loopback, Cloudflare Tunnel ingress, systemd supervision, SQLite WAL as the system of record, and encrypted verified off-host backups. PostgreSQL is the migration target before multi-node operation.
+
+## First phone-preview finding
+
+The original OpenFront development shell rendered on desktop Chromium but appeared as a blank white page with horizontal and vertical scrollbars in Firefox on iOS. The LAN server, static assets, and lobby WebSocket were independently healthy. Because all iOS browsers use WebKit and the original shell depends on a large Vite ES-module/Lit bootstrap, the first idle demo uses a standalone classic-script mobile entry point with an in-page diagnostic state. LAN auth also must not resolve `localhost` from the phone, because that refers to the phone rather than the development host.
+
+## Verified first vertical slice
+
+The live phone preview is `http://192.168.2.118:3000/idle/`. Use port 3000,
+not the original Vite port 9000: an OpenFront service worker previously
+installed on the Vite origin can intercept new paths and replay its cached app
+shell. The authority origin serves the standalone document and same-origin API
+without that worker.
+
+The slice now includes:
+
+- an original, dependency-free Pressure Atlas client with critical fallback
+  CSS, classic JavaScript, twelve dynamic SVG regions, diagnostics, tap
+  ripples, AFK copy, and no horizontal overflow in the live browser check;
+- SQLite WAL authority with schema version/world revision, 24-hour Supply
+  accrual, guest recovery, one active command lease, bot replacement up to
+  twelve humans, and rolling seven-day windows;
+- nonlethal, capped, six-hour-decaying pressure and capped Influence;
+- protocol-versioned/idempotent taps, receipt metadata, coarse user-agent
+  families, externally keyed network HMACs, 14-day live raw expiry plus a
+  14-day encrypted recovery window, constant-size per-session replay
+  watermarks, reversible risk decay, reward suppression, quarantine/admin
+  aggregates, and transport hard ceilings;
+- session credentials in headers rather than URLs, JSON-only command creation,
+  a separate admin bearer credential, and public-origin admin disablement;
+- Node 24 CI, build/test/lint/format/restart smoke, container contract build,
+  environment-approved immutable GHCR publish, a locked host deploy/rollback
+  wrapper with a schema-matched pre-deploy database snapshot, loopback systemd
+  service, Cloudflare Tunnel config, and bounded encrypted restic backup/restore
+  instructions. Host automation is deliberately deferred because this public
+  fork must not expose a persistent management-network runner.
+
+End-to-end verification created a guest, fetched state, applied and replayed a
+tap, checked admin observation, restarted the authority against the same
+database, recovered the same player, and confirmed Influence/revision did not
+move backward. Live interaction remained reconciled after the five-second
+poll, with exactly one `YOU` label on the actual owned territory.
+
+The next planning phase still owns upgrades/spending, production automation,
+season scoring/archive rewards, multi-world matchmaking, Discord linking, the
+admin case UI, and calibrated anti-cheat rules.

@@ -6,6 +6,7 @@ import { normalizeAssetPath } from "../../src/core/AssetUrls";
 import {
   buildPublicAssetManifest,
   clearPublicAssetManifestCache,
+  copyRootPublicFiles,
   createHashedPublicAssetFiles,
 } from "../../src/server/PublicAssetManifest";
 
@@ -92,6 +93,29 @@ describe("PublicAssetManifest", () => {
       await fs.rm(tempDir, { recursive: true, force: true });
       tempDir = null;
     }
+  });
+
+  test("copies the standalone idle client into production output", async () => {
+    const { resourcesDir, outDir } = await createTempResources();
+    const idleDir = path.join(resourcesDir, "idle");
+    await fs.mkdir(idleDir, { recursive: true });
+    await Promise.all([
+      fs.writeFile(path.join(idleDir, "index.html"), "idle-html"),
+      fs.writeFile(path.join(idleDir, "style.css"), "idle-css"),
+      fs.writeFile(path.join(idleDir, "app.js"), "idle-js"),
+    ]);
+
+    copyRootPublicFiles(resourcesDir, outDir);
+
+    await expect(
+      fs.readFile(path.join(outDir, "idle", "index.html"), "utf8"),
+    ).resolves.toBe("idle-html");
+    await expect(
+      fs.readFile(path.join(outDir, "idle", "style.css"), "utf8"),
+    ).resolves.toBe("idle-css");
+    await expect(
+      fs.readFile(path.join(outDir, "idle", "app.js"), "utf8"),
+    ).resolves.toBe("idle-js");
   });
 
   test("hashes manifest.json from its rewritten content", async () => {
