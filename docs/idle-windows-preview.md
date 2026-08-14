@@ -75,22 +75,35 @@ Invoke-WebRequest http://127.0.0.1:3100/__preview/login -UseBasicParsing
 The `Tunnel` task initially uses a Cloudflare Quick Tunnel. Its HTTPS URL is
 written to `run\public-url.txt`. It reconnects automatically, but the random
 hostname can change after a connector restart and Cloudflare gives Quick
-Tunnels no uptime guarantee.
+Tunnels no uptime guarantee. After named-tunnel cutover, a uniquely named
+delayed-auto Windows service runs the stable connector; Service Control Manager
+recovery and the watchdog supervise it independently from the application.
 
 ## Stable hostname cutover
 
-Create a separate remotely managed tunnel for this preview; do not edit the
-Sightings production tunnel. The intended public hostname is
+Create a separate locally managed tunnel for this preview; do not edit the
+Sightings production tunnel. The current public hostname is
 `atlas-dev.sightings.today`, pointing to `http://127.0.0.1:3100`.
 
-Before cutover:
+The high-entropy gateway password is the authentication boundary for the
+owner-only preview. Before sharing the hostname with anyone else, add a
+Cloudflare Access application restricted to the owner's exact identity and
+enable Access JWT validation in the ingress configuration.
 
-1. Protect the entire hostname with Cloudflare Access restricted to the
-   owner's exact identity.
-2. Install the tunnel-scoped token as a native Windows `cloudflared` service.
-3. Set `QuickTunnelEnabled` to `false` in the protected runtime JSON, then stop
-   and disable only `\OpenFrontIdle\Tunnel`; keep the authority, gateway, and
-   watchdog tasks. Write the stable HTTPS URL to `run\public-url.txt`.
+Cutover checklist:
+
+1. Put a dedicated signed executable, tunnel-scoped credential, exact-host
+   ingress configuration, and logs under a protected
+   `C:\ProgramData\OpenFrontIdle\named-tunnel` subtree. The final ingress rule
+   must be `http_status:404`.
+2. Run it as the unique delayed-auto service
+   `CloudflaredPressureAtlasDev`, with a service SID, Local Service identity,
+   and restart-on-failure rules. Do not reuse the default `cloudflared` service
+   or the Sightings connector.
+3. Set `TunnelMode` to `service`, `NamedTunnelServiceName` to that service,
+   `CloudflaredConfigPath` to its configuration, and `PublicUrl` to the stable
+   HTTPS URL in the protected runtime JSON. Keep the quick scheduled task
+   disabled as a rollback path.
 4. Verify that admin, health, OpenFront assets, Vite, workers, missing files,
    wrong methods, and WebSocket upgrades all remain inaccessible publicly.
 5. Stop/restart the authority and connector independently, then perform one
@@ -99,7 +112,8 @@ Before cutover:
 Cloudflare references:
 
 - [Run cloudflared as a Windows service](https://developers.cloudflare.com/tunnel/advanced/local-management/as-a-service/windows/)
-- [Remotely managed tunnel tokens](https://developers.cloudflare.com/tunnel/advanced/tunnel-tokens/)
+- [Tunnel credential permissions](https://developers.cloudflare.com/tunnel/advanced/local-management/tunnel-permissions/)
+- [Ingress configuration](https://developers.cloudflare.com/tunnel/advanced/local-management/configuration-file/)
 - [Validate Access JWTs at the origin](https://developers.cloudflare.com/tunnel/advanced/origin-parameters/)
 - [Access policy behavior](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/)
 

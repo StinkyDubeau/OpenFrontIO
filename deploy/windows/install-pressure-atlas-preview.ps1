@@ -96,7 +96,11 @@ $existingConfig = if (Test-Path -LiteralPath $configPath) {
     Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 }
 else { $null }
-$previewToken = if ($null -ne $existingConfig -and $existingConfig.PreviewAccessToken) {
+$previewTokenCreated = -not (
+    $null -ne $existingConfig -and
+    $existingConfig.PreviewAccessToken
+)
+$previewToken = if (-not $previewTokenCreated) {
     [string]$existingConfig.PreviewAccessToken
 }
 else { New-RandomSecret 24 }
@@ -111,6 +115,61 @@ $quickTunnelEnabled = if (
     [bool]$existingConfig.QuickTunnelEnabled
 }
 else { $true }
+$tunnelMode = if ($null -ne $existingConfig -and $existingConfig.TunnelMode) {
+    ([string]$existingConfig.TunnelMode).ToLowerInvariant()
+}
+elseif ($quickTunnelEnabled) { "quick" }
+else { "disabled" }
+if ($tunnelMode -notin @("quick", "service", "disabled")) {
+    throw "Existing runtime configuration has an invalid TunnelMode"
+}
+$namedTunnelConfigPath = if (
+    $null -ne $existingConfig -and
+    $existingConfig.CloudflaredConfigPath
+) {
+    [IO.Path]::GetFullPath([string]$existingConfig.CloudflaredConfigPath)
+}
+else { "" }
+$publicUrl = if ($null -ne $existingConfig -and $existingConfig.PublicUrl) {
+    [string]$existingConfig.PublicUrl
+}
+else { "" }
+$tunnelLogPath = if ($null -ne $existingConfig -and $existingConfig.TunnelLogPath) {
+    [IO.Path]::GetFullPath([string]$existingConfig.TunnelLogPath)
+}
+else { Join-Path $paths.Logs "tunnel.log" }
+$quickTunnelLogPath = Join-Path $paths.Logs "tunnel.log"
+if ($tunnelMode -eq "service") {
+    $configRoot = [IO.Path]::GetFullPath(
+        (Join-Path $InstallRoot "named-tunnel")
+    ).TrimEnd("\") + "\"
+    if (
+        -not $namedTunnelConfigPath.StartsWith(
+            $configRoot,
+            [StringComparison]::OrdinalIgnoreCase
+        ) -or
+        -not (Test-Path -LiteralPath $namedTunnelConfigPath -PathType Leaf)
+    ) {
+        throw "Named tunnel service configuration must exist under $configRoot"
+    }
+    $parsedPublicUrl = $null
+    if (
+        -not [Uri]::TryCreate($publicUrl, [UriKind]::Absolute, [ref]$parsedPublicUrl) -or
+        $parsedPublicUrl.Scheme -ne "https"
+    ) {
+        throw "Named tunnel service PublicUrl must be an absolute HTTPS URL"
+    }
+}
+$namedTunnelServiceName = if (
+    $null -ne $existingConfig -and
+    $existingConfig.NamedTunnelServiceName
+) {
+    [string]$existingConfig.NamedTunnelServiceName
+}
+else { "" }
+if ($tunnelMode -eq "service" -and -not $namedTunnelServiceName) {
+    throw "NamedTunnelServiceName is required when TunnelMode is service"
+}
 $databasePath = Join-Path $paths.Data "idle-demo.sqlite"
 
 $runtimeConfig = [ordered]@{
@@ -119,7 +178,12 @@ $runtimeConfig = [ordered]@{
     CloudflaredPath = $cloudflaredPath
     AuthorityPort = 3000
     GatewayPort = 3100
-    QuickTunnelEnabled = $quickTunnelEnabled
+    TunnelMode = $tunnelMode
+    QuickTunnelEnabled = ($tunnelMode -eq "quick")
+    CloudflaredConfigPath = $namedTunnelConfigPath
+    NamedTunnelServiceName = $namedTunnelServiceName
+    PublicUrl = $publicUrl
+    TunnelLogPath = $tunnelLogPath
     DatabasePath = $databasePath
     TelemetryHmacSecret = $hmacSecret
     PreviewAccessToken = $previewToken
@@ -232,8 +296,7 @@ foreach ($component in @("Authority", "Gateway")) {
         -Force | Out-Null
 }
 
-$tunnelLog = Join-Path $paths.Logs "tunnel.log"
-$tunnelArguments = "tunnel --no-autoupdate --url http://127.0.0.1:3100 --loglevel info --logfile `"$tunnelLog`""
+$tunnelArguments = "tunnel --no-autoupdate --url http://127.0.0.1:3100 --loglevel info --logfile `"$quickTunnelLogPath`""
 $tunnelAction = New-ScheduledTaskAction `
     -Execute $cloudflaredPath `
     -Argument $tunnelArguments `
@@ -248,7 +311,7 @@ Register-ScheduledTask `
     -TaskPath "\OpenFrontIdle\" `
     -InputObject $tunnelTask `
     -Force | Out-Null
-if ($quickTunnelEnabled) {
+if ($tunnelMode -eq "quick") {
     Enable-ScheduledTask -TaskName "Tunnel" -TaskPath "\OpenFrontIdle\" | Out-Null
 }
 else {
@@ -293,10 +356,15 @@ Register-ScheduledTask `
     -Force | Out-Null
 
 $startupTasks = @("Authority", "Gateway", "Watchdog")
-if ($quickTunnelEnabled) { $startupTasks += "Tunnel" }
+if ($tunnelMode -eq "quick") { $startupTasks += "Tunnel" }
 foreach ($name in $startupTasks) {
     Start-ScheduledTask -TaskName $name -TaskPath "\OpenFrontIdle\"
 }
 
 Write-Output "Installed Pressure Atlas startup tasks and watchdog."
-Write-Output "Preview password: $previewToken"
+if ($previewTokenCreated) {
+    Write-Output "Preview password: $previewToken"
+}
+else {
+    Write-Output "The existing preview password was preserved in protected configuration."
+}

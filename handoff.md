@@ -131,16 +131,20 @@ admin case UI, and calibrated anti-cheat rules.
 The workstation preview now has a separate deployment boundary documented in
 `docs/idle-windows-preview.md`. Its durable state lives outside this dated
 checkout under `C:\ProgramData\OpenFrontIdle`. Direct Local Service startup
-tasks run a loopback-only idle authority, a password-gated exact-route gateway,
-and a Cloudflare connector; a narrow SYSTEM watchdog performs health recovery,
-and a daily task makes verified SQLite backups. The raw OpenFront dev server,
+tasks run a loopback-only idle authority and a password-gated exact-route
+gateway; a separate delayed-auto service runs the Cloudflare connector, a
+narrow SYSTEM watchdog performs health recovery, and a daily task makes
+verified SQLite backups. The raw OpenFront dev server,
 admin endpoint, Vite, workers, WebSockets, health
 details, and unrelated static assets are not part of the tunneled surface.
 
-Until Cloudflare account authorization is supplied, the connector is a
-supervised Quick Tunnel: it supplies an immediate off-LAN HTTPS preview but its
-random hostname is not a durable identity. The intended durable cutover is a
-new tunnel named `pressure-atlas-dev-windows` at
-`atlas-dev.sightings.today`, protected by a Cloudflare Access policy restricted
-to the owner's exact identity and pointing only to `127.0.0.1:3100`. Do not
-modify or reuse the Sightings production tunnel.
+Cloudflare authorization and the durable cutover are complete. The isolated
+`pressure-atlas-dev-windows` tunnel publishes only
+`https://atlas-dev.sightings.today` to `127.0.0.1:3100`. Its tunnel-scoped
+credential and signed executable live under an ACL-restricted ProgramData
+subtree, and the delayed-auto `CloudflaredPressureAtlasDev` Windows service has
+its own service SID and restart-on-failure policy. The Quick Tunnel task is
+disabled but retained as a rollback path. The Sightings production tunnel was
+not modified. Cloudflare Access still requires the owner's exact identity;
+until that is supplied, the high-entropy preview-password gateway remains the
+authentication boundary.

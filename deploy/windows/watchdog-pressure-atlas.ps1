@@ -26,24 +26,36 @@ function Restart-Component([string]$Name) {
     Start-ScheduledTask -TaskPath $taskPath -TaskName $Name
 }
 
-function Publish-TunnelUrl($config) {
-    $logPath = Join-Path $config.LogsPath "tunnel.log"
+function Write-PublicUrl($config, [string]$Url) {
+    if (-not $Url) { return }
+    $urlPath = Join-Path $config.RunPath "public-url.txt"
+    $current = if (Test-Path -LiteralPath $urlPath) {
+        (Get-Content -LiteralPath $urlPath -Raw).Trim()
+    }
+    else { "" }
+    if ($current -ne $Url) {
+        [IO.File]::WriteAllText($urlPath, $Url + [Environment]::NewLine)
+    }
+}
+
+function Maintain-TunnelLog($config, [bool]$ExtractQuickUrl) {
+    $logPath = if ($ExtractQuickUrl) {
+        Join-Path $config.LogsPath "tunnel.log"
+    }
+    elseif ($config.TunnelLogPath) {
+        [string]$config.TunnelLogPath
+    }
+    else { Join-Path $config.LogsPath "tunnel.log" }
     if (-not (Test-Path -LiteralPath $logPath)) { return }
-    $text = Get-Content -LiteralPath $logPath -Raw -ErrorAction SilentlyContinue
-    $matches = [regex]::Matches(
-        $text,
-        "https://[a-z0-9-]+\.trycloudflare\.com",
-        [Text.RegularExpressions.RegexOptions]::IgnoreCase
-    )
-    if ($matches.Count -gt 0) {
-        $latest = $matches[$matches.Count - 1].Value
-        $urlPath = Join-Path $config.RunPath "public-url.txt"
-        $current = if (Test-Path -LiteralPath $urlPath) {
-            (Get-Content -LiteralPath $urlPath -Raw).Trim()
-        }
-        else { "" }
-        if ($current -ne $latest) {
-            [IO.File]::WriteAllText($urlPath, $latest + [Environment]::NewLine)
+    if ($ExtractQuickUrl) {
+        $text = Get-Content -LiteralPath $logPath -Raw -ErrorAction SilentlyContinue
+        $matches = [regex]::Matches(
+            $text,
+            "https://[a-z0-9-]+\.trycloudflare\.com",
+            [Text.RegularExpressions.RegexOptions]::IgnoreCase
+        )
+        if ($matches.Count -gt 0) {
+            Write-PublicUrl $config $matches[$matches.Count - 1].Value
         }
     }
 
@@ -89,16 +101,29 @@ while ($true) {
             }
         }
 
-        $quickTunnelEnabled = if ($null -ne $config.QuickTunnelEnabled) {
-            [bool]$config.QuickTunnelEnabled
+        $tunnelMode = if ($config.TunnelMode) {
+            [string]$config.TunnelMode
         }
-        else { $true }
-        if ($quickTunnelEnabled) {
+        elseif ($null -ne $config.QuickTunnelEnabled -and -not [bool]$config.QuickTunnelEnabled) {
+            "disabled"
+        }
+        else { "quick" }
+        if ($tunnelMode -eq "quick") {
             $tunnel = Get-ScheduledTask -TaskPath $taskPath -TaskName Tunnel
             if ($tunnel.State -ne "Running") {
                 Start-ScheduledTask -TaskPath $taskPath -TaskName Tunnel
             }
-            Publish-TunnelUrl $config
+            Maintain-TunnelLog $config $true
+        }
+        elseif ($tunnelMode -eq "service") {
+            $serviceName = [string]$config.NamedTunnelServiceName
+            if ($serviceName) {
+                $service = Get-Service -Name $serviceName -ErrorAction Stop
+                if ($service.Status -ne "Running") {
+                    Start-Service -Name $serviceName
+                }
+            }
+            Write-PublicUrl $config ([string]$config.PublicUrl)
         }
     }
     catch {
