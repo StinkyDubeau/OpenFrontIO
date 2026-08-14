@@ -23,6 +23,35 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
+  windows-preview-syntax:
+    name: Validate Windows preview scripts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: false
+
+      - name: Parse with Windows PowerShell
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($file in Get-ChildItem deploy\windows\*.ps1) {
+            $tokens = $null
+            $errors = $null
+            [Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            foreach ($errorRecord in $errors) {
+              Write-Error "$($file.Name): $($errorRecord.Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
   verify:
     name: Verify authoritative idle demo
     runs-on: ubuntu-latest
@@ -75,12 +104,17 @@ jobs:
           npx prettier --ignore-unknown --check
           .github/workflows/idle-ci.yml
           deploy/idle
+          deploy/windows
           docs/idle-architecture.md
           docs/idle-operations.md
+          docs/idle-windows-preview.md
           eslint.config.js
           handoff.md
           resources/idle
+          scripts/idle-db-backup.mjs
+          scripts/idle-public-gateway.mjs
           scripts/idle-smoke.mjs
+          scripts/idle-windows-launcher.mjs
           src/server/idle
           src/server/Master.ts
           src/server/PublicAssetManifest.ts

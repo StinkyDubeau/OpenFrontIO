@@ -67,7 +67,13 @@ export default [
     // than members of the TypeScript application project. Keeping them on the
     // untyped parser also avoids exhausting projectService's intentionally
     // small allowDefaultProject budget.
-    files: ["resources/idle/app.js", "scripts/idle-smoke.mjs"],
+    files: [
+      "resources/idle/app.js",
+      "scripts/idle-db-backup.mjs",
+      "scripts/idle-public-gateway.mjs",
+      "scripts/idle-smoke.mjs",
+      "scripts/idle-windows-launcher.mjs",
+    ],
     languageOptions: { parserOptions: { projectService: false } },
     rules: { "@typescript-eslint/prefer-nullish-coalescing": "off" },
   },

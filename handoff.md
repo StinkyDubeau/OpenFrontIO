@@ -125,3 +125,22 @@ poll, with exactly one `YOU` label on the actual owned territory.
 The next planning phase still owns upgrades/spending, production automation,
 season scoring/archive rewards, multi-world matchmaking, Discord linking, the
 admin case UI, and calibrated anti-cheat rules.
+
+## Dedicated Windows preview host
+
+The workstation preview now has a separate deployment boundary documented in
+`docs/idle-windows-preview.md`. Its durable state lives outside this dated
+checkout under `C:\ProgramData\OpenFrontIdle`. Direct Local Service startup
+tasks run a loopback-only idle authority, a password-gated exact-route gateway,
+and a Cloudflare connector; a narrow SYSTEM watchdog performs health recovery,
+and a daily task makes verified SQLite backups. The raw OpenFront dev server,
+admin endpoint, Vite, workers, WebSockets, health
+details, and unrelated static assets are not part of the tunneled surface.
+
+Until Cloudflare account authorization is supplied, the connector is a
+supervised Quick Tunnel: it supplies an immediate off-LAN HTTPS preview but its
+random hostname is not a durable identity. The intended durable cutover is a
+new tunnel named `pressure-atlas-dev-windows` at
+`atlas-dev.sightings.today`, protected by a Cloudflare Access policy restricted
+to the owner's exact identity and pointing only to `127.0.0.1:3100`. Do not
+modify or reuse the Sightings production tunnel.

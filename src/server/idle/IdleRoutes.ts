@@ -190,7 +190,7 @@ export function createIdleRouter(
           code: "IDLE_INTERNAL_ERROR",
           message: "Idle service request failed",
         },
-        ...(process.env.GAME_ENV === "dev" ? { debug: message } : {}),
+        ...(process.env.IDLE_DEBUG_ERRORS === "true" ? { debug: message } : {}),
       });
     },
   );
