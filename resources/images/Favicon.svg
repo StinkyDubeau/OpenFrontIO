@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pressure Atlas">
+  <defs>
+    <linearGradient id="cabinet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6f351f"/>
+      <stop offset="1" stop-color="#21100b"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0a8"/>
+      <stop offset="0.5" stop-color="#c48a31"/>
+      <stop offset="1" stop-color="#6e4317"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="13" fill="url(#cabinet)"/>
+  <circle cx="32" cy="32" r="22" fill="#071512" stroke="url(#brass)" stroke-width="3"/>
+  <path d="M10 32h44M15 21c10 5 24 5 34 0M15 43c10-5 24-5 34 0M32 10c-7 9-9 15-9 22s2 13 9 22M32 10c7 9 9 15 9 22s-2 13-9 22" fill="none" stroke="#d6a64c" stroke-width="1.5" opacity=".82"/>
+  <path d="m38 26-4 8-8 4 4-8 8-4Z" fill="#f9e59a" stroke="#7a4a19" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="2.2" fill="#fff4bd"/>
+</svg>

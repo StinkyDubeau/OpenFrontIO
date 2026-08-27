@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import "./LegalNoticePage";
 
 const pageClass =
   "atlas-page-stage hidden w-full h-full page-content relative z-50";
@@ -77,6 +78,7 @@ export class AtlasPageDeck extends LitElement {
         class=${pageClass}
       ></inventory-modal>
       <ranked-modal id="page-ranked" inline class=${pageClass}></ranked-modal>
+      <legal-notice-page id="page-legal" class=${pageClass}></legal-notice-page>
     `;
   }
 }

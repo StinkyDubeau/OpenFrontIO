@@ -42,7 +42,7 @@ COPY package.json package-lock.json tsconfig.json ./
 COPY --from=build /app/static ./static
 COPY resources ./resources
 COPY src ./src
-COPY LICENSE LICENSE-ASSETS LICENSING.md ./
+COPY LICENSE LICENSE-ASSETS LICENSING.md NOTICE.md CREDITS.md ./
 
 ARG GIT_COMMIT=unknown
 RUN printf '%s\n' "${GIT_COMMIT}" > static/commit.txt

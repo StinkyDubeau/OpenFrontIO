@@ -142,12 +142,14 @@ export class MobileNavBar extends LitElement {
 
         <footer class="atlas-navigation-drawer__footer">
           <lang-selector></lang-selector>
-          <a href="/terms-of-service.html" data-i18n="main.terms_of_service"
-            >Terms</a
+          <button
+            type="button"
+            class="atlas-legal-trigger nav-menu-item"
+            data-page="page-legal"
           >
-          <a href="/privacy-policy.html" data-i18n="main.privacy_policy"
-            >Privacy</a
-          >
+            <span>© OpenFront and Contributors</span>
+            <strong>Legal + source</strong>
+          </button>
         </footer>
       </div>
     `;

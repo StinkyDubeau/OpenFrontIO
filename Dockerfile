@@ -16,7 +16,6 @@ COPY vite.config.ts ./
 COPY eslint.config.js ./
 COPY index.html ./
 COPY resources ./resources
-COPY proprietary ./proprietary
 COPY src ./src
 
 ARG GIT_COMMIT=unknown
@@ -61,6 +60,7 @@ RUN chmod +x /usr/local/bin/generate-nginx-upstream.sh
 # Copy production node_modules from prod-deps stage (cached separately from build)
 COPY --from=prod-deps /usr/src/app/node_modules ./node_modules
 COPY package*.json ./
+COPY LICENSE LICENSE-ASSETS LICENSING.md NOTICE.md CREDITS.md ./
 
 # Copy built artifacts from build stage
 COPY --from=build /usr/src/app/static ./static

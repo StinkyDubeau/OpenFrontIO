@@ -51,7 +51,7 @@ export class Footer extends LitElement {
         <lang-selector class="atlas-footer__language"></lang-selector>
 
         <p class="atlas-footer__credit">
-          <span data-i18n="main.copyright">© OpenFront™ and Contributors</span>
+          <span data-i18n="main.copyright">© OpenFront and Contributors</span>
           <span aria-hidden="true"> · </span>
           <span data-i18n="pressure_atlas.footer_credit"
             >Engine licensed under AGPL-3.0 · Open map assets CC BY-SA</span

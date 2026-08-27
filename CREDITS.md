@@ -1,5 +1,12 @@
 # Credits
 
+## Pressure Atlas modifications
+
+Pressure Atlas is an independent modified version of OpenFront, modified by
+StinkyDubeau in 2026. It is not affiliated with or endorsed by OpenFront Inc.
+The original Pressure Atlas interface materials under `resources/images/ui/`
+are distributed with the other open resources under CC BY-SA 4.0.
+
 ## Code
 
 OpenFront is licensed under AGPL-3.0.  

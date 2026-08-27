@@ -1,5 +1,4 @@
 import { Howl } from "howler";
-import { assetUrl } from "../../core/AssetUrls";
 import { EventBus } from "../../core/EventBus";
 import { UserSettings } from "../../core/game/UserSettings";
 import {
@@ -28,28 +27,10 @@ export class SoundManager {
 
   constructor(eventBus: EventBus, userSettings: UserSettings) {
     this.eventBus = eventBus;
-    this.safely("initialize background music", () => {
-      this.backgroundMusic = [
-        new Howl({
-          src: [assetUrl("sounds/music/of4.mp3")],
-          loop: false,
-          onend: this.playNext.bind(this),
-          volume: 0,
-        }),
-        new Howl({
-          src: [assetUrl("sounds/music/openfront.mp3")],
-          loop: false,
-          onend: this.playNext.bind(this),
-          volume: 0,
-        }),
-        new Howl({
-          src: [assetUrl("sounds/music/war.mp3")],
-          loop: false,
-          onend: this.playNext.bind(this),
-          volume: 0,
-        }),
-      ];
-    });
+    // OpenFront's bundled music is proprietary. Pressure Atlas intentionally
+    // ships without background tracks until independently licensed music is
+    // added; gameplay sound effects remain available under LICENSE-ASSETS.
+    this.backgroundMusic = [];
     this.setBackgroundMusicVolume(userSettings.backgroundMusicVolume());
     this.setSoundEffectsVolume(userSettings.soundEffectsVolume());
     this.onPlaySoundEffect = (e) => this.playSoundEffect(e.effect);

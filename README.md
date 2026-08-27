@@ -1,12 +1,13 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="proprietary/images/OpenFrontLogoDark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="proprietary/images/OpenFrontLogo.svg">
-    <img src="proprietary/images/OpenFrontLogo.svg" alt="OpenFrontIO Logo" width="300">
-  </picture>
-</p>
+# Pressure Atlas
 
-[OpenFront.io](https://openfront.io/) is an online real-time strategy game focused on territorial control and alliance building. Players compete to expand their territory, build structures, and form strategic alliances in various maps based on real-world geography.
+Pressure Atlas is a persistent multiplayer strategy game built as an
+independent modified version of [OpenFront](https://github.com/openfrontio/OpenFrontIO).
+It is not affiliated with, endorsed by, or an official product of OpenFront
+Inc. This repository was modified by StinkyDubeau in 2026.
+
+The inherited OpenFront strategy simulation remains focused on territorial
+control, structures, alliances, and real-world geography. Pressure Atlas adds
+its own product identity, interface, and persistent multiplayer foundation.
 
 This is a fork/rewrite of WarFront.io. Credit to https://github.com/WarFrontIO.
 
@@ -18,19 +19,28 @@ This is a fork/rewrite of WarFront.io. Credit to https://github.com/WarFrontIO.
 
 ## License
 
-OpenFront source code is licensed under the **GNU Affero General Public License v3.0**
+Pressure Atlas and the inherited OpenFront source code are licensed under the
+**GNU Affero General Public License v3.0**, including OpenFront's Section 7
+additional terms.
 
-Current copyright notices appear in:
+The required copyright notice appears in the in-game loading screen and the
+main-menu Legal & Source panel:
 
-- Footer: "© OpenFront and Contributors"
+- Main menu: "© OpenFront and Contributors"
 - Loading screen: "© OpenFront and Contributors"
 
 Modified versions must preserve these notices in reasonably visible locations.
 
 See the [LICENSE](LICENSE) for complete requirements.
 
-For asset licensing, see [LICENSE-ASSETS](LICENSE-ASSETS).  
-For license history, see [LICENSING.md](LICENSING.md).
+For fork-specific disclosure and the corresponding-source offer, see
+[NOTICE.md](NOTICE.md). For asset licensing, see
+[LICENSE-ASSETS](LICENSE-ASSETS). For license history, see
+[LICENSING.md](LICENSING.md).
+
+The all-rights-reserved files formerly under `proprietary/` are intentionally
+excluded from this standalone fork. Runtime music is disabled until
+independently licensed tracks are available.
 
 ## 🌟 Features
 

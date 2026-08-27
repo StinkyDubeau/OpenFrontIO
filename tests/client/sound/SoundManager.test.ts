@@ -95,8 +95,7 @@ describe("SoundManager", () => {
   it("lazy-loads a sound effect once and reuses it", () => {
     eventBus.emit(new PlaySoundEffectEvent("click"));
     eventBus.emit(new PlaySoundEffectEvent("click"));
-    // 3 background music Howls + 1 Click Howl = 4
-    expect(howlCtor).toHaveBeenCalledTimes(4);
+    expect(howlCtor).toHaveBeenCalledTimes(1);
   });
 
   it("plays a sound effect when PlaySoundEffectEvent is emitted", () => {
@@ -105,17 +104,13 @@ describe("SoundManager", () => {
     expect(effectHowl.play).toHaveBeenCalledTimes(1);
   });
 
-  it("applies bootstrap volume from UserSettings to background music", () => {
+  it("does not construct the excluded proprietary background tracks", () => {
     const settings = createUserSettings(0.5, 1);
     const bus = new EventBus();
     howlCtor.mockClear();
     howlInstances.length = 0;
     new SoundManager(bus, settings);
-    const bgHowls = howlInstances.slice(0, 3);
-    bgHowls.forEach((h) => {
-      // Slider position is curved (squared) into perceptual gain: 0.5² = 0.25.
-      expect(h.volume).toHaveBeenCalledWith(0.25);
-    });
+    expect(howlCtor).not.toHaveBeenCalled();
   });
 
   it("applies current sfx volume to lazily-loaded sounds", () => {
@@ -132,12 +127,9 @@ describe("SoundManager", () => {
   });
 
   it("responds to SetBackgroundMusicVolumeEvent", () => {
+    howlCtor.mockClear();
     eventBus.emit(new SetBackgroundMusicVolumeEvent(0.7));
-    const bgHowls = howlInstances.slice(0, 3);
-    bgHowls.forEach((h) => {
-      // 0.7² = 0.49 perceptual gain.
-      expect(h.volume).toHaveBeenCalledWith(0.7 * 0.7);
-    });
+    expect(howlCtor).not.toHaveBeenCalled();
   });
 
   it("responds to SetSoundEffectsVolumeEvent", () => {
@@ -150,27 +142,26 @@ describe("SoundManager", () => {
   });
 
   it("clamps volume values between 0 and 1", () => {
-    eventBus.emit(new SetBackgroundMusicVolumeEvent(2));
-    const bgHowls = howlInstances.slice(0, 3);
-    bgHowls.forEach((h) => {
-      expect(h.volume).toHaveBeenCalledWith(1);
-    });
+    eventBus.emit(new SetSoundEffectsVolumeEvent(2));
+    eventBus.emit(new PlaySoundEffectEvent("click"));
+    expect(howlCtor).toHaveBeenLastCalledWith(
+      expect.objectContaining({ volume: 1 }),
+    );
 
-    bgHowls.forEach((h) => h.volume.mockClear());
-    eventBus.emit(new SetBackgroundMusicVolumeEvent(-0.5));
-    bgHowls.forEach((h) => {
-      expect(h.volume).toHaveBeenCalledWith(0);
-    });
+    eventBus.emit(new SetSoundEffectsVolumeEvent(-0.5));
+    eventBus.emit(new PlaySoundEffectEvent("atom-hit"));
+    expect(howlCtor).toHaveBeenLastCalledWith(
+      expect.objectContaining({ volume: 0 }),
+    );
   });
 
   it("curves the slider position into perceptual gain so the top of the range is audibly distinct", () => {
-    const bgHowls = howlInstances.slice(0, 3);
     // Linear gain would make 0.9 and 1.0 nearly indistinguishable; squaring
     // spreads the top end (0.9 → 0.81) so reductions are noticeable sooner.
-    eventBus.emit(new SetBackgroundMusicVolumeEvent(0.9));
-    bgHowls.forEach((h) => {
-      expect(h.volume).toHaveBeenLastCalledWith(0.81);
-    });
+    eventBus.emit(new PlaySoundEffectEvent("click"));
+    const clickHowl = howlInstances[howlInstances.length - 1];
+    eventBus.emit(new SetSoundEffectsVolumeEvent(0.9));
+    expect(clickHowl.volume).toHaveBeenLastCalledWith(0.81);
   });
 
   it("dispose() unsubscribes from EventBus so events no longer play sounds", () => {
@@ -194,15 +185,9 @@ describe("SoundManager", () => {
     expect(clickHowl.unload).toHaveBeenCalled();
   });
 
-  it("dispose() stops and unloads background music", () => {
-    const bgHowls = howlInstances.slice(0, 3);
-
+  it("dispose() leaves the intentionally empty background channel alone", () => {
     soundManager.dispose();
-
-    bgHowls.forEach((h) => {
-      expect(h.stop).toHaveBeenCalled();
-      expect(h.unload).toHaveBeenCalled();
-    });
+    expect(howlInstances).toHaveLength(0);
   });
 
   it("does not throw when playSoundEffect is called directly", () => {

@@ -93,14 +93,6 @@
         "--background-image-url",
         `url("<%- backgroundImageUrl %>")`,
       );
-      // document.documentElement.style.setProperty(
-      //   "--desktop-logo-image-url",
-      //   `url("<%- desktopLogoImageUrl %>")`,
-      // );
-      document.documentElement.style.setProperty(
-        "--mobile-logo-image-url",
-        `url("<%- mobileLogoImageUrl %>")`,
-      );
     </script>
 
     <!-- CrazyGames SDK -->
@@ -172,14 +164,6 @@
           background-image: var(--background-image-url);
           background-position: center top;
         "
-      ></div>
-      <div
-        class="absolute inset-0 bg-center bg-no-repeat bg-contain hidden lg:block"
-        style="background-image: var(--desktop-logo-image-url); opacity: 0.5"
-      ></div>
-      <div
-        class="absolute inset-0 bg-center bg-no-repeat bg-contain lg:hidden"
-        style="background-image: var(--mobile-logo-image-url); opacity: 0.5"
       ></div>
     </div>
 
