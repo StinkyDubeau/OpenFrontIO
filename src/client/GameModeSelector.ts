@@ -27,8 +27,6 @@ import {
   translateText,
 } from "./Utils";
 
-const CARD_BG = "bg-surface";
-
 @customElement("game-mode-selector")
 export class GameModeSelector extends LitElement {
   @state() private lobbies: PublicGames | null = null;
@@ -128,112 +126,58 @@ export class GameModeSelector extends LitElement {
     const special = this.lobbies?.games?.["special"]?.[0];
 
     return html`
-      <div class="flex flex-col gap-4 w-full px-4 sm:px-0 mx-auto pb-4 sm:pb-0">
-        <!-- Solo: mobile only, top -->
-        <div class="sm:hidden h-14">
-          ${this.renderSmallActionCard(
-            translateText("main.solo"),
-            this.openSinglePlayerModal,
-            "bg-malibu-blue hover:bg-aquarius active:bg-malibu-blue/80 hover:scale-y-105 hover:scale-x-[1.01]",
-          )}
-        </div>
-        <!-- Create/ranked/join: mobile only, below solo -->
-        <div class="sm:hidden grid grid-cols-3 gap-4 h-14">
-          ${this.renderSmallActionCard(
-            translateText("main.create"),
-            this.openHostLobby,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
-          )}
-          ${this.renderSmallActionCard(
-            translateText("mode_selector.ranked_title"),
-            this.openRankedMenu,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
-          )}
-          ${this.renderSmallActionCard(
-            translateText("main.join"),
-            this.openJoinLobby,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
-            this.hostedLobbyCount(),
-          )}
-        </div>
+      <div class="atlas-game-modes">
         <!-- iOS Add to Home Screen banner -->
         <ios-add-to-home-screen-banner
-          class="no-crazygames"
+          class="atlas-install-prompt no-crazygames"
         ></ios-add-to-home-screen-banner>
 
-        <!-- Game cards grid -->
+        <!-- Public operations: one composition, recomposed by CSS. -->
         ${this.lobbies === null
           ? html`<div
-              class="flex items-center justify-center h-44 sm:h-[min(24rem,40vh)]"
+              class="atlas-public-lobbies atlas-public-lobbies--loading"
             >
-              <span
-                class="w-24 h-24 border-[6px] border-blue-500/30 border-t-blue-500 rounded-full animate-spin"
-              ></span>
+              <span class="atlas-loading-ring"></span>
             </div>`
           : html`<div
-              class="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-4 sm:h-[min(24rem,40vh)]"
+              class="atlas-public-lobbies"
+              aria-label="Public operations"
             >
-              <!-- Left col: main card (desktop only) -->
               ${ffa
-                ? html`<div class="hidden sm:block">
+                ? html`<div class="atlas-public-lobbies__primary">
                     ${this.renderLobbyCard(ffa, this.getLobbyTitle(ffa))}
                   </div>`
                 : nothing}
-
-              <!-- Right col: special + teams (desktop only) -->
-              <div class="hidden sm:flex sm:flex-col sm:gap-4">
+              <div class="atlas-public-lobbies__secondary">
                 ${special
-                  ? html`<div class="flex-1 min-h-0">
-                      ${this.renderSpecialLobbyCard(special)}
-                    </div>`
+                  ? html`<div>${this.renderSpecialLobbyCard(special)}</div>`
                   : nothing}
                 ${teams
-                  ? html`<div class="flex-1 min-h-0">
+                  ? html`<div>
                       ${this.renderLobbyCard(teams, this.getLobbyTitle(teams))}
                     </div>`
                   : nothing}
               </div>
-
-              <!-- Mobile: special, ffa, teams inline -->
-              <div class="sm:hidden">
-                ${special ? this.renderSpecialLobbyCard(special) : nothing}
-              </div>
-              <div class="sm:hidden">
-                ${ffa
-                  ? this.renderLobbyCard(ffa, this.getLobbyTitle(ffa))
-                  : nothing}
-              </div>
-              <div class="sm:hidden">
-                ${teams
-                  ? this.renderLobbyCard(teams, this.getLobbyTitle(teams))
-                  : nothing}
-              </div>
             </div>`}
 
-        <!-- Solo: full width, desktop only -->
-        <div class="hidden sm:block h-14">
+        <div class="atlas-game-actions" aria-label="Other game modes">
           ${this.renderSmallActionCard(
             translateText("main.solo"),
             this.openSinglePlayerModal,
-            "bg-malibu-blue hover:bg-aquarius active:bg-malibu-blue/80 hover:scale-y-105 hover:scale-x-[1.01]",
+            "atlas-action-button--primary",
           )}
-        </div>
-        <!-- Bottom row: create + ranked + join (desktop only) -->
-        <div class="hidden sm:grid grid-cols-3 gap-4 h-14">
           ${this.renderSmallActionCard(
             translateText("main.create"),
             this.openHostLobby,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
           )}
           ${this.renderSmallActionCard(
             translateText("mode_selector.ranked_title"),
             this.openRankedMenu,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
           )}
           ${this.renderSmallActionCard(
             translateText("main.join"),
             this.openJoinLobby,
-            "bg-surface hover:brightness-[1.08] active:brightness-[0.95] hover:scale-105 hover:shadow-[var(--shadow-action-card-hover)]",
+            undefined,
             this.hostedLobbyCount(),
           )}
         </div>
@@ -276,15 +220,14 @@ export class GameModeSelector extends LitElement {
   private renderSmallActionCard(
     title: string,
     onClick: () => void,
-    bgClass: string = CARD_BG,
+    extraClass: string = "",
     badge?: number,
   ) {
     return html`
       <button
         @click=${onClick}
         ?disabled=${!this.inputValid}
-        class="relative flex items-center justify-center w-full h-full rounded-lg ${bgClass} transition-all duration-200 text-sm lg:text-base font-medium text-white uppercase tracking-wider text-center ${!this
-          .inputValid
+        class="atlas-action-button ${extraClass} ${!this.inputValid
           ? "opacity-50 cursor-not-allowed pointer-events-none"
           : ""}"
       >
@@ -340,14 +283,14 @@ export class GameModeSelector extends LitElement {
       <button
         @click=${() => this.validateAndJoin(lobby)}
         ?disabled=${!this.inputValid}
-        class="group relative w-full h-44 sm:h-full text-white uppercase rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] bg-surface hover:shadow-[var(--shadow-lobby-card-hover)] ${!this
+        class="atlas-lobby-card group relative w-full h-44 sm:h-full text-white uppercase ${!this
           .inputValid
           ? "opacity-50 cursor-not-allowed pointer-events-none"
           : ""}"
       >
         <!-- Image clipped separately so overflow-hidden doesn't block absolute children -->
         <div
-          class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none"
+          class="atlas-lobby-card__image absolute inset-0 overflow-hidden pointer-events-none"
         >
           ${mapImageSrc
             ? html`<img
@@ -362,14 +305,16 @@ export class GameModeSelector extends LitElement {
         </div>
         <!-- Top row: modifiers + timer -->
         <div
-          class="absolute inset-x-2 top-2 flex items-start justify-between gap-2"
+          class="atlas-lobby-card__telemetry absolute inset-x-2 top-2 flex items-start justify-between gap-2"
         >
           ${modifierLabels.length > 0
-            ? html`<div class="flex flex-col items-start gap-1 mt-[2px]">
+            ? html`<div
+                class="atlas-lobby-card__modifiers flex flex-col items-start gap-1 mt-[2px]"
+              >
                 ${modifierLabels.map(
                   (label) =>
                     html`<span
-                      class="px-2 py-1 rounded text-xs font-bold uppercase tracking-widest bg-malibu-blue text-white shadow-[var(--shadow-malibu-blue-pill)]"
+                      class="atlas-lobby-card__modifier px-2 py-1 rounded text-xs font-bold uppercase tracking-widest bg-malibu-blue text-white shadow-[var(--shadow-malibu-blue-pill)]"
                       >${label}</span
                     >`,
                 )}
@@ -377,7 +322,7 @@ export class GameModeSelector extends LitElement {
             : html`<div></div>`}
           <div class="shrink-0">
             <span
-              class="text-xs font-bold tracking-widest ${timeDisplayUppercase
+              class="atlas-lobby-card__timer text-xs font-bold tracking-widest ${timeDisplayUppercase
                 ? "uppercase"
                 : "normal-case"} bg-malibu-blue text-white px-2 py-1 rounded"
               >${timeDisplay}</span
@@ -386,11 +331,11 @@ export class GameModeSelector extends LitElement {
         </div>
         <!-- Bottom bar: map name + mode, with player count floating above -->
         <div
-          class="absolute bottom-0 left-0 right-0 flex flex-col px-3 py-2 bg-black/55 backdrop-blur-sm rounded-b-2xl"
+          class="atlas-lobby-card__caption absolute bottom-0 left-0 right-0 flex flex-col px-3 py-2"
           style="overflow: visible;"
         >
           <span
-            class="absolute bottom-full right-2 mb-1 flex items-center gap-1 text-xs font-bold tracking-widest bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded"
+            class="atlas-lobby-card__population absolute bottom-full right-2 mb-1 flex items-center gap-1 text-xs font-bold tracking-widest bg-black/70 px-2 py-0.5 rounded"
           >
             ${lobby.numClients}/${lobby.gameConfig?.maxPlayers}
             <svg

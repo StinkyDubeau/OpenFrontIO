@@ -92,7 +92,9 @@ export class OButton extends LitElement {
 
     return html`
       <button
-        class=${classes}
+        class="atlas-o-button ${classes}"
+        data-variant=${this.variant}
+        data-size=${this.size}
         ?disabled=${this.disable}
         type=${this.submit ? "submit" : "button"}
         aria-label=${iconOnly ? label : nothing}

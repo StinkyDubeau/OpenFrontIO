@@ -1405,6 +1405,17 @@
     "nation": "Nation",
     "player": "Player"
   },
+  "pressure_atlas": {
+    "brand_descriptor": "Persistent frontiers",
+    "commander_identity": "Commander identity",
+    "footer_build": "Pressure Atlas working build",
+    "footer_credit": "Engine licensed under AGPL-3.0 · Open map assets CC BY-SA",
+    "footer_links_label": "Project links",
+    "footer_status": "Development world online",
+    "menu_tagline": "Persistent multiplayer strategy",
+    "page_title": "Pressure Atlas — Persistent Strategy",
+    "world_online": "World online"
+  },
   "private_lobby": {
     "disabled_units": "Disabled Units",
     "enter_id": "Enter Lobby ID",

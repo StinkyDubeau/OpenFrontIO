@@ -1,5 +1,79 @@
 # Idle Multiplayer OpenFront Fork — Handoff
 
+## Pinned prompt for the next planning phase
+
+Re-read this exact user prompt immediately before entering planning mode for
+the next phase of development:
+
+> Remember this exact prompt for later. Re-read it before we enter planning mode for the next phase of development. I will give you one more text prompt following this one, and the next message after that will be planning mode.
+>
+> I want to play test the game and tweak values in realtime to get the pacing where I like it whilst leaving the current structures; defense posts/factory/road networks mechanics/balance completely intact.
+
+Planning guardrail: this is a live, incremental pacing-tuning phase, not a
+gameplay rewrite. Defense posts, factories, road networks, and their current
+mechanics and balance are explicitly out of scope for mutation.
+
+## Current direction — supersedes the standalone territory prototype
+
+The user explicitly corrected the project direction on August 26, 2026:
+
+- OpenFront's real map, renderer, input model, controls, simulation, multiplayer
+  flow, structures, and strategic systems are the gameplay baseline.
+- UI work must reskin and reorganize the existing client shell and HUD around
+  that gameplay. It must not replace the map with a bespoke SVG territory game.
+- `resources/idle/` is a historical prototype and is no longer a player-facing
+  product route. In development, `/idle`, `/idle/`, and `/idle/index.html`
+  redirect to the canonical `/` client.
+- `src/server/idle/` remains isolated research infrastructure. Do not wire its
+  hard-coded twelve-territory model into the OpenFront renderer or simulation.
+- Future pacing work is a separate playtest-led planning phase based on small,
+  observable value changes. See
+  [`docs/openfront-gameplay-study.md`](docs/openfront-gameplay-study.md).
+
+The current LAN preview is `http://192.168.2.118:9000/`. It runs the real
+OpenFront master and two workers on ports 3000–3002 and the themed Vite client
+on port 9000.
+
+## Current UI overhaul contract
+
+The August 27 UI phase is an immediate product-skin replacement around the
+existing game, not a gameplay redesign. The lobby uses period-aware iOS 6
+chrome cues; the match HUD uses an original pristine executive war-room system
+made from mahogany, green felt, brass, parchment, chrome, and instrument glass.
+System sans typography remains deliberate. Mobile may recompose the interface,
+but every existing gameplay action remains available.
+
+The hard boundary is explicit: do not style or mutate `#app`, `canvas`,
+`map-display`, `src/core`, `src/client/render`, `InputHandler`,
+`TransformHandler`, or `ClientGameRunner`. The OpenFront map's sampling,
+palette, camera, input, and simulation must remain intact. Ordinary HUD panels
+must be opaque and may not blur or veil the map; only modal scrims may dim it.
+The thin `atlas-map-bezel` is a sibling of the renderer host and has
+`pointer-events: none`.
+
+Reusable material, gauge, bezel, adaptive-fidelity, and UI-sound primitives
+live in `src/client/components/AtlasPrimitives.ts` and
+`src/client/ui/WarRoomUI.ts`. The deterministic development gallery is
+available at `/?ui-lab=1`. Generated local WebP textures are under
+`resources/images/ui/materials/`; no remote material dependency is required.
+The fidelity controller honors reduced motion and can demote UI-only animation
+after sustained frame pressure without communicating with the game renderer.
+
+Verification at handoff: TypeScript, ESLint, oxlint, development bundle, 3,016
+tests, desktop geometry, and 390×844 mobile geometry pass. There is no
+horizontal overflow. The in-app browser cannot initialize WebGL, so final
+map/HUD visual compositing must be checked on the linked iPhone/Safari build;
+the source and regression tests independently assert the renderer boundary.
+
+The second polish pass removes the marketing-page composition entirely. The
+title screen is one fixed command surface with no document or stage scrolling;
+it has been geometry-checked at 390×844, 390×667, 844×390, and 1280×720. The
+desktop bar exposes only Play, Account, and Menu. All secondary destinations
+live in a fixed two-column drawer. Root HTML custom-element mounts were reduced
+from 52 to eight via `atlas-page-deck`, `atlas-game-hud`, and
+`atlas-global-overlays`; see `docs/ui-component-audit.md`. Canonical OpenFront
+controller tags and page IDs remain inside those light-DOM compositions.
+
 ## Mission
 
 Use OpenFront as the starting point for a persistent, idle multiplayer online game. A player must be able to leave and return without losing the session, move between devices, use a simplified mobile experience, and sign in on the web for the full desktop experience.
@@ -81,11 +155,11 @@ The user accepted the recommended defaults on August 14, 2026:
 - Guest-first play with a future Discord identity upgrade. One device holds the active command lease; other signed-in devices are read-only.
 - First hosting target follows `sightings.today`: a single Debian/Proxmox VM, Node bound to loopback, Cloudflare Tunnel ingress, systemd supervision, SQLite WAL as the system of record, and encrypted verified off-host backups. PostgreSQL is the migration target before multi-node operation.
 
-## First phone-preview finding
+## First phone-preview finding (historical; superseded)
 
 The original OpenFront development shell rendered on desktop Chromium but appeared as a blank white page with horizontal and vertical scrollbars in Firefox on iOS. The LAN server, static assets, and lobby WebSocket were independently healthy. Because all iOS browsers use WebKit and the original shell depends on a large Vite ES-module/Lit bootstrap, the first idle demo uses a standalone classic-script mobile entry point with an in-page diagnostic state. LAN auth also must not resolve `localhost` from the phone, because that refers to the phone rather than the development host.
 
-## Verified first vertical slice
+## Verified first vertical slice (historical prototype; not the product route)
 
 The live phone preview is `http://192.168.2.118:3000/idle/`. Use port 3000,
 not the original Vite port 9000: an OpenFront service worker previously
@@ -126,7 +200,7 @@ The next planning phase still owns upgrades/spending, production automation,
 season scoring/archive rewards, multi-world matchmaking, Discord linking, the
 admin case UI, and calibrated anti-cheat rules.
 
-## Dedicated Windows preview host
+## Dedicated Windows preview host (historical standalone tunnel)
 
 The workstation preview now has a separate deployment boundary documented in
 `docs/idle-windows-preview.md`. Its durable state lives outside this dated

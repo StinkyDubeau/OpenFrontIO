@@ -1,86 +1,68 @@
-import { Platform } from "./Platform";
+function navigationElements() {
+  return {
+    backdrop: document.getElementById("mobile-menu-backdrop"),
+    controls: [
+      document.getElementById("hamburger-btn"),
+      document.getElementById("desktop-menu-button"),
+    ].filter((element): element is HTMLElement => element !== null),
+    sidebar: document.getElementById("sidebar-menu"),
+  };
+}
+
+export function setNavigationDrawer(open: boolean): void {
+  const { backdrop, controls, sidebar } = navigationElements();
+  if (!sidebar || !backdrop) return;
+
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("open", open);
+  document.documentElement.classList.toggle("overflow-hidden", open);
+  sidebar.setAttribute("aria-hidden", open ? "false" : "true");
+  backdrop.setAttribute("aria-hidden", open ? "false" : "true");
+  if (open) sidebar.setAttribute("aria-modal", "true");
+  else sidebar.removeAttribute("aria-modal");
+  controls.forEach((control) =>
+    control.setAttribute("aria-expanded", open ? "true" : "false"),
+  );
+}
+
+export function toggleNavigationDrawer(event?: Event): void {
+  event?.stopPropagation();
+  if (event?.type === "touchstart") event.preventDefault();
+  const sidebar = document.getElementById("sidebar-menu");
+  setNavigationDrawer(!sidebar?.classList.contains("open"));
+}
 
 export function initLayout() {
-  // Wait for play-page component to render before setting up hamburger menu
-  customElements.whenDefined("play-page").then(() => {
-    const hb = document.getElementById("hamburger-btn");
-    const sidebar = document.getElementById("sidebar-menu");
-    const backdrop = document.getElementById("mobile-menu-backdrop");
-
-    // Force sidebar visibility style to ensure it's not hidden by other CSS
-    if (sidebar && Platform.isMobileWidth) {
-      sidebar.style.display = "flex";
-    }
-
-    if (!hb) {
-      console.error("Hamburger button not found");
+  Promise.all([
+    customElements.whenDefined("play-page"),
+    customElements.whenDefined("desktop-nav-bar"),
+    customElements.whenDefined("mobile-nav-bar"),
+  ]).then(() => {
+    const { backdrop, controls, sidebar } = navigationElements();
+    if (!sidebar || !backdrop || controls.length === 0) {
+      console.error("Navigation drawer controls not found");
       return;
     }
+    if (sidebar.dataset.navigationReady === "true") return;
+    sidebar.dataset.navigationReady = "true";
+    sidebar.style.display = "flex";
 
-    // Disable fallback inline handler now that JS is loaded
-    hb.onclick = null;
-
-    if (!sidebar) {
-      console.error("Sidebar menu not found");
-      return;
-    }
-    if (!backdrop) {
-      console.error("Mobile menu backdrop not found");
-      return;
-    }
-
-    const setMenuState = (open: boolean) => {
-      sidebar.classList.toggle("open", open);
-      backdrop.classList.toggle("open", open);
-      document.documentElement.classList.toggle("overflow-hidden", open);
-      hb.setAttribute("aria-expanded", open ? "true" : "false");
-    };
-
-    const closeMenu = () => setMenuState(false);
-    const openMenu = () => setMenuState(true);
-
-    const toggle = (e: Event) => {
-      e.stopPropagation();
-      // Only prevent default if it's a touchstart to avoid ghost clicks
-      if ((e as any).type === "touchstart") {
-        (e as Event).preventDefault();
-      }
-
-      const opening = !sidebar.classList.contains("open");
-      if (opening) {
-        openMenu();
-      } else {
-        closeMenu();
-      }
-    };
-
-    hb.addEventListener("click", toggle);
-
-    backdrop.addEventListener("click", closeMenu);
-
-    // Close menu when clicking a menu link or button (Mobile only)
-    sidebar.addEventListener("click", (e) => {
-      // On desktop, we want the menu to stay open unless explicitly toggled
-      if (!Platform.isMobileWidth) return;
-
-      // If the click happened on or inside an anchor/button/menu item, close the menu
-      const clickedElement = (e.target as Element).closest
-        ? (e.target as Element).closest(
-            'a, button, [role="menuitem"], .nav-menu-item',
-          )
-        : null;
-
-      if (clickedElement) {
-        closeMenu();
+    controls.forEach((control) => {
+      control.onclick = null;
+      control.addEventListener("click", toggleNavigationDrawer);
+    });
+    backdrop.addEventListener("click", () => setNavigationDrawer(false));
+    sidebar.addEventListener("click", (event) => {
+      const target = event.target as Element;
+      if (target.closest("a, button, atlas-nav-item, .nav-menu-item")) {
+        setNavigationDrawer(false);
       }
     });
-
-    // Close on Escape (Mobile only)
-    document.addEventListener("keydown", (e) => {
-      if (!Platform.isMobileWidth) return;
-      if (e.key === "Escape" && sidebar.classList.contains("open")) {
-        closeMenu();
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && sidebar.classList.contains("open")) {
+        setNavigationDrawer(false);
       }
     });
+    setNavigationDrawer(false);
   });
 }

@@ -1,7 +1,8 @@
 import { html, LitElement, TemplateResult } from "lit";
 import { customElement } from "lit/decorators.js";
-import { assetUrl } from "../../core/AssetUrls";
+import "./AtlasPrimitives";
 import { NavNotificationsController } from "./NavNotificationsController";
+import "./ProductWordmark";
 
 @customElement("mobile-nav-bar")
 export class MobileNavBar extends LitElement {
@@ -46,11 +47,26 @@ export class MobileNavBar extends LitElement {
     });
   }
 
-  private _renderDot(color: string): TemplateResult {
-    return html`<span class="relative ml-2 shrink-0 -mt-2 w-2 h-2">
-      <span class="absolute inset-0 ${color} rounded-full animate-ping"></span>
-      <span class="absolute inset-0 ${color} rounded-full"></span>
-    </span>`;
+  private _renderItem(
+    page: string,
+    i18nKey: string,
+    label: string,
+    currentPage: string,
+    options: {
+      attention?: "none" | "info" | "danger";
+      className?: string;
+      onClick?: () => void;
+    } = {},
+  ): TemplateResult {
+    return html`<atlas-nav-item
+      class=${options.className ?? ""}
+      page=${page}
+      i18n-key=${i18nKey}
+      label=${label}
+      attention=${options.attention ?? "none"}
+      ?active=${currentPage === page}
+      @click=${options.onClick}
+    ></atlas-nav-item>`;
   }
 
   render() {
@@ -58,115 +74,81 @@ export class MobileNavBar extends LitElement {
     const currentPage = window.currentPageId;
 
     return html`
-      <!-- Border Segments (Custom right border with gap for button) -->
-      <div
-        class="absolute right-0 top-0 w-px bg-transparent"
-        style="height: calc(50% - 64px)"
-      ></div>
-      <div
-        class="absolute right-0 bottom-0 w-px bg-transparent"
-        style="height: calc(50% - 64px)"
-      ></div>
+      <div class="atlas-navigation-drawer">
+        <div class="atlas-mobile-nav__brand">
+          <product-wordmark></product-wordmark>
+          <div id="game-version" class="atlas-version"></div>
+          <atlas-status-lamp
+            label="World online"
+            i18n-key="pressure_atlas.world_online"
+          ></atlas-status-lamp>
+        </div>
 
-      <div
-        class="flex-1 w-full flex flex-col justify-start overflow-y-auto lg:pt-[clamp(1rem,3vh,4rem)] lg:pb-[clamp(0.5rem,2vh,2rem)] lg:px-[clamp(1rem,1.5vw,2rem)] pt-4 pb-4 px-5 gap-4 lg:gap-[clamp(1rem,3vh,3rem)]"
-      >
-        <!-- Logo + Menu -->
-        <div
-          class="flex flex-col text-malibu-blue mb-4 ml-[clamp(0.2rem,0.4vw,0.4vh)]"
-        >
-          <div class="flex flex-col items-center gap-1">
-            <img
-              src=${assetUrl("images/OpenFrontLogo.svg")}
-              alt="OpenFront"
-              class="w-auto h-auto max-w-[220px] max-h-[4.5rem]"
-            />
-            <div
-              id="game-version"
-              class="l-header__highlightText text-center"
-            ></div>
-          </div>
-        </div>
-        <!-- Mobile Navigation Menu Items -->
-        <button
-          class="nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] ${currentPage ===
-          "page-play"
-            ? "active"
-            : ""}"
-          data-page="page-play"
-          data-i18n="main.play"
-        ></button>
-        <div
-          class="nav-menu-item flex items-center w-full cursor-pointer"
-          data-page="page-news"
-          @click=${this._notifications.onNewsClick}
-        >
-          <button
-            class="block text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-            data-i18n="main.news"
-          ></button>
-          ${this._notifications.showNewsDot()
-            ? this._renderDot("bg-red-500")
-            : ""}
-        </div>
-        <button
-          class="nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-          data-page="page-leaderboard"
-          data-i18n="main.leaderboard"
-        ></button>
-        <button
-          class="no-crazygames nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-          data-page="page-clan"
-          data-i18n="main.clans"
-        ></button>
-        <div
-          class="no-crazygames nav-menu-item flex items-center w-full cursor-pointer"
-          data-page="page-item-store"
-          @click=${this._notifications.onStoreClick}
-        >
-          <button
-            class="block text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-            data-i18n="main.store"
-          ></button>
-          ${this._notifications.showStoreDot()
-            ? this._renderDot("bg-red-500")
-            : ""}
-        </div>
-        <button
-          class="nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)] ${currentPage ===
-          "page-inventory"
-            ? "active"
-            : ""}"
-          data-page="page-inventory"
-          data-i18n="main.inventory"
-        ></button>
-        <button
-          class="nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-          data-page="page-settings"
-          data-i18n="main.settings"
-        ></button>
-        <button
-          id="mobile-nav-account-button"
-          class="nav-menu-item block w-full text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-          data-page="page-account"
-          data-i18n="main.account"
-        ></button>
-        <div
-          class="nav-menu-item flex items-center w-full cursor-pointer"
-          data-page="page-help"
-          @click=${this._notifications.onHelpClick}
-        >
-          <button
-            class="block text-left font-bold uppercase tracking-[0.05em] text-white/70 transition-all duration-200 cursor-pointer hover:text-blue-600 hover:translate-x-2.5 hover:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] [&.active]:text-blue-600 [&.active]:translate-x-2.5 [&.active]:drop-shadow-[0_0_20px_rgba(37,99,235,0.5)] text-[clamp(18px,2.8vh,32px)] py-[clamp(0.2rem,0.8vh,0.75rem)]"
-            data-i18n="main.help"
-          ></button>
-          ${this._notifications.showHelpDot()
-            ? this._renderDot("bg-yellow-400")
-            : ""}
-        </div>
-        <div
-          class="flex flex-col w-full mt-auto [.in-game_&]:hidden items-end justify-end pt-4 border-t border-white/10"
-        ></div>
+        <nav class="atlas-navigation-drawer__items" aria-label="Game menu">
+          ${this._renderItem("page-play", "main.play", "Play", currentPage)}
+          ${this._renderItem("page-news", "main.news", "News", currentPage, {
+            attention: this._notifications.showNewsDot() ? "danger" : "none",
+            onClick: this._notifications.onNewsClick,
+          })}
+          ${this._renderItem(
+            "page-item-store",
+            "main.store",
+            "Store",
+            currentPage,
+            {
+              attention: this._notifications.showStoreDot() ? "danger" : "none",
+              className: "no-crazygames",
+              onClick: this._notifications.onStoreClick,
+            },
+          )}
+          ${this._renderItem(
+            "page-inventory",
+            "main.inventory",
+            "Inventory",
+            currentPage,
+          )}
+          ${this._renderItem(
+            "page-ranked",
+            "mode_selector.ranked_title",
+            "Ranked",
+            currentPage,
+          )}
+          ${this._renderItem(
+            "page-leaderboard",
+            "main.leaderboard",
+            "Leaderboard",
+            currentPage,
+          )}
+          ${this._renderItem("page-clan", "main.clans", "Clans", currentPage, {
+            className: "no-crazygames",
+          })}
+          ${this._renderItem(
+            "page-settings",
+            "main.settings",
+            "Settings",
+            currentPage,
+          )}
+          ${this._renderItem(
+            "page-account",
+            "main.account",
+            "Account",
+            currentPage,
+          )}
+          ${this._renderItem("page-help", "main.help", "Help", currentPage, {
+            attention: this._notifications.showHelpDot() ? "info" : "none",
+            onClick: this._notifications.onHelpClick,
+          })}
+        </nav>
+
+        <footer class="atlas-navigation-drawer__footer">
+          <lang-selector></lang-selector>
+          <a href="/terms-of-service.html" data-i18n="main.terms_of_service"
+            >Terms</a
+          >
+          <a href="/privacy-policy.html" data-i18n="main.privacy_policy"
+            >Privacy</a
+          >
+        </footer>
       </div>
     `;
   }

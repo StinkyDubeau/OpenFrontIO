@@ -251,7 +251,10 @@ export class LangSelector extends LitElement {
       "streaming-now",
     ];
 
-    document.title = this.translateText("main.title") ?? document.title;
+    document.title =
+      document.body.dataset.product === "pressure-atlas"
+        ? this.translateText("pressure_atlas.page_title")
+        : (this.translateText("main.title") ?? document.title);
 
     document.querySelectorAll("[data-i18n]").forEach((element) => {
       const key = element.getAttribute("data-i18n");

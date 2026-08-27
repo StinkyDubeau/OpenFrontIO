@@ -82,8 +82,12 @@ import {
   installSafariPinchZoomBlocker,
 } from "./utilities/DisableSafariPinchZoom";
 
+import "./components/AtlasGameHud";
+import "./components/AtlasGlobalOverlays";
+import "./components/AtlasPageDeck";
+import "./components/AtlasPrimitives";
+import { mountAtlasUiLab } from "./components/AtlasUiLab";
 import "./components/DesktopNavBar";
-import "./components/Footer";
 import "./components/MainLayout";
 import "./components/MobileNavBar";
 import "./components/PlayPage";
@@ -96,6 +100,9 @@ import "./styles/core/variables.css";
 import "./styles/layout/container.css";
 import "./styles/layout/header.css";
 import "./styles/modal/chat.css";
+import "./styles/pressure-atlas.css";
+import "./styles/war-room.css";
+import { initWarRoomUI } from "./ui/WarRoomUI";
 
 declare global {
   interface Window {
@@ -1172,6 +1179,9 @@ const hideCrazyGamesElements = () => {
 
 // Initialize the client when the DOM is loaded
 const bootstrap = () => {
+  initWarRoomUI();
+  if (mountAtlasUiLab()) return;
+
   // Prevent Safari's page-level pinch-zoom, which ignores `user-scalable=no`
   // on iOS and can softlock the HUD. See issue #2330.
   installSafariPinchZoomBlocker();

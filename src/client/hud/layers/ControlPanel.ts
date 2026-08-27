@@ -344,7 +344,7 @@ export class ControlPanel extends LitElement implements Controller {
     const { greenPercent, orangePercent } = this.calculateTroopBar();
     return html`
       <div
-        class="w-full h-6 border border-gray-600 rounded-md bg-gray-900/60 overflow-hidden relative"
+        class="atlas-troop-meter w-full h-6 border border-gray-600 rounded-md bg-gray-900/60 overflow-hidden relative"
       >
         <div class="relative h-full">
           <div
@@ -396,7 +396,7 @@ export class ControlPanel extends LitElement implements Controller {
     const { greenPercent, orangePercent } = this.calculateTroopBar();
     return html`
       <div
-        class="w-full h-6 border border-gray-600 rounded-md bg-gray-900/60 overflow-hidden relative"
+        class="atlas-troop-meter w-full h-6 border border-gray-600 rounded-md bg-gray-900/60 overflow-hidden relative"
       >
         <div class="relative h-full">
           <div
@@ -462,10 +462,10 @@ export class ControlPanel extends LitElement implements Controller {
     return html`
       ${this.renderNotification()}
       <!-- Row 1: troop rate | troop bar | gold -->
-      <div class="flex gap-1.5 items-center mb-1">
+      <div class="atlas-resource-row flex gap-1.5 items-center mb-1">
         <!-- Troop rate -->
         <div
-          class="flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${this
+          class="atlas-instrument-readout atlas-instrument-readout--rate flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${this
             ._troopRateIsIncreasing
             ? "border-green-400"
             : "border-orange-400"}"
@@ -493,7 +493,7 @@ export class ControlPanel extends LitElement implements Controller {
         <div class="flex-1">${this.renderDesktopTroopBar()}</div>
         <!-- Gold -->
         <div
-          class="flex items-center gap-1 shrink-0 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm py-0.5 px-1 min-w-[4.5rem] relative"
+          class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center gap-1 shrink-0 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm py-0.5 px-1 min-w-[4.5rem] relative"
           translate="no"
         >
           ${this._goldGain !== null
@@ -510,9 +510,12 @@ export class ControlPanel extends LitElement implements Controller {
         </div>
       </div>
       <!-- Row 2: attack ratio | slider -->
-      <div class="flex items-center gap-1.5" translate="no">
+      <div
+        class="atlas-attack-console flex items-center gap-1.5"
+        translate="no"
+      >
         <div
-          class="flex items-center gap-1 shrink-0 border border-gray-600 rounded-md px-1 py-0.5 text-sm font-bold text-white cursor-pointer w-[8rem]"
+          class="atlas-instrument-readout atlas-instrument-readout--attack flex items-center gap-1 shrink-0 border border-gray-600 rounded-md px-1 py-0.5 text-sm font-bold text-white cursor-pointer w-[8rem]"
         >
           <img
             src=${swordIcon}
@@ -536,7 +539,7 @@ export class ControlPanel extends LitElement implements Controller {
           .value=${String(Math.round(this.attackRatio * 100))}
           @input=${(e: Event) => this.handleRatioSliderInput(e)}
           @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-          class="flex-1 h-1.5 accent-aquarius cursor-pointer"
+          class="atlas-attack-slider flex-1 h-1.5 accent-aquarius cursor-pointer"
         />
       </div>
     `;
@@ -545,10 +548,10 @@ export class ControlPanel extends LitElement implements Controller {
   private renderMobile() {
     return html`
       ${this.renderNotification()}
-      <div class="flex gap-2 items-center">
+      <div class="atlas-mobile-instrument-row flex gap-2 items-center">
         <!-- Gold -->
         <div
-          class="flex items-center justify-center p-1 gap-0.5 border rounded-md border-yellow-400 font-bold text-yellow-400 text-xs w-1/5 shrink-0 relative"
+          class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center justify-center p-1 gap-0.5 border rounded-md border-yellow-400 font-bold text-yellow-400 text-xs w-1/5 shrink-0 relative"
           translate="no"
         >
           ${this._goldGain !== null
@@ -569,7 +572,7 @@ export class ControlPanel extends LitElement implements Controller {
         </div>
         <!-- Sword + % label -->
         <div
-          class="flex flex-col items-center shrink-0 gap-0.5 w-8"
+          class="atlas-instrument-readout atlas-instrument-readout--attack flex flex-col items-center shrink-0 gap-0.5 w-8"
           translate="no"
         >
           <img
@@ -593,7 +596,7 @@ export class ControlPanel extends LitElement implements Controller {
             .value=${String(Math.round(this.attackRatio * 100))}
             @input=${(e: Event) => this.handleRatioSliderInput(e)}
             @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-            class="w-full h-1.5 accent-aquarius cursor-pointer"
+            class="atlas-attack-slider w-full h-1.5 accent-aquarius cursor-pointer"
           />
         </div>
       </div>
@@ -618,7 +621,8 @@ export class ControlPanel extends LitElement implements Controller {
         }
       </style>
       <div
-        class="relative pointer-events-auto ${this._isVisible
+        class="atlas-control-instruments relative pointer-events-auto ${this
+          ._isVisible
           ? "relative w-full text-sm px-2 py-1"
           : "hidden"}"
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}

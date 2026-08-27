@@ -32,14 +32,11 @@ async function mount<T extends LitElement>(element: T): Promise<T> {
 afterEach(() => document.body.replaceChildren());
 
 describe("Inventory navigation", () => {
-  it("renders Inventory in desktop and mobile navigation", async () => {
+  it("keeps desktop navigation minimal and Inventory in the game drawer", async () => {
     const desktop = await mount(new DesktopNavBar());
     const mobile = await mount(new MobileNavBar());
-    expect(
-      desktop.querySelector(
-        '[data-page="page-inventory"][data-i18n="main.inventory"]',
-      ),
-    ).toBeTruthy();
+    expect(desktop.querySelector('[data-page="page-inventory"]')).toBeNull();
+    expect(desktop.querySelector("#desktop-menu-button")).toBeTruthy();
     expect(mobile.querySelector('[data-page="page-inventory"]')).toBeTruthy();
     expect(
       mobile.querySelector(
@@ -55,12 +52,12 @@ describe("Inventory navigation", () => {
     expect(play.querySelector("username-input")).toBeTruthy();
   });
 
-  it("declares only the routed Inventory page in index.html", () => {
+  it("declares only the routed Inventory page in the reusable page deck", () => {
     const source = fs.readFileSync(
-      path.join(process.cwd(), "index.html"),
+      path.join(process.cwd(), "src/client/components/AtlasPageDeck.ts"),
       "utf8",
     );
-    expect(source).toContain('<inventory-modal\n          id="page-inventory"');
+    expect(source).toMatch(/<inventory-modal\s+id="page-inventory"/);
     expect(source).not.toContain("<cosmetics-modal");
     expect(source).not.toContain("<flag-input-modal");
   });
@@ -93,20 +90,20 @@ describe("Inventory navigation", () => {
       loadFailed: false,
     });
     document.body.appendChild(inventory);
-    const desktop = await mount(new DesktopNavBar());
+    const mobile = await mount(new MobileNavBar());
     modalRouter.register("inventory", {
       tag: "inventory-modal",
       pageId: "page-inventory",
     });
     initNavigation();
 
-    desktop.querySelector<HTMLElement>('[data-page="page-inventory"]')!.click();
+    mobile.querySelector<HTMLElement>('[data-page="page-inventory"]')!.click();
 
     await vi.waitFor(() => {
       expect(window.location.hash).toBe("#modal=inventory&tab=skins");
     });
     expect(
-      desktop
+      mobile
         .querySelector<HTMLElement>('[data-page="page-inventory"]')!
         .classList.contains("active"),
     ).toBe(true);

@@ -1,0 +1,126 @@
+import { html, LitElement, nothing } from "lit";
+import { customElement, property } from "lit/decorators.js";
+import { translateText } from "../Utils";
+
+export type AtlasMaterial =
+  | "chrome"
+  | "mahogany"
+  | "felt"
+  | "brass"
+  | "parchment"
+  | "glass";
+
+export type AtlasElevation = "inset" | "flush" | "raised" | "floating";
+
+@customElement("atlas-surface")
+export class AtlasSurface extends LitElement {
+  @property({ reflect: true }) material: AtlasMaterial = "mahogany";
+  @property({ reflect: true }) elevation: AtlasElevation = "raised";
+  @property({ type: Boolean, reflect: true }) interactive = false;
+
+  createRenderRoot() {
+    return this;
+  }
+
+  render() {
+    return html`<div
+      class="atlas-material-surface atlas-material-${this
+        .material} atlas-elevation-${this.elevation}"
+    >
+      <slot></slot>
+    </div>`;
+  }
+}
+
+@customElement("atlas-gauge")
+export class AtlasGauge extends LitElement {
+  @property() label = "";
+  @property() value = "";
+  @property({ type: Number }) progress = 0;
+  @property() tone: "brass" | "green" | "danger" = "brass";
+
+  createRenderRoot() {
+    return this;
+  }
+
+  render() {
+    const clamped = Math.max(0, Math.min(1, this.progress));
+    return html`<div
+      class="atlas-gauge atlas-gauge--${this.tone}"
+      style=${`--atlas-gauge-progress:${clamped * 270}deg`}
+      role="meter"
+      aria-label=${this.label || nothing}
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow=${Math.round(clamped * 100)}
+    >
+      <span class="atlas-gauge__dial" aria-hidden="true"></span>
+      <strong>${this.value}</strong>
+      <span>${this.label}</span>
+    </div>`;
+  }
+}
+
+@customElement("atlas-map-bezel")
+export class AtlasMapBezel extends LitElement {
+  createRenderRoot() {
+    return this;
+  }
+
+  render() {
+    return html`<div class="atlas-map-bezel__edge" aria-hidden="true"></div>`;
+  }
+}
+
+@customElement("atlas-status-lamp")
+export class AtlasStatusLamp extends LitElement {
+  @property() label = "";
+  @property({ attribute: "i18n-key" }) i18nKey = "";
+
+  createRenderRoot() {
+    return this;
+  }
+
+  render() {
+    const translatedLabel =
+      this.i18nKey === "pressure_atlas.world_online"
+        ? translateText("pressure_atlas.world_online")
+        : this.label;
+    return html`<span class="atlas-status-lamp" role="status">
+      <span class="atlas-status-lamp__light" aria-hidden="true"></span>
+      <span data-i18n=${this.i18nKey || nothing}>${translatedLabel}</span>
+    </span>`;
+  }
+}
+
+@customElement("atlas-nav-item")
+export class AtlasNavItem extends LitElement {
+  @property() page = "";
+  @property({ attribute: "i18n-key" }) i18nKey = "";
+  @property() label = "";
+  @property({ type: Boolean, reflect: true }) active = false;
+  @property({ type: Boolean, reflect: true }) compact = false;
+  @property() attention: "none" | "info" | "danger" = "none";
+
+  createRenderRoot() {
+    return this;
+  }
+
+  render() {
+    return html`<button
+      type="button"
+      class="atlas-nav-item nav-menu-item ${this.active ? "active" : ""}"
+      data-page=${this.page || nothing}
+      data-i18n=${this.i18nKey || nothing}
+    >
+      ${this.label}
+      ${this.attention === "none"
+        ? nothing
+        : html`<span
+            class="atlas-nav-item__attention atlas-nav-item__attention--${this
+              .attention}"
+            aria-hidden="true"
+          ></span>`}
+    </button>`;
+  }
+}

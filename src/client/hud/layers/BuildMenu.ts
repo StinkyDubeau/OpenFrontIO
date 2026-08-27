@@ -174,10 +174,20 @@ export class BuildMenu extends LitElement implements Controller {
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 9999;
-      background-color: #1e1e1e;
-      padding: 15px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-      border-radius: 10px;
+      border: 3px solid #a47529;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 23%),
+        url("/resources/images/ui/materials/mahogany@2x.webp"), #210c08;
+      background-size:
+        auto,
+        384px 384px,
+        auto;
+      padding: 18px;
+      box-shadow:
+        0 30px 90px rgba(0, 0, 0, 0.72),
+        inset 0 0 0 1px rgba(255, 230, 157, 0.24),
+        inset 0 0 34px rgba(0, 0, 0, 0.5);
+      border-radius: 16px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -198,12 +208,27 @@ export class BuildMenu extends LitElement implements Controller {
       position: relative;
       width: 120px;
       height: 140px;
-      border: 2px solid #444;
-      background-color: #2c2c2c;
-      color: white;
-      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid #7a5118;
+      background:
+        radial-gradient(
+          circle at 50% 120%,
+          rgba(78, 176, 142, 0.2),
+          transparent 58%
+        ),
+        linear-gradient(155deg, rgba(255, 255, 255, 0.13), transparent 24%),
+        #071713;
+      color: #fff3cd;
+      border-radius: 11px;
       cursor: pointer;
-      transition: all 0.3s ease;
+      box-shadow:
+        inset 0 3px 13px rgba(0, 0, 0, 0.72),
+        inset 0 1px rgba(255, 255, 255, 0.17),
+        0 5px 12px rgba(0, 0, 0, 0.42);
+      transition:
+        transform 130ms cubic-bezier(0.2, 0.72, 0.2, 1),
+        border-color 130ms ease,
+        filter 130ms ease;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -213,17 +238,17 @@ export class BuildMenu extends LitElement implements Controller {
       gap: 5px;
     }
     .build-button:not(:disabled):hover {
-      background-color: #3a3a3a;
-      transform: scale(1.05);
-      border-color: #666;
+      filter: brightness(1.14);
+      transform: translateY(-2px) scale(1.018);
+      border-color: #f5cf70;
     }
     .build-button:not(:disabled):active {
-      background-color: #4a4a4a;
-      transform: scale(0.95);
+      filter: brightness(0.88);
+      transform: translateY(1px) scale(0.985);
     }
     .build-button:disabled {
-      background-color: #1a1a1a;
-      border-color: #333;
+      background-color: #0b0c0b;
+      border-color: #3c2d17;
       cursor: not-allowed;
       opacity: 0.7;
     }
@@ -253,8 +278,14 @@ export class BuildMenu extends LitElement implements Controller {
       position: absolute;
       top: -10px;
       right: -10px;
-      background-color: #2c2c2c;
-      color: white;
+      background: linear-gradient(
+        180deg,
+        #fff0a9,
+        #c18b32 48%,
+        #6f430d 52%,
+        #b57c24
+      );
+      color: #251503;
       padding: 2px 10px;
       border-radius: 10000px;
       transition: all 0.3s ease;
@@ -262,23 +293,67 @@ export class BuildMenu extends LitElement implements Controller {
       display: flex;
       justify-content: center;
       align-content: center;
-      border: 1px solid #444;
+      border: 1px solid #f2cf72;
+      text-shadow: 0 1px rgba(255, 255, 255, 0.5);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.52);
     }
     .build-button:not(:disabled):hover > .build-count-chip {
-      background-color: #3a3a3a;
-      border-color: #666;
+      filter: brightness(1.08);
+      border-color: #fff1b3;
     }
     .build-button:not(:disabled):active > .build-count-chip {
-      background-color: #4a4a4a;
+      filter: brightness(0.9);
     }
     .build-button:disabled > .build-count-chip {
-      background-color: #1a1a1a;
-      border-color: #333;
+      background: #30271b;
+      border-color: #4c3a22;
       cursor: not-allowed;
     }
     .build-count {
       font-weight: bold;
       font-size: 14px;
+    }
+
+    .build-button::before {
+      position: absolute;
+      inset: 1px 2px 58%;
+      border-radius: 8px 8px 45% 45%;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.14),
+        transparent
+      );
+      content: "";
+      pointer-events: none;
+    }
+
+    .build-button img {
+      position: relative;
+      z-index: 1;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.72));
+    }
+
+    .build-name {
+      color: #fff0b8;
+      text-shadow: 0 -1px rgba(0, 0, 0, 0.8);
+    }
+
+    .build-description {
+      color: #cdbd91;
+      line-height: 1.25;
+    }
+
+    .build-cost {
+      color: #f2d176;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 -1px rgba(0, 0, 0, 0.7);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .build-button,
+      .build-count-chip {
+        transition: none;
+      }
     }
 
     @media (max-width: 768px) {

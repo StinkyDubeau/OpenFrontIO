@@ -112,18 +112,27 @@ function steamLinkAliasRedirect(): Plugin {
   };
 }
 
-// Keep the standalone idle client on an explicit static document. Vite's SPA
-// fallback otherwise serves the OpenFront app shell for `/idle/`, which is
-// exactly the module-heavy path this iOS-safe preview is meant to bypass.
-function idleStandaloneRedirect(): Plugin {
+// `/idle/` was the first standalone prototype. Keep old phone bookmarks useful,
+// but send them to the canonical client so every preview uses the real
+// OpenFront map, input layer, lobby flow, and simulation.
+function legacyIdlePreviewRedirect(): Plugin {
   return {
-    name: "idle-standalone-redirect",
+    name: "legacy-idle-preview-redirect",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (!req.url || req.method !== "GET") return next();
-        const pathname = new URL(req.url, "http://x").pathname;
-        if (pathname !== "/idle" && pathname !== "/idle/") return next();
-        res.writeHead(302, { Location: "/idle/index.html" });
+        if (req.method !== "GET") return next();
+        const requestedUrl =
+          (req as { originalUrl?: string }).originalUrl ?? req.url;
+        if (!requestedUrl) return next();
+        const pathname = new URL(requestedUrl, "http://x").pathname;
+        if (
+          pathname !== "/idle" &&
+          pathname !== "/idle/" &&
+          pathname !== "/idle/index.html"
+        ) {
+          return next();
+        }
+        res.writeHead(302, { Location: "/" });
         res.end();
       });
     },
@@ -288,7 +297,7 @@ export default defineConfig(({ mode }) => {
         ? [
             serveProprietaryDir(proprietaryDir, resourcesDir),
             randomWorkerCreateProxy(devNumWorkers),
-            idleStandaloneRedirect(),
+            legacyIdlePreviewRedirect(),
             steamLinkAliasRedirect(),
           ]
         : []),
