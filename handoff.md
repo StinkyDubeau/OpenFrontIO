@@ -222,3 +222,26 @@ disabled but retained as a rollback path. The Sightings production tunnel was
 not modified. Cloudflare Access still requires the owner's exact identity;
 until that is supplied, the high-entropy preview-password gateway remains the
 authentication boundary.
+
+## Expo mobile shell
+
+The first native-shell milestone lives in `apps/mobile` and targets Expo SDK 57
+on iOS and Android. It does not port or replace gameplay: the existing client is
+a persistent, full-bleed `react-native-webview` surface with bounce, pull to
+refresh, and outer scrolling disabled. The native layer adds safe-area-aware
+connection state, haptics, recovery, source/license access, Android back
+handling, and a responsive iOS-6-inspired command deck.
+
+The committed LAN fallback is `http://192.168.2.118:9000/`; override it with
+`EXPO_PUBLIC_GAME_URL`, including `https://atlas-dev.sightings.today/` when the
+phone is away from the LAN. The WebView preserves cookies and DOM storage. It
+also emits `pressureatlas:native-ready` and `pressureatlas:app-state` browser
+events so later reconnect/idle work can use native lifecycle without changing
+the game renderer.
+
+Metro is launched on port 8081 by `scripts/start-mobile-dev-server.ps1`. The
+script supervises and restarts Expo Go LAN mode. Use `exp://192.168.2.118:8081`
+from Expo Go while on the same LAN. `expo-dev-client`, build properties, and EAS
+development/preview/production profiles are already configured for the later
+Swift `UIButton` and Android native-widget module phase. Store signing remains
+unconfigured and will require the owner's Expo/Apple/Android credentials.

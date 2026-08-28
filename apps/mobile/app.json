@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Pressure Atlas",
+    "slug": "pressure-atlas",
+    "scheme": "pressureatlas",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/pressure-atlas-icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#05090c",
+    "ios": {
+      "bundleIdentifier": "today.sightings.pressureatlas",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoadsInWebContent": true,
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "today.sightings.pressureatlas",
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/pressure-atlas-icon.png"
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ]
+    ]
+  }
+}
