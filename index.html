@@ -20,10 +20,19 @@
 
       /* iOS safe area support */
       body {
-        padding-top: env(safe-area-inset-top);
-        padding-right: env(safe-area-inset-right);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
+        padding-top: max(env(safe-area-inset-top), var(--native-safe-top, 0px));
+        padding-right: max(
+          env(safe-area-inset-right),
+          var(--native-safe-right, 0px)
+        );
+        padding-bottom: max(
+          env(safe-area-inset-bottom),
+          var(--native-safe-bottom, 0px)
+        );
+        padding-left: max(
+          env(safe-area-inset-left),
+          var(--native-safe-left, 0px)
+        );
       }
 
       /* Prevent Playwire bottom rail from affecting flex layout,

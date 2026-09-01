@@ -32,3 +32,22 @@ export function appStateScript(state: string): string {
     true;
   `;
 }
+
+export function safeAreaScript(
+  top: number,
+  right: number,
+  bottom: number,
+  left: number,
+): string {
+  return `
+    (function () {
+      var root = document.documentElement;
+      if (!root) return;
+      root.style.setProperty("--native-safe-top", ${JSON.stringify(`${top}px`)});
+      root.style.setProperty("--native-safe-right", ${JSON.stringify(`${right}px`)});
+      root.style.setProperty("--native-safe-bottom", ${JSON.stringify(`${bottom}px`)});
+      root.style.setProperty("--native-safe-left", ${JSON.stringify(`${left}px`)});
+    })();
+    true;
+  `;
+}

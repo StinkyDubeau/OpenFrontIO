@@ -1,11 +1,9 @@
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   BackHandler,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -14,11 +12,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView, { WebViewNavigation } from "react-native-webview";
 
 import { AtlasButton } from "./components/AtlasButton";
+import { LiquidGlassButton } from "./components/LiquidGlassButton";
 import { NativeDeck } from "./components/NativeDeck";
 import {
   appStateScript,
   GAME_URL,
   NATIVE_BRIDGE_BOOTSTRAP,
+  safeAreaScript,
 } from "./config/game";
 
 type LoadState = "connecting" | "live" | "error";
@@ -31,6 +31,16 @@ export function GameSurface() {
   const [deckVisible, setDeckVisible] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("connecting");
   const [reloadKey, setReloadKey] = useState(0);
+  const nativeBootstrap = useMemo(
+    () =>
+      `${NATIVE_BRIDGE_BOOTSTRAP}\n${safeAreaScript(
+        insets.top,
+        insets.right,
+        insets.bottom,
+        insets.left,
+      )}`,
+    [insets.bottom, insets.left, insets.right, insets.top],
+  );
 
   const reload = () => {
     setLoadState("connecting");
@@ -48,6 +58,12 @@ export function GameSurface() {
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => {
+    webView.current?.injectJavaScript(
+      safeAreaScript(insets.top, insets.right, insets.bottom, insets.left),
+    );
+  }, [insets.bottom, insets.left, insets.right, insets.top]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -84,7 +100,7 @@ export function GameSurface() {
         cacheEnabled
         contentInsetAdjustmentBehavior="never"
         domStorageEnabled
-        injectedJavaScriptBeforeContentLoaded={NATIVE_BRIDGE_BOOTSTRAP}
+        injectedJavaScriptBeforeContentLoaded={nativeBootstrap}
         javaScriptCanOpenWindowsAutomatically={false}
         javaScriptEnabled
         mediaPlaybackRequiresUserAction={false}
@@ -128,39 +144,10 @@ export function GameSurface() {
           },
         ]}
       >
-        <Pressable
-          accessibilityHint="Opens native connection and app controls"
-          accessibilityLabel="Open Pressure Atlas command deck"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setDeckVisible(true);
-          }}
-          style={({ pressed }) => [
-            styles.deckTrigger,
-            pressed && styles.deckTriggerPressed,
-          ]}
-        >
-          <LinearGradient
-            colors={["#ebe4ce", "#98917f", "#4a4a43"]}
-            style={styles.triggerRing}
-          >
-            <View style={styles.triggerFace}>
-              <Text style={styles.triggerGlyph}>◈</Text>
-              <View
-                style={[
-                  styles.triggerLamp,
-                  loadState === "live"
-                    ? styles.triggerLampLive
-                    : loadState === "error"
-                      ? styles.triggerLampError
-                      : styles.triggerLampLoading,
-                ]}
-              />
-            </View>
-          </LinearGradient>
-        </Pressable>
+        <LiquidGlassButton
+          onPress={() => setDeckVisible(true)}
+          status={loadState}
+        />
 
         {loadState !== "live" ? (
           <View style={styles.connectionPlate}>
@@ -238,65 +225,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     top: 0,
-  },
-  deckTrigger: {
-    borderRadius: 23,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.67,
-    shadowRadius: 5,
-    elevation: 10,
-  },
-  deckTriggerPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.94 }],
-  },
-  triggerRing: {
-    alignItems: "center",
-    borderColor: "#161715",
-    borderRadius: 23,
-    borderWidth: 1,
-    height: 46,
-    justifyContent: "center",
-    width: 46,
-  },
-  triggerFace: {
-    alignItems: "center",
-    backgroundColor: "#15231f",
-    borderColor: "rgba(255,255,255,0.35)",
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  triggerGlyph: {
-    color: "#efe5c8",
-    fontSize: 24,
-    fontWeight: "900",
-    marginTop: -2,
-    textShadowColor: "#000",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 2,
-  },
-  triggerLamp: {
-    borderColor: "rgba(0,0,0,0.75)",
-    borderRadius: 4,
-    borderWidth: 1,
-    bottom: 2,
-    height: 7,
-    position: "absolute",
-    right: 2,
-    width: 7,
-  },
-  triggerLampLive: {
-    backgroundColor: "#72f0a4",
-  },
-  triggerLampLoading: {
-    backgroundColor: "#e2bc54",
-  },
-  triggerLampError: {
-    backgroundColor: "#ff625d",
   },
   connectionPlate: {
     backgroundColor: "rgba(17,21,20,0.92)",

@@ -93,6 +93,18 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(mainLayout).not.toContain("overflow-y-auto");
   });
 
+  test("presents one headerless public play action", () => {
+    const playPage = source("src/client/components/PlayPage.ts");
+    const modeSelector = source("src/client/GameModeSelector.ts");
+
+    expect(playPage).not.toContain("<header");
+    expect(playPage).not.toContain("hamburger-btn");
+    expect(modeSelector.match(/class="atlas-quick-play /g)).toHaveLength(1);
+    expect(modeSelector).not.toContain("atlas-public-lobbies");
+    expect(modeSelector).not.toContain("atlas-game-actions");
+    expect(modeSelector).toContain("games?.ffa?.[0]");
+  });
+
   test("keeps product styles away from renderer-owned selectors", () => {
     for (const stylesheet of [
       "src/client/styles/pressure-atlas.css",

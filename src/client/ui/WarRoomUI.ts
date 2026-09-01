@@ -194,11 +194,11 @@ export class UiFlourishController {
     if (!control) return;
 
     const interactive = control.closest<HTMLElement>(
-      ".atlas-lobby-card, .nav-menu-item[data-page], #hamburger-btn, #desktop-menu-button",
+      ".atlas-quick-play, .atlas-lobby-card, .nav-menu-item[data-page], #hamburger-btn, #desktop-menu-button",
     );
     if (!interactive) return;
 
-    if (interactive.matches(".atlas-lobby-card")) {
+    if (interactive.matches(".atlas-quick-play, .atlas-lobby-card")) {
       this.play("deploy");
     } else if (interactive.matches("#hamburger-btn, #desktop-menu-button")) {
       this.play("drawer");

@@ -7,6 +7,7 @@ export function closeMobileSidebar() {
 export function initNavigation() {
   const showPage = (pageId: string) => {
     window.currentPageId = pageId;
+    document.body.dataset.page = pageId;
 
     // Close mobile sidebar if a nav item was clicked
     closeMobileSidebar();
