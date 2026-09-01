@@ -105,6 +105,18 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(modeSelector).toContain("games?.ffa?.[0]");
   });
 
+  test("never offers Add to Home Screen inside the native shell", () => {
+    const banner = source("src/client/components/IOSAddToHomeScreenBanner.ts");
+    const nativeBridge = source("apps/mobile/src/config/game.ts");
+    const renderMethod = banner.slice(banner.indexOf("  render() {"));
+
+    expect(nativeBridge).toContain("window.__PRESSURE_ATLAS_NATIVE__");
+    expect(banner).toContain(".__PRESSURE_ATLAS_NATIVE__");
+    expect(renderMethod.indexOf(".__PRESSURE_ATLAS_NATIVE__")).toBeLessThan(
+      renderMethod.indexOf("return html`"),
+    );
+  });
+
   test("keeps product styles away from renderer-owned selectors", () => {
     for (const stylesheet of [
       "src/client/styles/pressure-atlas.css",

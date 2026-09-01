@@ -138,6 +138,12 @@ export class IOSAddToHomeScreenBanner extends LitElement {
 
   render() {
     if (!Platform.isIOS) return nothing;
+    if (
+      (window as Window & { __PRESSURE_ATLAS_NATIVE__?: unknown })
+        .__PRESSURE_ATLAS_NATIVE__
+    ) {
+      return nothing;
+    }
     if (this.dismissed || this.later) return nothing;
     if (
       (navigator as any).standalone === true ||
