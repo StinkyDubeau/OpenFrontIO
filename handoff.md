@@ -225,8 +225,10 @@ authentication boundary.
 
 ## Expo mobile shell
 
-The first native-shell milestone lives in `apps/mobile` and targets Expo SDK 57
-on iOS and Android. It does not port or replace gameplay: the existing client is
+The first native-shell milestone lives in `apps/mobile` and targets Expo SDK 54
+on iOS and Android. SDK 54 is deliberate: as of September 2026 it is the version
+included in the iOS App Store and Google Play releases of Expo Go. It does not
+port or replace gameplay: the existing client is
 a persistent, full-bleed `react-native-webview` surface with bounce, pull to
 refresh, and outer scrolling disabled. The native layer adds safe-area-aware
 connection state, haptics, recovery, source/license access, Android back

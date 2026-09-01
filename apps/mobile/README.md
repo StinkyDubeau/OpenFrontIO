@@ -22,6 +22,10 @@ a mahogany instrument bezel. Its project master is
 3. From the repository root, run `npm run mobile:start`.
 4. Open the resulting QR code with Expo Go on iOS or Android.
 
+The project deliberately targets Expo SDK 54 so the ordinary Expo Go release
+from Apple's App Store and Google Play can open it. Newer Expo SDKs require a
+separately signed Expo Go or a development build on a physical iPhone.
+
 The committed fallback is `http://192.168.2.118:9000/`. For off-LAN testing,
 set `EXPO_PUBLIC_GAME_URL=https://atlas-dev.sightings.today/` before starting
 Metro. Cloudflare Access can authenticate inside the persistent WebView.
