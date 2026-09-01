@@ -2,12 +2,12 @@
 
 This Expo app presents the existing Pressure Atlas/OpenFront client as a
 full-screen game surface. The map, WebGL renderer, networking, and gameplay stay
-in the web application. Native React Native chrome supplies app lifecycle,
-session persistence, haptics, connection recovery, and a small command deck.
+in the web application. The React Native shell supplies app lifecycle, session
+persistence, safe-area data, platform back navigation, and connection recovery.
 
-The boundary is deliberate: the game remains visually pixelated and unchanged,
-while the app controls use the tactile, material-heavy Pressure Atlas design.
-There is no page-like outer scrolling.
+The boundary is deliberate: every product screen owns its own controls and
+fills the display. The native shell adds no persistent menu, trigger, header,
+or control overlay. There is no page-like outer scrolling.
 
 The app icon was generated specifically for Pressure Atlas with the built-in
 image generation workflow: an original brass compass over an emerald globe in
@@ -38,17 +38,15 @@ Metro. Cloudflare Access can authenticate inside the persistent WebView.
   `pressureatlas:app-state` browser event.
 - The presence of the shell is delivered as `pressureatlas:native-ready`; the
   same metadata is exposed at `window.__PRESSURE_ATLAS_NATIVE__`.
-- Existing gameplay input is not intercepted except beneath the single native
-  command-deck trigger.
-- External source/license material opens in the system browser.
+- Existing gameplay input is never intercepted by persistent native chrome.
+- iOS uses its edge-swipe navigation gesture; Android uses its hardware/system
+  back action. Reconnect appears only on a connection failure.
 
 ## Development builds and literal platform controls
 
-The current deck uses React Native `Pressable`, which renders through native
-iOS/Android views and works in Expo Go. The project also includes
-`expo-dev-client` and an EAS development profile. That gives the next phase a
-clean place for an Expo Module whose Swift side hosts `UIButton`/UIKit controls
-and whose Kotlin side hosts Android platform widgets.
+The project includes `expo-dev-client` and an EAS development profile. Future
+native controls should be placed in the screen or workflow they operate rather
+than collected in global shell chrome.
 
 Create those installable development builds with:
 

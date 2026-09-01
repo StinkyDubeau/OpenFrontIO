@@ -117,6 +117,18 @@ describe("Pressure Atlas OpenFront shell", () => {
     );
   });
 
+  test("keeps the native game surface full-screen and free of global controls", () => {
+    const mobileSurface = source("apps/mobile/src/GameSurface.tsx");
+
+    expect(mobileSurface).toContain("<WebView");
+    expect(mobileSurface).toContain("flex: 1");
+    expect(mobileSurface).not.toContain("NativeDeck");
+    expect(mobileSurface).not.toContain("LiquidGlassButton");
+    expect(mobileSurface).not.toContain("deckVisible");
+    expect(mobileSurface).toContain("allowsBackForwardNavigationGestures");
+    expect(mobileSurface).toContain('"hardwareBackPress"');
+  });
+
   test("keeps product styles away from renderer-owned selectors", () => {
     for (const stylesheet of [
       "src/client/styles/pressure-atlas.css",

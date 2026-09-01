@@ -12,8 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import WebView, { WebViewNavigation } from "react-native-webview";
 
 import { AtlasButton } from "./components/AtlasButton";
-import { LiquidGlassButton } from "./components/LiquidGlassButton";
-import { NativeDeck } from "./components/NativeDeck";
 import {
   appStateScript,
   GAME_URL,
@@ -28,7 +26,6 @@ export function GameSurface() {
   const loadFailed = useRef(false);
   const insets = useSafeAreaInsets();
   const [canGoBack, setCanGoBack] = useState(false);
-  const [deckVisible, setDeckVisible] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("connecting");
   const [reloadKey, setReloadKey] = useState(0);
   const nativeBootstrap = useMemo(
@@ -41,11 +38,6 @@ export function GameSurface() {
       )}`,
     [insets.bottom, insets.left, insets.right, insets.top],
   );
-
-  const reload = () => {
-    setLoadState("connecting");
-    webView.current?.reload();
-  };
 
   const hardReload = () => {
     setLoadState("connecting");
@@ -70,10 +62,6 @@ export function GameSurface() {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        if (deckVisible) {
-          setDeckVisible(false);
-          return true;
-        }
         if (canGoBack) {
           webView.current?.goBack();
           return true;
@@ -82,7 +70,7 @@ export function GameSurface() {
       },
     );
     return () => subscription.remove();
-  }, [canGoBack, deckVisible]);
+  }, [canGoBack]);
 
   const updateNavigation = (navigation: WebViewNavigation) => {
     setCanGoBack(navigation.canGoBack);
@@ -133,30 +121,20 @@ export function GameSurface() {
         thirdPartyCookiesEnabled
       />
 
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.chrome,
-          {
-            paddingTop: Math.max(insets.top, 8),
-            paddingLeft: Math.max(insets.left, 9),
-            paddingRight: Math.max(insets.right, 9),
-          },
-        ]}
-      >
-        <LiquidGlassButton
-          onPress={() => setDeckVisible(true)}
-          status={loadState}
-        />
-
-        {loadState !== "live" ? (
-          <View style={styles.connectionPlate}>
-            <Text style={styles.connectionText}>
-              {loadState === "error" ? "LINK LOST" : "CONNECTING"}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      {loadState === "connecting" ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.connectionPlate,
+            {
+              top: Math.max(insets.top, 8),
+              right: Math.max(insets.right, 9),
+            },
+          ]}
+        >
+          <Text style={styles.connectionText}>CONNECTING</Text>
+        </View>
+      ) : null}
 
       {loadState === "error" ? (
         <View style={styles.errorWrap}>
@@ -182,28 +160,6 @@ export function GameSurface() {
           </LinearGradient>
         </View>
       ) : null}
-
-      <View
-        pointerEvents={deckVisible ? "auto" : "none"}
-        style={[
-          styles.deckLayer,
-          {
-            paddingTop: Math.max(insets.top, 8),
-            paddingBottom: Math.max(insets.bottom, 8),
-            paddingLeft: Math.max(insets.left, 0),
-            paddingRight: Math.max(insets.right, 0),
-          },
-        ]}
-      >
-        <NativeDeck
-          canGoBack={canGoBack}
-          gameUrl={GAME_URL}
-          onBack={() => webView.current?.goBack()}
-          onClose={() => setDeckVisible(false)}
-          onReload={reload}
-          visible={deckVisible}
-        />
-      </View>
     </View>
   );
 }
@@ -217,23 +173,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#05090c",
     flex: 1,
   },
-  chrome: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    left: 0,
-    position: "absolute",
-    right: 0,
-    top: 0,
-  },
   connectionPlate: {
     backgroundColor: "rgba(17,21,20,0.92)",
     borderColor: "#8c826a",
     borderRadius: 5,
     borderWidth: 1,
-    marginTop: 8,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    position: "absolute",
   },
   connectionText: {
     color: "#e9dec0",
@@ -284,12 +231,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 15,
     marginTop: 8,
-  },
-  deckLayer: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    top: 0,
   },
 });

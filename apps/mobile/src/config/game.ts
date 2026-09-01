@@ -9,8 +9,6 @@ function normalizeGameUrl(value: string | undefined): string {
 
 export const GAME_URL = normalizeGameUrl(process.env.EXPO_PUBLIC_GAME_URL);
 
-export const SOURCE_URL = "https://github.com/StinkyDubeau/OpenFrontIO";
-
 export const NATIVE_BRIDGE_BOOTSTRAP = `
   (function () {
     var detail = {
