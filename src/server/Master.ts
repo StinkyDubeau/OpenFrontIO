@@ -45,6 +45,7 @@ let persistentWorldRouter:
 let persistentWorldNotificationTimer: NodeJS.Timeout | undefined;
 let persistentWorldNotificationTickInFlight = false;
 let persistentWorldRuntimeBridge: PersistentWorldRuntimeBridge | undefined;
+let masterShutdownStarted = false;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -331,6 +332,17 @@ export async function startMaster() {
     lobbyService.removeWorker(workerIdNum);
     persistentWorldRuntimeBridge?.invalidateAll();
 
+    // During a controlled container stop each worker flushes its final managed
+    // turn batch before disconnecting. Do not replace it while the master is
+    // draining or the replacement can race the database close and keep the
+    // container alive past Docker's stop timeout.
+    if (masterShutdownStarted) {
+      log.info(
+        `Worker ${workerId} (PID: ${worker.process.pid}) drained during shutdown`,
+      );
+      return;
+    }
+
     log.warn(
       `Worker ${workerId} (PID: ${worker.process.pid}) died with code: ${code} and signal: ${signal}`,
     );
@@ -352,6 +364,52 @@ export async function startMaster() {
   server.listen(PORT, () => {
     log.info(`Master HTTP server listening on port ${PORT}`);
   });
+
+  const gracefullyStopMaster = (signal: string) => {
+    if (masterShutdownStarted) return;
+    masterShutdownStarted = true;
+    log.info(`master received ${signal}, draining gameplay workers`);
+
+    // Stop accepting new HTTP and WebSocket upgrades while keeping IPC alive
+    // long enough for every worker to persist its final turn batch.
+    server.close();
+    const workers = Object.values(cluster.workers ?? {}).filter(
+      (worker): worker is NonNullable<typeof worker> => worker !== undefined,
+    );
+    if (workers.length === 0) {
+      process.exit(0);
+      return;
+    }
+
+    let remaining = workers.length;
+    let completed = false;
+    const finish = () => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(forceExit);
+      process.exit(0);
+    };
+    const forceExit = setTimeout(() => {
+      log.warn("worker drain deadline elapsed; forcing master shutdown", {
+        remaining,
+      });
+      for (const worker of workers) {
+        if (!worker.isDead()) worker.kill("SIGKILL");
+      }
+      finish();
+    }, 15_000);
+
+    for (const worker of workers) {
+      worker.once("exit", () => {
+        remaining -= 1;
+        if (remaining === 0) finish();
+      });
+      worker.kill("SIGTERM");
+    }
+  };
+
+  process.once("SIGTERM", () => gracefullyStopMaster("SIGTERM"));
+  process.once("SIGINT", () => gracefullyStopMaster("SIGINT"));
 }
 
 app.get("/api/health", (_req, res) => {

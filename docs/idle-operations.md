@@ -186,6 +186,20 @@ wrapper deletes its temporary snapshot only after a healthy new deployment or
 healthy rollback; on any restore/stop failure it leaves the root-only artifact
 in place and prints the exact recovery path.
 
+Persistent matches treat this restart as a normal recovery boundary. The
+master first closes public ingress, signals every gameplay worker to flush its
+final managed-turn batch through IPC, and waits up to 15 seconds before it
+exits. The bind-mounted SQLite database retains the frozen roster, stable game
+identifier, configuration, and contiguous turn journal. On startup the master
+recreates every active managed game from that journal, after which clients
+reconnect through the same canonical `/wN` route. Simulation time is paused
+during the short deployment outage; it is not advanced from wall-clock time.
+
+Full-journal replay is suitable for the one-day playtest phase. Before week-long
+production worlds, add periodic hashed engine checkpoints plus acknowledged
+worker-to-master journal delivery so recovery work and the possible unconfirmed
+tail remain bounded regardless of world age.
+
 For a schema-compatible release, manual rollback is the same operation with an
 older known-good digest:
 
