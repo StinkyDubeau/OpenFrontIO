@@ -142,12 +142,17 @@ describe("persistent-world notifications", () => {
     repository.close();
 
     // Recreate the exact upgrade boundary: durable worlds/reminder JSON exist,
-    // while notification tables and the v3 ledger entry do not.
+    // while v3 notification data and later additive schema do not.
     const versionTwo = new DatabaseSync(dbPath);
     versionTwo.exec(`
+      DROP TABLE persistent_world_runtime_turns;
+      DROP TABLE persistent_world_runtimes;
+      DROP INDEX persistent_world_identities_gameplay_hash_idx;
+      ALTER TABLE persistent_world_identities
+        DROP COLUMN gameplay_persistent_id_hash;
       DROP TABLE persistent_world_in_app_notifications;
       DROP TABLE persistent_world_notification_jobs;
-      DELETE FROM persistent_world_schema_migrations WHERE version = 3;
+      DELETE FROM persistent_world_schema_migrations WHERE version >= 3;
     `);
     versionTwo.close();
 

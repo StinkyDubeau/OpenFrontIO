@@ -39,6 +39,10 @@ import { archive, finalizeGameRecord } from "./Archive";
 import { Client } from "./Client";
 import { ClientMsgRateLimiter } from "./ClientMsgRateLimiter";
 import { fetchCustomTribes } from "./CustomTribes";
+import type {
+  ManagedGameOptions,
+  ManagedReservedSeat,
+} from "./IPCBridgeSchema";
 import { ServerEnv } from "./ServerEnv";
 import {
   noopMatchTelemetryEmitter,
@@ -70,6 +74,10 @@ export interface IntentActor {
 export interface IntentOutcome {
   status: number;
   error?: string;
+}
+
+export interface ManagedGameHooks {
+  onTurnsCommitted?: (turns: Turn[]) => void;
 }
 
 export function hashPersistentID(persistentID: string): string {
@@ -107,6 +115,9 @@ export class GameServer {
 
   private turns: Turn[] = [];
   private intents: StampedIntent[] = [];
+  private readonly initialTurnForClient = new Map<ClientID, number>();
+  private pendingManagedTurns: Turn[] = [];
+  private managedTurnFlushTimer: ReturnType<typeof setTimeout> | undefined;
   public activeClients: Client[] = [];
   private allClients: Map<ClientID, Client> = new Map();
   // Map persistentID to clientID for reconnection lookup
@@ -150,6 +161,15 @@ export class GameServer {
   private websockets: Set<WebSocket> = new Set();
 
   private winnerVotes = new VoteRound<ClientSendWinnerMessage>();
+
+  private readonly managedSeatsByIdentityHash = new Map<
+    string,
+    ManagedReservedSeat
+  >();
+  private readonly managedSeatsByClientID = new Map<
+    ClientID,
+    ManagedReservedSeat
+  >();
 
   // Per-turn consensus on the live stats snapshot (see handleLiveStats).
   // Tallies are keyed by turn number; an entry is removed once consensus is
@@ -202,8 +222,16 @@ export class GameServer {
     private matchmakingTeams?: string[][],
     private readonly telemetry: MatchTelemetryEmitter = noopMatchTelemetryEmitter,
     private readonly telemetryBuildHash: string = "DEV",
+    private readonly managedOptions?: ManagedGameOptions,
+    private readonly managedHooks?: ManagedGameHooks,
   ) {
     this.log = log_.child({ gameID: id });
+    this.turns = [...(managedOptions?.initialTurns ?? [])];
+    for (const seat of managedOptions?.reservedSeats ?? []) {
+      this.managedSeatsByIdentityHash.set(seat.persistentIdHash, seat);
+      this.managedSeatsByClientID.set(seat.clientID, seat);
+      this.clientsDisconnectedStatus.set(seat.clientID, true);
+    }
     if (startsAt !== undefined) {
       this.visibleAt = Date.now();
     }
@@ -325,7 +353,10 @@ export class GameServer {
   // never the simulation or the archived record, so it cannot desync (see #4426).
   private anonName(viewer: ClientID | undefined, target: ClientID): string {
     let slot = 0;
-    for (const id of this.allClients.keys()) {
+    const roster = this.managedOptions
+      ? this.managedOptions.reservedSeats.map((seat) => seat.clientID)
+      : this.allClients.keys();
+    for (const id of roster) {
       if (id === target) break;
       slot++;
     }
@@ -344,14 +375,22 @@ export class GameServer {
     target: ClientID,
   ): boolean {
     if (viewer === undefined) return false;
-    const viewerClient = this.allClients.get(viewer);
-    const targetClient = this.allClients.get(target);
-    if (viewerClient === undefined || targetClient === undefined) return false;
-    const viewerTeam = this.matchmakingTeamIndex(viewerClient);
+    const viewerTeam = this.teamIndexForClientID(viewer);
     return (
       viewerTeam !== undefined &&
-      viewerTeam === this.matchmakingTeamIndex(targetClient)
+      viewerTeam === this.teamIndexForClientID(target)
     );
+  }
+
+  private teamIndexForClientID(clientID: ClientID): number | undefined {
+    const reserved = this.managedSeatsByClientID.get(clientID);
+    if (reserved !== undefined) return reserved.teamIndex;
+    const client = this.allClients.get(clientID);
+    if (client === undefined || client.publicId === undefined) return undefined;
+    const idx = this.matchmakingTeams?.findIndex((team) =>
+      team.includes(client.publicId!),
+    );
+    return idx === undefined || idx === -1 ? undefined : idx;
   }
 
   // The reveal reasons that predate teammate visibility: names are not
@@ -689,6 +728,36 @@ export class GameServer {
     return clientID;
   }
 
+  /**
+   * Returns the frozen seat assigned to an authenticated identity. `undefined`
+   * means this is an ordinary match; `null` means a managed match has no seat
+   * for that identity. Workers call this before constructing Client so a late
+   * arrival receives the same client ID already present in GameStartInfo.
+   */
+  public managedClientIDForPersistentId(
+    persistentID: string,
+  ): ClientID | null | undefined {
+    if (!this.managedOptions) return undefined;
+    return (
+      this.managedSeatsByIdentityHash.get(hashPersistentID(persistentID))
+        ?.clientID ?? null
+    );
+  }
+
+  public managedRequestId(): string | undefined {
+    return this.managedOptions?.requestId;
+  }
+
+  public managedSeatForPersistentId(
+    persistentID: string,
+  ): ManagedReservedSeat | null | undefined {
+    if (!this.managedOptions) return undefined;
+    return (
+      this.managedSeatsByIdentityHash.get(hashPersistentID(persistentID)) ??
+      null
+    );
+  }
+
   // Whether this persistentID has already been admitted (passed Turnstile and
   // other join authorization) for this game. Used to skip the single-use
   // Turnstile re-check when an already-admitted player reconnects. Kicked
@@ -713,6 +782,7 @@ export class GameServer {
 
   public joinClient(
     client: Client,
+    lastTurn: number = 0,
   ): "joined" | "kicked" | "rejected" | "not_allowlisted" {
     // e.g. the host left an unstarted lobby and GameManager hasn't pruned
     // it yet.
@@ -721,6 +791,27 @@ export class GameServer {
     }
     if (this.kickedPersistentIds.has(client.persistentID)) {
       return "kicked";
+    }
+
+    const managedClientID = this.managedClientIDForPersistentId(
+      client.persistentID,
+    );
+    if (
+      managedClientID !== undefined &&
+      (managedClientID === null || managedClientID !== client.clientID)
+    ) {
+      this.log.warn("client does not own a reserved managed-game seat", {
+        clientID: client.clientID,
+      });
+      return "rejected";
+    }
+    if (managedClientID !== undefined) {
+      const seat = this.managedSeatsByClientID.get(managedClientID)!;
+      if (client.username !== seat.username && client.cosmetics?.verified) {
+        delete client.cosmetics.verified;
+      }
+      client.username = seat.username;
+      client.clanTag = seat.clanTag;
     }
 
     // OFM: if an allowlist is set, only those publicIds may join. Re-checked on
@@ -805,6 +896,7 @@ export class GameServer {
     this.persistentIdToClientId.set(client.persistentID, client.clientID);
     this.admittedPersistentIds.add(client.persistentID);
     this.activeClients.push(client);
+    this.initialTurnForClient.set(client.clientID, lastTurn);
     client.lastPing = Date.now();
     this.markClientDisconnected(client.clientID, false);
     this.allClients.set(client.clientID, client);
@@ -824,7 +916,7 @@ export class GameServer {
 
     // In case a client joined the game late and missed the start message.
     if (this._hasStarted) {
-      this.sendStartGameMsg(client.ws, 0);
+      this.sendStartGameMsg(client.ws, lastTurn);
     }
 
     return "joined";
@@ -858,7 +950,8 @@ export class GameServer {
       (c) => c.clientID !== client.clientID,
     );
     this.activeClients.push(client);
-    if (identityUpdate && !this.hasStarted()) {
+    this.initialTurnForClient.set(client.clientID, lastTurn);
+    if (identityUpdate && !this.hasStarted() && !this.managedOptions) {
       // The verified badge vouches for the exact join name — a pre-start
       // identity change under it must drop the badge (the rejoin path skips
       // the Worker's join-time badge validation).
@@ -1281,6 +1374,27 @@ export class GameServer {
     this.lastPingUpdate = Date.now();
 
     const friendsFor = this.buildFriendsLookup();
+    const players = this.managedOptions
+      ? this.managedOptions.reservedSeats.map((seat) => {
+          const client = this.allClients.get(seat.clientID);
+          return {
+            username: seat.username,
+            clanTag: seat.clanTag,
+            clientID: seat.clientID,
+            cosmetics: client?.cosmetics,
+            friends: client ? friendsFor(client) : undefined,
+            teamIndex: seat.teamIndex,
+          };
+        })
+      : this.activeClients.map((client) => ({
+          username: client.username,
+          clanTag: client.clanTag ?? null,
+          clientID: client.clientID,
+          cosmetics: client.cosmetics,
+          isLobbyCreator: this.lobbyCreatorID === client.clientID,
+          friends: friendsFor(client),
+          teamIndex: this.matchmakingTeamIndex(client),
+        }));
 
     // allowedPublicIds / nameRevealPublicIds hold account publicIds and are
     // enforced server-side against this.gameConfig (joinClient / seesReal).
@@ -1295,15 +1409,7 @@ export class GameServer {
       lobbyCreatedAt: this.createdAt,
       visibleAt: this.visibleAt,
       config,
-      players: this.activeClients.map((c) => ({
-        username: c.username,
-        clanTag: c.clanTag ?? null,
-        clientID: c.clientID,
-        cosmetics: c.cosmetics,
-        isLobbyCreator: this.lobbyCreatorID === c.clientID,
-        friends: friendsFor(c),
-        teamIndex: this.matchmakingTeamIndex(c),
-      })),
+      players,
       tribes: this.tribes,
     });
     if (!result.success) {
@@ -1332,6 +1438,20 @@ export class GameServer {
         }
       : wireGameStartInfo;
 
+    // The frozen roster exists before every player connects. Stamp its
+    // current online state into the first authoritative turn so offline seats
+    // do not masquerade as live connections, and a later claimant can flip
+    // the same player back online without changing the roster.
+    const connectedClientIDs = new Set(
+      this.activeClients.map((client) => client.clientID),
+    );
+    for (const seat of this.managedOptions?.reservedSeats ?? []) {
+      this.markClientDisconnected(
+        seat.clientID,
+        !connectedClientIDs.has(seat.clientID),
+      );
+    }
+
     this.endTurnIntervalID = setInterval(
       () => this.endTurn(),
       ServerEnv.turnIntervalMs(),
@@ -1341,7 +1461,10 @@ export class GameServer {
         clientID: c.clientID,
         persistentID: c.persistentID,
       });
-      this.sendStartGameMsg(c.ws, 0);
+      this.sendStartGameMsg(
+        c.ws,
+        this.initialTurnForClient.get(c.clientID) ?? 0,
+      );
     });
   }
 
@@ -1349,6 +1472,10 @@ export class GameServer {
   // matchmakingTeams), or undefined when the game isn't matchmade / the
   // client isn't in the assignment.
   private matchmakingTeamIndex(c: Client): number | undefined {
+    const managedTeamIndex = this.managedSeatsByClientID.get(
+      c.clientID,
+    )?.teamIndex;
+    if (managedTeamIndex !== undefined) return managedTeamIndex;
     const publicId = c.publicId;
     if (this.matchmakingTeams === undefined || publicId === undefined) {
       return undefined;
@@ -1471,6 +1598,7 @@ export class GameServer {
 
     this.handleSynchronization();
     this.checkDisconnectedStatus();
+    this.queueManagedTurn(pastTurn);
 
     const msg = JSON.stringify({
       type: "turn",
@@ -1490,6 +1618,7 @@ export class GameServer {
       clearInterval(this.endTurnIntervalID);
       this.endTurnIntervalID = undefined;
     }
+    this.flushManagedTurns();
     this.websockets.forEach((ws) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.close(1000, "game has ended");
@@ -1539,6 +1668,49 @@ export class GameServer {
     this.emitMatchFinished();
   }
 
+  /** Flushes the current managed journal batch, including during teardown. */
+  public flushManagedTurns(): void {
+    if (this.managedTurnFlushTimer !== undefined) {
+      clearTimeout(this.managedTurnFlushTimer);
+      this.managedTurnFlushTimer = undefined;
+    }
+    if (
+      this.pendingManagedTurns.length === 0 ||
+      !this.managedHooks?.onTurnsCommitted
+    ) {
+      return;
+    }
+    const batch = this.pendingManagedTurns;
+    this.pendingManagedTurns = [];
+    try {
+      this.managedHooks.onTurnsCommitted(batch);
+    } catch (error) {
+      this.pendingManagedTurns = [...batch, ...this.pendingManagedTurns];
+      this.log.error("Failed to emit managed turn batch", {
+        gameID: this.id,
+        firstTurn: batch[0]?.turnNumber,
+        lastTurn: batch[batch.length - 1]?.turnNumber,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private queueManagedTurn(turn: Turn): void {
+    if (!this.managedHooks?.onTurnsCommitted) return;
+    this.pendingManagedTurns.push(turn);
+    if (turn.intents.length > 0 || this.pendingManagedTurns.length >= 10) {
+      this.flushManagedTurns();
+      return;
+    }
+    if (this.managedTurnFlushTimer === undefined) {
+      this.managedTurnFlushTimer = setTimeout(
+        () => this.flushManagedTurns(),
+        1_000,
+      );
+      this.managedTurnFlushTimer.unref?.();
+    }
+  }
+
   phase(): GamePhase {
     // An ended game (e.g. an unstarted lobby whose host left) must report
     // Finished: GameManager prunes on Finished, and a ghost that kept
@@ -1563,7 +1735,9 @@ export class GameServer {
       }
     }
     this.activeClients = alive;
-    if (now > this.createdAt + this.maxGameDuration) {
+    const expiresAt =
+      this.managedOptions?.expiresAt ?? this.createdAt + this.maxGameDuration;
+    if (now > expiresAt) {
       this.log.warn("game past max duration", {
         gameID: this.id,
       });
@@ -1574,6 +1748,12 @@ export class GameServer {
     const noActive = this.activeClients.length === 0;
 
     const lessThanLifetime = this.startsAt ? Date.now() < this.startsAt : true;
+    // A managed game belongs to an external schedule. Filling every reserved
+    // seat must not pull that schedule forward as ordinary max-player lobbies
+    // do, so remain in Lobby until the exact start time.
+    if (this.managedOptions && lessThanLifetime && !this.hasStarted()) {
+      return GamePhase.Lobby;
+    }
     if (
       lessThanLifetime &&
       !this.hasStarted() &&
@@ -1582,7 +1762,7 @@ export class GameServer {
       return GamePhase.Lobby;
     }
     const warmupOver = now > this.startsAt! + 30 * 1000;
-    if (noActive && warmupOver && noRecentPings) {
+    if (!this.managedOptions && noActive && warmupOver && noRecentPings) {
       return GamePhase.Finished;
     }
 

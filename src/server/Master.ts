@@ -10,21 +10,25 @@ import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GameEnv } from "../core/configuration/Config";
+import { createIdleRouter, IdleService } from "./idle";
+import { verifyClientToken } from "./jwt";
 import { logger } from "./Logger";
 import { MapPlaylist } from "./MapPlaylist";
 import { MasterLobbyService } from "./MasterLobbyService";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
-import { renderAppShell } from "./RenderHtml";
-import { ServerEnv } from "./ServerEnv";
-import { applyStaticAssetCacheControl } from "./StaticAssetCache";
-import { createTrustedProxyPredicate } from "./TrustedProxy";
-import { createIdleRouter, IdleService } from "./idle";
 import {
   createPersistentWorldRouter,
   PersistentWorldNotificationWorker,
   PersistentWorldRepository,
   PersistentWorldService,
+  PersistentWorldServiceError,
 } from "./persistent";
+import { PersistentWorldRuntimeBridge } from "./PersistentWorldRuntimeBridge";
+import { renderAppShell } from "./RenderHtml";
+import { ServerEnv } from "./ServerEnv";
+import { applyStaticAssetCacheControl } from "./StaticAssetCache";
+import { createTrustedProxyPredicate } from "./TrustedProxy";
+import { installWorkerReverseProxy } from "./WorkerReverseProxy";
 
 const playlist = new MapPlaylist();
 let lobbyService: MasterLobbyService;
@@ -40,6 +44,7 @@ let persistentWorldRouter:
   ReturnType<typeof createPersistentWorldRouter> | undefined;
 let persistentWorldNotificationTimer: NodeJS.Timeout | undefined;
 let persistentWorldNotificationTickInFlight = false;
+let persistentWorldRuntimeBridge: PersistentWorldRuntimeBridge | undefined;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,6 +57,16 @@ app.set(
   "trust proxy",
   createTrustedProxyPredicate(process.env.IDLE_TRUSTED_PROXY_ADDRESS),
 );
+
+// Production exposes only the master port. Keep worker-owned HTTP and sockets
+// on loopback and stream canonical /wN routes through this single origin. This
+// must precede parsers and rate-limit middleware so gameplay payloads are not
+// buffered or interpreted by the master.
+if (cluster.isPrimary) {
+  installWorkerReverseProxy(app, server, {
+    numWorkers: ServerEnv.numWorkers(),
+  });
+}
 
 // Run hard transport ceilings before JSON parsing. Human taps still reach the
 // durable watchdog, while malformed or hostile floods cannot consume
@@ -202,11 +217,30 @@ export async function startMaster() {
   });
   process.once("exit", () => idleService?.close());
 
+  // Managed runtimes are dispatched through the same shard-aware master
+  // service as ordinary lobbies. It is safe to construct this before workers:
+  // durable provisioning requests remain retryable until their shard reports
+  // ready.
+  lobbyService = new MasterLobbyService(playlist, log);
+
   const persistentWorldRepository = new PersistentWorldRepository({
     dbPath: process.env.PERSISTENT_WORLD_DB_PATH,
   });
+  persistentWorldRuntimeBridge = new PersistentWorldRuntimeBridge(
+    persistentWorldRepository,
+    playlist,
+    (command) => lobbyService.createManagedGame(command),
+  );
+  lobbyService.setManagedGameTurnHandler((message) =>
+    persistentWorldRuntimeBridge!.persistTurns(message),
+  );
   persistentWorldService = new PersistentWorldService(
     persistentWorldRepository,
+    {
+      runtimeCoordinator: persistentWorldRuntimeBridge,
+      onRuntimeError: (error) =>
+        log.warn("Persistent-world runtime reconciliation failed", error),
+    },
   );
   persistentWorldService.activateDueWorlds();
   persistentWorldService.startScheduler();
@@ -243,6 +277,20 @@ export async function startMaster() {
   persistentWorldRouter = createPersistentWorldRouter(persistentWorldService, {
     onInternalError: (error) =>
       log.error("Persistent-world request failed", error),
+    gameplayIdentityVerifier: async (playToken) => {
+      const verified = await verifyClientToken(playToken);
+      if (verified.type !== "success") {
+        throw new PersistentWorldServiceError(
+          401,
+          "GAME_IDENTITY_INVALID",
+          "The gameplay identity could not be verified",
+        );
+      }
+      return crypto
+        .createHash("sha256")
+        .update(verified.persistentId)
+        .digest("hex");
+    },
   });
   process.once("exit", () => {
     if (persistentWorldNotificationTimer) {
@@ -251,8 +299,6 @@ export async function startMaster() {
     persistentWorldService?.close();
   });
   log.info(`Setting up ${ServerEnv.numWorkers()} workers...`);
-
-  lobbyService = new MasterLobbyService(playlist, log);
 
   const INSTANCE_ID =
     ServerEnv.env() === GameEnv.Dev
@@ -283,6 +329,7 @@ export async function startMaster() {
 
     const workerIdNum = parseInt(workerId);
     lobbyService.removeWorker(workerIdNum);
+    persistentWorldRuntimeBridge?.invalidateAll();
 
     log.warn(
       `Worker ${workerId} (PID: ${worker.process.pid}) died with code: ${code} and signal: ${signal}`,

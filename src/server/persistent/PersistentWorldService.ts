@@ -51,6 +51,18 @@ export class PersistentWorldServiceError extends Error {
 export interface PersistentWorldServiceOptions {
   now?: () => number;
   randomBytes?: (size: number) => Buffer;
+  runtimeCoordinator?: PersistentWorldRuntimeCoordinator;
+  onRuntimeError?: (error: unknown) => void;
+}
+
+/**
+ * Adapter owned by the application composition root. Keeping this interface
+ * here lets the invitation domain request a runtime without importing game
+ * configuration, worker IPC, or any simulation code.
+ */
+export interface PersistentWorldRuntimeCoordinator {
+  ensure(world: PersistentWorld): Promise<void>;
+  reconcile(): Promise<void>;
 }
 
 export interface CreatedPersistentWorld {
@@ -61,6 +73,8 @@ export interface CreatedPersistentWorld {
 export class PersistentWorldService {
   private readonly now: () => number;
   private readonly secureRandomBytes: (size: number) => Buffer;
+  private readonly runtimeCoordinator?: PersistentWorldRuntimeCoordinator;
+  private readonly onRuntimeError: (error: unknown) => void;
   private readonly presence = new Map<string, Map<string, number>>();
   private scheduler: NodeJS.Timeout | undefined;
 
@@ -70,6 +84,8 @@ export class PersistentWorldService {
   ) {
     this.now = options.now ?? Date.now;
     this.secureRandomBytes = options.randomBytes ?? randomBytes;
+    this.runtimeCoordinator = options.runtimeCoordinator;
+    this.onRuntimeError = options.onRuntimeError ?? (() => undefined);
   }
 
   createGuestSession(inputValue: unknown): NewPersistentWorldControllerSession {
@@ -87,6 +103,26 @@ export class PersistentWorldService {
       );
     }
     return session;
+  }
+
+  bindGameplayIdentity(
+    bearerToken: string,
+    gameplayPersistentIdHash: string,
+  ): void {
+    const session = this.resumeSession(bearerToken);
+    this.repository.bindGameplayIdentity(
+      session.identity.id,
+      gameplayPersistentIdHash,
+    );
+
+    // A legacy controller session may first acquire its gameplay binding
+    // after the invitation has already elapsed. Give an active, not-yet-
+    // provisioned world an immediate chance to attach its runtime.
+    for (const world of this.repository.listWorldsForIdentity(
+      session.identity.id,
+    )) {
+      if (world.phase === "active") this.queueRuntime(world);
+    }
   }
 
   createWorld(
@@ -191,6 +227,14 @@ export class PersistentWorldService {
   ): PersistentWorldLobbySnapshot {
     const session = this.resumeSession(bearerToken);
     const input = PersistentWorldRsvpRequestSchema.parse(inputValue);
+    const world = this.requireWorld(worldId);
+    if (world.phase === "active" && this.repository.getRuntime(worldId)) {
+      throw new PersistentWorldServiceError(
+        410,
+        "JOIN_CLOSED",
+        "The playable roster was sealed when this world began",
+      );
+    }
     this.repository.rsvp({
       worldId,
       identity: session.identity,
@@ -203,6 +247,13 @@ export class PersistentWorldService {
 
   leave(worldId: string, bearerToken: string): void {
     const session = this.resumeSession(bearerToken);
+    if (this.repository.getRuntime(worldId)) {
+      throw new PersistentWorldServiceError(
+        409,
+        "ROSTER_SEALED",
+        "The roster is sealed after the map has been provisioned",
+      );
+    }
     this.repository.leaveWorld(worldId, session.identity.id);
     this.presence.get(worldId)?.delete(session.identity.id);
   }
@@ -254,14 +305,20 @@ export class PersistentWorldService {
   activateDueWorlds(): PersistentWorld[] {
     const activated: PersistentWorld[] = [];
     for (const due of this.repository.listWorldsDueToStart(this.now())) {
-      activated.push(this.repository.markActive(due.id, this.now()));
+      const world = this.repository.markActive(due.id, this.now());
+      activated.push(world);
+      this.queueRuntime(world);
     }
     return activated;
   }
 
   startScheduler(intervalMs: number = 1000): void {
     if (this.scheduler) return;
-    this.scheduler = setInterval(() => this.activateDueWorlds(), intervalMs);
+    this.queueReconcile();
+    this.scheduler = setInterval(() => {
+      this.activateDueWorlds();
+      this.queueReconcile();
+    }, intervalMs);
     this.scheduler.unref?.();
   }
 
@@ -285,6 +342,7 @@ export class PersistentWorldService {
     const viewerRsvp = identity
       ? world.rsvps.find((rsvp) => rsvp.identity.id === identity.id)
       : undefined;
+    const runtime = this.repository.getRuntime(world.id);
     const reminderOptionsMs = inferredReminderLeadTimes(
       world.startsAt - world.createdAt,
     );
@@ -318,6 +376,7 @@ export class PersistentWorldService {
       !isFull &&
       world.phase !== "finished" &&
       world.phase !== "cancelled" &&
+      runtime === undefined &&
       (world.access === "public"
         ? world.phase === "scheduled" && this.now() < world.startsAt
         : inviteValid && this.now() < world.joinClosesAt);
@@ -350,9 +409,15 @@ export class PersistentWorldService {
           identity?.verifiedEmail !== null &&
           identity?.verifiedEmail !== undefined,
       },
-      // The application lifecycle is durable now; the ordinary OpenFront
-      // runtime is intentionally not fabricated until server authority lands.
-      runtimeGameId: null,
+      // A game ID is a capability to attempt a worker join. Reveal it only
+      // after the worker acknowledged creation and only to an RSVP identity
+      // that has been cryptographically bound to a gameplay principal.
+      runtimeGameId:
+        viewerRsvp &&
+        runtime?.state === "ready" &&
+        this.repository.gameplayIdentityHash(viewerRsvp.identity.id)
+          ? runtime.gameId
+          : null,
     });
   }
 
@@ -448,6 +513,16 @@ export class PersistentWorldService {
   private isOnline(worldId: string, identityId: string): boolean {
     const lastSeen = this.presence.get(worldId)?.get(identityId);
     return lastSeen !== undefined && this.now() - lastSeen <= PRESENCE_TTL_MS;
+  }
+
+  private queueRuntime(world: PersistentWorld): void {
+    if (!this.runtimeCoordinator) return;
+    void this.runtimeCoordinator.ensure(world).catch(this.onRuntimeError);
+  }
+
+  private queueReconcile(): void {
+    if (!this.runtimeCoordinator) return;
+    void this.runtimeCoordinator.reconcile().catch(this.onRuntimeError);
   }
 
   private randomToken(prefix: string, bytes: number): string {

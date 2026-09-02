@@ -19,7 +19,8 @@ cloudflared on one Debian VM
 127.0.0.1:3000 -> openfront-idle container -> Node authority
                                              |
                                              v
-                                  /var/lib/openfront-idle/idle.sqlite
+                         /var/lib/openfront-idle/idle.sqlite
+                         (idle + persistent-world tables)
                                              |
                                              v
                                online SQLite snapshot -> encrypted
@@ -110,7 +111,10 @@ defaults and the complete initial variable list. Production requirements:
 - `GAME_ENV=prod` and `IDLE_ADMIN_ENABLED=false`;
 - `IDLE_TELEMETRY_HMAC_SECRET` is a random secret of at least 32 characters,
   stored outside SQLite;
-- `IDLE_DB_PATH` remains under `/var/lib/openfront-idle`;
+- `IDLE_DB_PATH` remains under `/var/lib/openfront-idle`, and
+  `PERSISTENT_WORLD_DB_PATH` points at the same file. Persistent-world tables
+  and migrations are namespaced, while one file keeps deployment rollback and
+  encrypted off-host backups atomic across both services;
 - `IDLE_TRUSTED_PROXY_ADDRESS=172.30.0.1` matches the dedicated Docker bridge
   gateway created above;
 - `DOMAIN` matches the public audience used for future login tokens;
@@ -284,7 +288,8 @@ are recorded in `docs/idle-architecture.md`.
 3. Restore into a new file; never overwrite the only copy of the damaged
    database.
 4. Run integrity and smoke checks against loopback.
-5. Point `IDLE_DB_PATH` at the verified restore, restart, and monitor.
+5. Point both `IDLE_DB_PATH` and `PERSISTENT_WORLD_DB_PATH` at the verified
+   restore, restart, and monitor.
 6. Record affected revisions and anti-cheat ruleset versions so enforcement
    can be reversed if necessary.
 

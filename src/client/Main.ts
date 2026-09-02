@@ -174,7 +174,13 @@ export interface JoinLobbyEvent {
   gameStartInfo?: GameStartInfo;
   // GameRecord exists when replaying an archived game.
   gameRecord?: GameRecord;
-  source?: "public" | "private" | "host" | "matchmaking" | "singleplayer";
+  source?:
+    | "public"
+    | "private"
+    | "host"
+    | "matchmaking"
+    | "singleplayer"
+    | "persistent-world";
   publicLobbyInfo?: GameInfo | PublicGameInfo;
 }
 
@@ -874,7 +880,15 @@ class Client {
   private async handleJoinLobby(event: CustomEvent<JoinLobbyEvent>) {
     const lobby = event.detail;
     this.mostRecentJoinEvent = event.timeStamp;
-    if (this.usernameInput && !this.usernameInput.canPlay()) {
+    // Persistent-world membership already owns a server-screened, frozen
+    // display name. Do not let the unrelated home-screen username field turn
+    // its Play control into a silent no-op; the worker replaces the join
+    // payload name with the reserved seat name before admitting it.
+    if (
+      lobby.source !== "persistent-world" &&
+      this.usernameInput &&
+      !this.usernameInput.canPlay()
+    ) {
       return;
     }
 

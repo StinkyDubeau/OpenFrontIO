@@ -79,6 +79,16 @@ describe("persistent-world HTTP API", () => {
             verifiedEmail: "account@example.test",
           });
         },
+        gameplayIdentityVerifier: async (playToken) => {
+          if (playToken !== "verified-play-token") {
+            throw new PersistentWorldServiceError(
+              401,
+              "GAME_IDENTITY_INVALID",
+              "Gameplay authentication failed",
+            );
+          }
+          return "a".repeat(64);
+        },
       }),
     );
     server = await new Promise<Server>((resolve) => {
@@ -162,6 +172,25 @@ describe("persistent-world HTTP API", () => {
 
     const host = await createSession("Host");
     const guest = await createSession("Guest");
+
+    const bound = await jsonRequest("/session/game-identity", {
+      method: "POST",
+      headers: authenticatedJson(host.bearerToken),
+      body: JSON.stringify({ playToken: "verified-play-token" }),
+    });
+    expect(bound.response.status).toBe(200);
+    expect(bound.body).toEqual({ bound: true });
+    expect(
+      service.repository.gameplayIdentityHash(host.session.identity.id),
+    ).toBe("a".repeat(64));
+
+    const invalidBinding = await jsonRequest("/session/game-identity", {
+      method: "POST",
+      headers: authenticatedJson(guest.bearerToken),
+      body: JSON.stringify({ playToken: "wrong" }),
+    });
+    expect(invalidBinding.response.status).toBe(401);
+    expect(invalidBinding.body.error.code).toBe("GAME_IDENTITY_INVALID");
 
     const missingSession = await jsonRequest("/session");
     expect(missingSession.response.status).toBe(401);

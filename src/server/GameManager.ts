@@ -7,9 +7,13 @@ import {
   GameMode,
   GameType,
 } from "../core/game/Game";
-import { GameConfig, GameID, PublicGameType } from "../core/Schemas";
+import { ClientID, GameConfig, GameID, PublicGameType } from "../core/Schemas";
 import { Client } from "./Client";
-import { GamePhase, GameServer } from "./GameServer";
+import { GamePhase, GameServer, type ManagedGameHooks } from "./GameServer";
+import type {
+  ManagedGameOptions,
+  ManagedReservedSeat,
+} from "./IPCBridgeSchema";
 import {
   noopMatchTelemetryEmitter,
   type MatchTelemetryEmitter,
@@ -47,10 +51,11 @@ export class GameManager {
   joinClient(
     client: Client,
     gameID: GameID,
+    lastTurn: number = 0,
   ): "joined" | "kicked" | "rejected" | "not_allowlisted" | "not_found" {
     const game = this.games.get(gameID);
     if (!game) return "not_found";
-    return game.joinClient(client);
+    return game.joinClient(client, lastTurn);
   }
 
   rejoinClient(
@@ -65,6 +70,20 @@ export class GameManager {
     return game.rejoinClient(ws, persistentID, lastTurn, identityUpdate);
   }
 
+  managedClientIDForPersistentId(
+    gameID: GameID,
+    persistentID: string,
+  ): ClientID | null | undefined {
+    return this.games.get(gameID)?.managedClientIDForPersistentId(persistentID);
+  }
+
+  managedSeatForPersistentId(
+    gameID: GameID,
+    persistentID: string,
+  ): ManagedReservedSeat | null | undefined {
+    return this.games.get(gameID)?.managedSeatForPersistentId(persistentID);
+  }
+
   createGame(
     id: GameID,
     gameConfig: Partial<GameConfig> | undefined,
@@ -72,6 +91,8 @@ export class GameManager {
     startsAt?: number,
     publicGameType?: PublicGameType,
     matchmakingTeams?: string[][],
+    managedOptions?: ManagedGameOptions,
+    managedHooks?: ManagedGameHooks,
   ): GameServer | null {
     if (this.games.has(id)) {
       this.log.warn("cannot create game, id already exists", { gameID: id });
@@ -106,6 +127,8 @@ export class GameManager {
       matchmakingTeams,
       this.telemetry,
       this.telemetryBuildHash,
+      managedOptions,
+      managedHooks,
     );
     this.games.set(id, game);
     return game;
@@ -128,6 +151,10 @@ export class GameManager {
       (acc, game) => acc + game.numDesyncedClients(),
       0,
     );
+  }
+
+  flushManagedTurns(): void {
+    for (const game of this.games.values()) game.flushManagedTurns();
   }
 
   tick() {

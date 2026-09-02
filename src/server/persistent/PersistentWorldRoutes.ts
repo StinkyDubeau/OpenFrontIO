@@ -29,6 +29,9 @@ const BearerTokenSchema = z
   .max(512)
   .regex(/^[A-Za-z0-9_-]+$/);
 const EmptyBodySchema = z.object({}).strict();
+const GameplayIdentityBodySchema = z
+  .object({ playToken: z.string().min(1).max(8192) })
+  .strict();
 const RsvpBodySchema = PersistentWorldRsvpRequestSchema.omit({
   invitationSecret: true,
 });
@@ -46,6 +49,12 @@ export interface PersistentWorldRouterOptions {
   }) =>
     | NewPersistentWorldControllerSession
     | Promise<NewPersistentWorldControllerSession>;
+  /**
+   * Verifies the ordinary game credential at the application boundary and
+   * returns a one-way SHA-256 identity digest. The token itself is never
+   * stored in the persistent-world database.
+   */
+  gameplayIdentityVerifier?: (playToken: string) => string | Promise<string>;
 }
 
 function requireJson(req: Request): void {
@@ -167,6 +176,25 @@ export function createPersistentWorldRouter(
     route((req, res) => {
       requireNoQuery(req);
       res.json(service.resumeSession(bearerToken(req, true)));
+    }),
+  );
+
+  router.post(
+    "/session/game-identity",
+    route(async (req, res) => {
+      requireNoQuery(req);
+      requireJson(req);
+      const { playToken } = GameplayIdentityBodySchema.parse(req.body);
+      if (!options.gameplayIdentityVerifier) {
+        throw new PersistentWorldHttpError(
+          501,
+          "GAME_IDENTITY_UNAVAILABLE",
+          "Gameplay identity binding is not configured",
+        );
+      }
+      const hash = await options.gameplayIdentityVerifier(playToken);
+      service.bindGameplayIdentity(bearerToken(req, true), hash);
+      res.json({ bound: true });
     }),
   );
 

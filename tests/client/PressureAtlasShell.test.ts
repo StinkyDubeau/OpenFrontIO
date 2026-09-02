@@ -378,6 +378,7 @@ describe("Pressure Atlas OpenFront shell", () => {
   });
 
   test("turns an active member's countdown into the world entry control", () => {
+    const main = source("src/client/Main.ts");
     const worldPage = source(
       "src/client/components/persistent-world/PersistentWorldPage.ts",
     );
@@ -390,10 +391,15 @@ describe("Pressure Atlas OpenFront shell", () => {
     );
     expect(worldComponents).toContain('class="pw-countdown pw-entry-control"');
     expect(worldComponents).toContain("?disabled=${!snapshot.runtimeGameId}");
+    expect(worldComponents).toContain('"Preparing map…"');
+    expect(worldComponents).toContain('? "Play world"');
+    expect(worldComponents).toContain('? "Return to world"');
     expect(worldComponents).toContain('new CustomEvent("world-enter-runtime"');
     expect(worldPage).toContain(
       "@world-enter-runtime=${this.enterRuntimeFromCard}",
     );
+    expect(worldPage).toContain('source: "persistent-world"');
+    expect(main).toContain('lobby.source !== "persistent-world"');
     expect(worldPage).toMatch(/you did not miss the\s+start/);
   });
 });

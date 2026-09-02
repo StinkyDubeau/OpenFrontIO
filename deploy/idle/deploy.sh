@@ -43,6 +43,11 @@ case "$db_path" in
         exit 2
         ;;
 esac
+persistent_world_db_path=$(sed -n 's/^PERSISTENT_WORLD_DB_PATH=//p' "$env_file" | tail -n 1)
+if [ "$persistent_world_db_path" != "$db_path" ]; then
+    echo "PERSISTENT_WORLD_DB_PATH must match the backed-up IDLE_DB_PATH: $persistent_world_db_path" >&2
+    exit 2
+fi
 if ! command -v sqlite3 > /dev/null 2>&1; then
     echo "sqlite3 is required for a schema-safe deployment rollback" >&2
     exit 3

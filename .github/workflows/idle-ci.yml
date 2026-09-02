@@ -69,6 +69,7 @@ jobs:
       IDLE_ADMIN_TOKEN: WARNING_IDLE_CI_ADMIN_TOKEN_NOT_FOR_PRODUCTION_32_CHARS
       IDLE_TELEMETRY_HMAC_SECRET: WARNING_IDLE_CI_HMAC_SECRET_NOT_FOR_PRODUCTION_32_CHARS
       IDLE_DB_PATH: ${{ runner.temp }}/openfront-idle/idle-ci.sqlite
+      PERSISTENT_WORLD_DB_PATH: ${{ runner.temp }}/openfront-idle/idle-ci.sqlite
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

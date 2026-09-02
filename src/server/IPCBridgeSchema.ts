@@ -1,8 +1,12 @@
 import { z } from "zod";
 import {
+  ClanTagSchema,
   GameConfigSchema,
+  ID,
   PublicGameInfoSchema,
   PublicGameTypeSchema,
+  TurnSchema,
+  UsernameSchema,
 } from "../core/Schemas";
 
 export type InternalGameInfo = z.infer<typeof InternalGameInfoSchema>;
@@ -15,8 +19,80 @@ export type MasterLobbiesBroadcast = z.infer<
 
 export type MasterUpdateGame = z.infer<typeof MasterUpdateGameSchema>;
 export type MasterCreateGame = z.infer<typeof MasterCreateGameSchema>;
+export type ManagedReservedSeat = z.infer<typeof ManagedReservedSeatSchema>;
+export type ManagedGameOptions = z.infer<typeof ManagedGameOptionsSchema>;
+export type MasterCreateManagedGame = z.infer<
+  typeof MasterCreateManagedGameSchema
+>;
+export type WorkerManagedGameReady = z.infer<
+  typeof WorkerManagedGameReadySchema
+>;
+export type WorkerManagedGameTurns = z.infer<
+  typeof WorkerManagedGameTurnsSchema
+>;
 export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 export type MasterMessage = z.infer<typeof MasterMessageSchema>;
+
+const ManagedRequestIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+/**
+ * An offline-capable seat in a server-managed match. The identity hash is a
+ * SHA-256 digest of the authenticated persistent ID; the raw credential never
+ * crosses IPC or enters a frozen game roster.
+ */
+export const ManagedReservedSeatSchema = z
+  .object({
+    clientID: ID,
+    persistentIdHash: z.string().regex(/^[a-f0-9]{64}$/),
+    username: UsernameSchema,
+    clanTag: ClanTagSchema,
+    teamIndex: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export const ManagedGameOptionsSchema = z
+  .object({
+    requestId: ManagedRequestIdSchema,
+    expiresAt: z.number().int().nonnegative(),
+    reservedSeats: z.array(ManagedReservedSeatSchema).min(1).max(200),
+    initialTurns: z.array(TurnSchema).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const clientIDs = new Set<string>();
+    const identityHashes = new Set<string>();
+    for (const [index, seat] of value.reservedSeats.entries()) {
+      if (clientIDs.has(seat.clientID)) {
+        context.addIssue({
+          code: "custom",
+          path: ["reservedSeats", index, "clientID"],
+          message: "Reserved client IDs must be unique",
+        });
+      }
+      clientIDs.add(seat.clientID);
+      if (identityHashes.has(seat.persistentIdHash)) {
+        context.addIssue({
+          code: "custom",
+          path: ["reservedSeats", index, "persistentIdHash"],
+          message: "Reserved identity hashes must be unique",
+        });
+      }
+      identityHashes.add(seat.persistentIdHash);
+    }
+    for (const [index, turn] of (value.initialTurns ?? []).entries()) {
+      if (turn.turnNumber !== index) {
+        context.addIssue({
+          code: "custom",
+          path: ["initialTurns", index, "turnNumber"],
+          message: "Managed initial turns must be contiguous from turn zero",
+        });
+      }
+    }
+  });
 
 // Master/worker-internal lobby info: PublicGameInfo plus the hashed creator
 // ID (hosted lobbies only) used for the one-listed-lobby-per-creator check.
@@ -48,9 +124,45 @@ const WorkerReadySchema = z.object({
   workerId: z.number(),
 });
 
+const WorkerManagedGameReadySchema = z
+  .object({
+    type: z.literal("managedGameReady"),
+    requestId: ManagedRequestIdSchema,
+    gameID: ID,
+    workerId: z.number().int().nonnegative(),
+    outcome: z.enum(["created", "exists", "conflict"]),
+  })
+  .strict();
+
+const WorkerManagedGameTurnsSchema = z
+  .object({
+    type: z.literal("managedGameTurns"),
+    requestId: ManagedRequestIdSchema,
+    gameID: ID,
+    workerId: z.number().int().nonnegative(),
+    turns: z.array(TurnSchema).min(1).max(10),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    for (let index = 1; index < value.turns.length; index++) {
+      if (
+        value.turns[index].turnNumber !==
+        value.turns[index - 1].turnNumber + 1
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["turns", index, "turnNumber"],
+          message: "Managed turn batches must be contiguous",
+        });
+      }
+    }
+  });
+
 export const WorkerMessageSchema = z.discriminatedUnion("type", [
   WorkerLobbyListSchema,
   WorkerReadySchema,
+  WorkerManagedGameReadySchema,
+  WorkerManagedGameTurnsSchema,
 ]);
 
 // --- Master Messages ---
@@ -82,8 +194,55 @@ const MasterCreateGameSchema = z.object({
   publicGameType: PublicGameTypeSchema,
 });
 
+const MasterCreateManagedGameSchema = z
+  .object({
+    type: z.literal("createManagedGame"),
+    gameID: ID,
+    gameConfig: GameConfigSchema,
+    startsAt: z.number().int().nonnegative(),
+    requestId: ManagedRequestIdSchema,
+    expiresAt: z.number().int().nonnegative(),
+    reservedSeats: z.array(ManagedReservedSeatSchema).min(1).max(200),
+    initialTurns: z.array(TurnSchema).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresAt <= value.startsAt) {
+      context.addIssue({
+        code: "custom",
+        path: ["expiresAt"],
+        message: "Managed game expiry must be after its start time",
+      });
+    }
+    const options = ManagedGameOptionsSchema.safeParse({
+      requestId: value.requestId,
+      expiresAt: value.expiresAt,
+      reservedSeats: value.reservedSeats,
+      initialTurns: value.initialTurns,
+    });
+    if (!options.success) {
+      for (const issue of options.error.issues) {
+        context.addIssue({
+          ...issue,
+          path: issue.path,
+        });
+      }
+    }
+    if (
+      value.gameConfig.maxPlayers !== undefined &&
+      value.gameConfig.maxPlayers < value.reservedSeats.length
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["gameConfig", "maxPlayers"],
+        message: "Managed games must have room for every reserved seat",
+      });
+    }
+  });
+
 export const MasterMessageSchema = z.discriminatedUnion("type", [
   MasterLobbiesBroadcastSchema,
   MasterCreateGameSchema,
+  MasterCreateManagedGameSchema,
   MasterUpdateGameSchema,
 ]);

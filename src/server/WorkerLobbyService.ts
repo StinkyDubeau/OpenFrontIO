@@ -11,10 +11,13 @@ import {
   InternalGameInfo,
   InternalPublicGames,
   MasterMessageSchema,
-  WorkerLobbyList,
-  WorkerReady,
+  type WorkerLobbyList,
+  type WorkerManagedGameReady,
+  type WorkerManagedGameTurns,
+  type WorkerMessage,
 } from "./IPCBridgeSchema";
 import { logger } from "./Logger";
+import { ServerEnv } from "./ServerEnv";
 
 // The game config advertised for a listed private lobby: everything the
 // host configured minus host-only fields. The server already rejects
@@ -108,6 +111,50 @@ export class WorkerLobbyService {
         }
         break;
       }
+      case "createManagedGame": {
+        const existing = this.gm.game(msg.gameID);
+        let outcome: WorkerManagedGameReady["outcome"];
+        if (existing !== null) {
+          outcome =
+            existing.managedRequestId() === msg.requestId
+              ? "exists"
+              : "conflict";
+        } else {
+          const game = this.gm.createGame(
+            msg.gameID,
+            msg.gameConfig,
+            undefined,
+            msg.startsAt,
+            undefined,
+            undefined,
+            {
+              requestId: msg.requestId,
+              expiresAt: msg.expiresAt,
+              reservedSeats: msg.reservedSeats,
+              initialTurns: msg.initialTurns,
+            },
+            {
+              onTurnsCommitted: (turns) =>
+                this.sendToMaster({
+                  type: "managedGameTurns",
+                  requestId: msg.requestId,
+                  gameID: msg.gameID,
+                  workerId: ServerEnv.workerId() ?? 0,
+                  turns,
+                } satisfies WorkerManagedGameTurns),
+            },
+          );
+          outcome = game === null ? "conflict" : "created";
+        }
+        this.sendToMaster({
+          type: "managedGameReady",
+          requestId: msg.requestId,
+          gameID: msg.gameID,
+          workerId: ServerEnv.workerId() ?? 0,
+          outcome,
+        } satisfies WorkerManagedGameReady);
+        break;
+      }
       case "updateLobby": {
         const game = this.gm.game(msg.gameID);
         if (!game) {
@@ -126,8 +173,20 @@ export class WorkerLobbyService {
     this.sendToMaster({ type: "workerReady", workerId });
   }
 
-  private sendToMaster(msg: WorkerReady | WorkerLobbyList) {
-    process.send?.(msg);
+  private sendToMaster(msg: WorkerMessage) {
+    if (!process.send || !process.connected) {
+      this.log.error("Cannot send worker message: master IPC is disconnected", {
+        type: msg.type,
+      });
+      return;
+    }
+    process.send(msg, (error) => {
+      if (!error) return;
+      this.log.error("Failed to send worker message to master", {
+        type: msg.type,
+        error: error.message,
+      });
+    });
   }
 
   private sendMyLobbiesToMaster() {

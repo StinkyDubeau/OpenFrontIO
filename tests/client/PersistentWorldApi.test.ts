@@ -23,6 +23,27 @@ describe("persistent-world invitation capabilities", () => {
     expect(invitationFromHash("#invite=short")).toBeNull();
   });
 
+  it("binds the game identity with an authenticated JSON request", async () => {
+    const controllerToken = "session_this-is-a-long-controller-token";
+    const playToken = "play_this-value-must-remain-in-the-request-body";
+    localStorage.setItem("pressure-atlas.world-controller.v1", controllerToken);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new PersistentWorldApi().bindGameIdentity(playToken);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(url).toBe("/api/worlds/session/game-identity");
+    expect(init.method).toBe("POST");
+    expect(headers.get("Authorization")).toBe(`Bearer ${controllerToken}`);
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(init.body))).toEqual({ playToken });
+  });
+
   it("moves an invite into tab storage and scrubs it from the URL", () => {
     history.replaceState(null, "", `/world/world_123#invite=${SECRET}`);
 

@@ -151,6 +151,14 @@ export class PersistentWorldApi {
     });
   }
 
+  async bindGameIdentity(playToken: string): Promise<void> {
+    await this.requestWithoutResponse("/session/game-identity", {
+      method: "POST",
+      body: { playToken },
+      authenticated: true,
+    });
+  }
+
   listPublic(): Promise<PersistentWorldCard[]> {
     return this.request("/public", z.array(PersistentWorldCardSchema), {
       authenticated: false,

@@ -163,22 +163,24 @@ export class PersistentWorldInvitationCard extends LitElement {
                   class="pw-countdown pw-entry-control"
                   type="button"
                   aria-label=${
-                    snapshot.runtimeGameId
-                      ? "Play world"
-                      : "Play world — game server pending"
+                    snapshot.runtimeGameId ? "Play world" : "Preparing map"
                   }
                   title=${
                     snapshot.runtimeGameId
-                      ? "Play world"
-                      : "The game server has not attached yet"
+                      ? "Return to world"
+                      : "Preparing the game map"
                   }
                   ?disabled=${!snapshot.runtimeGameId}
                   @click=${() => this.enterRuntime(snapshot.runtimeGameId)}
                 >
                   <span class="pw-entry-control__icon" aria-hidden="true"
-                    >▶</span
+                    >${snapshot.runtimeGameId ? "▶" : "…"}</span
                   >
-                  <span>Play world</span>
+                  <span
+                    >${
+                      snapshot.runtimeGameId ? "Play world" : "Preparing map…"
+                    }</span
+                  >
                 </button>`
               : html`<persistent-world-countdown
                   .startsAt=${world.startsAt}

@@ -39,8 +39,14 @@ import {
   type PersistentWorldRsvpInput,
   type PostPersistentWorldQuickChatInput,
 } from "../../core/PersistentWorldSchemas";
+import {
+  GameConfigSchema,
+  TurnSchema,
+  type GameConfig,
+  type Turn,
+} from "../../core/Schemas";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 5;
 const DEFAULT_DUE_LIMIT = 100;
 const MAX_DUE_LIMIT = 500;
 const DEFAULT_CHAT_LIMIT = 100;
@@ -50,6 +56,9 @@ const MAX_NOTIFICATION_LIMIT = 200;
 const DEFAULT_NOTIFICATION_LEASE_MS = 60_000;
 const MIN_NOTIFICATION_LEASE_MS = 5_000;
 const MAX_NOTIFICATION_LEASE_MS = 15 * 60_000;
+const GAMEPLAY_PERSISTENT_ID_HASH_PATTERN = /^[0-9a-f]{64}$/i;
+const RUNTIME_REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+const RUNTIME_GAME_ID_PATTERN = /^[A-Za-z0-9]{8}$/;
 
 type SqlRow = Record<string, unknown>;
 
@@ -109,6 +118,36 @@ export interface ClaimPersistentWorldNotificationsOptions {
   limit?: number;
   leaseMs?: number;
   now?: number;
+}
+
+export type PersistentWorldRuntimeState = "provisioning" | "ready";
+
+/** Server-only durable link between an invitation world and its game worker. */
+export interface PersistentWorldRuntime {
+  worldId: string;
+  requestId: string;
+  gameId: string;
+  /** Immutable, schema-validated worker input captured before map rotation. */
+  gameConfig: GameConfig;
+  state: PersistentWorldRuntimeState;
+  startsAt: number;
+  expiresAt: number;
+  requestedAt: number;
+  readyAt: number | null;
+  updatedAt: number;
+}
+
+/**
+ * Server-worker roster material. The gameplay hash is an authentication
+ * binding and must never be copied into a browser-facing world schema.
+ */
+export interface PersistentWorldRuntimeSeat {
+  identityId: string;
+  displayName: string;
+  gameplayPersistentIdHash: string | null;
+  isHost: boolean;
+  teamId: string | null;
+  joinedAt: number;
 }
 
 export class PersistentWorldRepositoryError extends Error {
@@ -453,6 +492,84 @@ export class PersistentWorldRepository {
           .run(now);
       });
     }
+
+    if (version < 4) {
+      this.transaction(() => {
+        this.db.exec(`
+          ALTER TABLE persistent_world_identities
+            ADD COLUMN gameplay_persistent_id_hash TEXT
+            CHECK (
+              gameplay_persistent_id_hash IS NULL OR (
+                length(gameplay_persistent_id_hash) = 64 AND
+                gameplay_persistent_id_hash NOT GLOB '*[^0-9a-f]*'
+              )
+            );
+          CREATE UNIQUE INDEX persistent_world_identities_gameplay_hash_idx
+            ON persistent_world_identities(gameplay_persistent_id_hash)
+            WHERE gameplay_persistent_id_hash IS NOT NULL;
+
+          CREATE TABLE persistent_world_runtimes (
+            world_id TEXT PRIMARY KEY
+              REFERENCES persistent_worlds(id) ON DELETE CASCADE,
+            request_id TEXT NOT NULL UNIQUE
+              CHECK (
+                length(request_id) BETWEEN 8 AND 128 AND
+                request_id NOT GLOB '*[^A-Za-z0-9_-]*'
+              ),
+            game_id TEXT NOT NULL UNIQUE
+              CHECK (
+                length(game_id) = 8 AND
+                game_id NOT GLOB '*[^A-Za-z0-9]*'
+              ),
+            game_config_json TEXT NOT NULL
+              CHECK (length(game_config_json) >= 2),
+            state TEXT NOT NULL
+              CHECK (state IN ('provisioning', 'ready')),
+            starts_at INTEGER NOT NULL CHECK (starts_at >= 0),
+            expires_at INTEGER NOT NULL CHECK (expires_at > starts_at),
+            requested_at INTEGER NOT NULL CHECK (requested_at >= 0),
+            ready_at INTEGER CHECK (
+              ready_at IS NULL OR
+              ready_at BETWEEN requested_at AND expires_at
+            ),
+            updated_at INTEGER NOT NULL CHECK (updated_at >= requested_at),
+            CHECK (
+              (state = 'provisioning' AND ready_at IS NULL) OR
+              (state = 'ready' AND ready_at IS NOT NULL)
+            )
+          ) STRICT;
+          CREATE INDEX persistent_world_runtimes_state_idx
+            ON persistent_world_runtimes(state, starts_at, world_id);
+          CREATE INDEX persistent_world_runtimes_expiry_idx
+            ON persistent_world_runtimes(state, expires_at, world_id);
+        `);
+        this.db
+          .prepare(
+            "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (4, ?)",
+          )
+          .run(this.validNow());
+      });
+    }
+
+    if (version < 5) {
+      this.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE persistent_world_runtime_turns (
+            world_id TEXT NOT NULL
+              REFERENCES persistent_world_runtimes(world_id) ON DELETE CASCADE,
+            turn_number INTEGER NOT NULL CHECK (turn_number >= 0),
+            turn_json TEXT NOT NULL CHECK (length(turn_json) >= 2),
+            committed_at INTEGER NOT NULL CHECK (committed_at >= 0),
+            PRIMARY KEY(world_id, turn_number)
+          ) STRICT;
+        `);
+        this.db
+          .prepare(
+            "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (5, ?)",
+          )
+          .run(this.validNow());
+      });
+    }
   }
 
   private validNow(): number {
@@ -543,6 +660,35 @@ export class PersistentWorldRepository {
           ? null
           : String(row.last_error),
       createdAt: numberValue(row.created_at),
+      updatedAt: numberValue(row.updated_at),
+    };
+  }
+
+  private runtimeFromRow(row: SqlRow): PersistentWorldRuntime {
+    const state = String(row.state);
+    if (state !== "provisioning" && state !== "ready") {
+      throw new Error(`Persistent-world runtime state is corrupt: ${state}`);
+    }
+    let gameConfigValue: unknown;
+    try {
+      gameConfigValue = JSON.parse(String(row.game_config_json));
+    } catch {
+      throw new Error("Persistent-world runtime game config is corrupt");
+    }
+    const gameConfig = GameConfigSchema.safeParse(gameConfigValue);
+    if (!gameConfig.success) {
+      throw new Error("Persistent-world runtime game config is invalid");
+    }
+    return {
+      worldId: String(row.world_id),
+      requestId: String(row.request_id),
+      gameId: String(row.game_id),
+      gameConfig: gameConfig.data,
+      state,
+      startsAt: numberValue(row.starts_at),
+      expiresAt: numberValue(row.expires_at),
+      requestedAt: numberValue(row.requested_at),
+      readyAt: nullableNumber(row.ready_at),
       updatedAt: numberValue(row.updated_at),
     };
   }
@@ -832,6 +978,558 @@ export class PersistentWorldRepository {
       }
       return this.identityFromRow(this.identityRow(current.id)!);
     });
+  }
+
+  /**
+   * Binds a world identity to the domain-separated hash of the gameplay
+   * persistent ID authenticated by the OpenFront join boundary. Both sides
+   * are immutable after the first binding: changing an identity's gameplay
+   * principal, or sharing one principal between identities, is a conflict.
+   */
+  bindGameplayIdentity(identityId: string, hashValue: string): string {
+    const gameplayPersistentIdHash = hashValue.trim().toLowerCase();
+    if (!GAMEPLAY_PERSISTENT_ID_HASH_PATTERN.test(gameplayPersistentIdHash)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Gameplay persistent ID hash must be 64 hexadecimal characters",
+      );
+    }
+
+    return this.transaction(() => {
+      const identity = this.identityRow(identityId);
+      if (!identity) {
+        throw new PersistentWorldRepositoryError(
+          "NOT_FOUND",
+          `Identity ${identityId} does not exist`,
+        );
+      }
+      const existing = identity.gameplay_persistent_id_hash;
+      if (existing !== null && existing !== undefined) {
+        if (String(existing) === gameplayPersistentIdHash) {
+          return gameplayPersistentIdHash;
+        }
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "World identity is already bound to another gameplay identity",
+        );
+      }
+
+      const claimed = this.db
+        .prepare(
+          `SELECT id FROM persistent_world_identities
+           WHERE gameplay_persistent_id_hash = ?`,
+        )
+        .get(gameplayPersistentIdHash) as SqlRow | undefined;
+      if (claimed) {
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "Gameplay identity is already bound to another world identity",
+        );
+      }
+
+      this.db
+        .prepare(
+          `UPDATE persistent_world_identities
+           SET gameplay_persistent_id_hash = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(gameplayPersistentIdHash, this.validNow(), identityId);
+      return gameplayPersistentIdHash;
+    });
+  }
+
+  /** Server-only authentication lookup; never include its result in a route. */
+  gameplayIdentityHash(identityId: string): string | null {
+    const identity = this.identityRow(identityId);
+    if (!identity) {
+      throw new PersistentWorldRepositoryError(
+        "NOT_FOUND",
+        `Identity ${identityId} does not exist`,
+      );
+    }
+    const value = identity.gameplay_persistent_id_hash;
+    return value === null || value === undefined ? null : String(value);
+  }
+
+  /**
+   * Returns the durable RSVP roster required to provision a runtime. This is
+   * deliberately a server-only projection and omits identity subjects,
+   * contact details, controller secrets, and invitation capabilities.
+   */
+  runtimeSeats(worldId: string): PersistentWorldRuntimeSeat[] {
+    const world = this.requireWorldRow(worldId);
+    const rows = this.db
+      .prepare(
+        `SELECT r.identity_id, r.team_id, r.joined_at,
+                i.display_name, i.gameplay_persistent_id_hash
+         FROM persistent_world_rsvps r
+         JOIN persistent_world_identities i ON i.id = r.identity_id
+         WHERE r.world_id = ?
+         ORDER BY r.joined_at, r.identity_id`,
+      )
+      .all(worldId) as SqlRow[];
+    return rows.map((row) => ({
+      identityId: String(row.identity_id),
+      displayName: String(row.display_name),
+      gameplayPersistentIdHash:
+        row.gameplay_persistent_id_hash === null ||
+        row.gameplay_persistent_id_hash === undefined
+          ? null
+          : String(row.gameplay_persistent_id_hash),
+      isHost: String(row.identity_id) === String(world.host_identity_id),
+      teamId: row.team_id === null ? null : String(row.team_id),
+      joinedAt: numberValue(row.joined_at),
+    }));
+  }
+
+  /**
+   * Reserves exactly one stable OpenFront game ID for a world. Repeating the
+   * same request is idempotent; every changed parameter is a conflict so a
+   * scheduler retry cannot silently point the invitation at another game.
+   */
+  reserveRuntime(
+    worldId: string,
+    requestIdValue: string,
+    gameIdValue: string,
+    gameConfigValue: GameConfig,
+    startsAtValue: number,
+    expiresAtValue: number,
+  ): PersistentWorldRuntime {
+    const requestId = requestIdValue.trim();
+    const gameId = gameIdValue.trim();
+    const gameConfig = GameConfigSchema.parse(gameConfigValue);
+    const gameConfigJson = JSON.stringify(gameConfig);
+    const startsAt = PersistentWorldTimestampSchema.parse(startsAtValue);
+    const expiresAt = PersistentWorldTimestampSchema.parse(expiresAtValue);
+    if (!RUNTIME_REQUEST_ID_PATTERN.test(requestId)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime request ID is invalid",
+      );
+    }
+    if (!RUNTIME_GAME_ID_PATTERN.test(gameId)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime game ID must be eight alphanumeric characters",
+      );
+    }
+    if (expiresAt <= startsAt) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime expiry must be after its start time",
+      );
+    }
+
+    return this.transaction(() => {
+      const world = this.requireWorldRow(worldId);
+      const phase = String(world.phase);
+      if (phase === "finished" || phase === "cancelled") {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          `Cannot reserve a runtime for a ${phase} world`,
+        );
+      }
+      if (startsAt !== numberValue(world.starts_at)) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_ARGUMENT",
+          "Runtime start must match the world's promised start time",
+        );
+      }
+
+      const existing = this.getRuntime(worldId);
+      if (existing) {
+        if (
+          existing.requestId === requestId &&
+          existing.gameId === gameId &&
+          JSON.stringify(existing.gameConfig) === gameConfigJson &&
+          existing.startsAt === startsAt &&
+          existing.expiresAt === expiresAt
+        ) {
+          return existing;
+        }
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          `World ${worldId} already has another runtime reservation`,
+        );
+      }
+
+      const requestedAt = this.validNow();
+      if (expiresAt <= requestedAt) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "Cannot reserve a runtime after its world lifetime has elapsed",
+        );
+      }
+      try {
+        this.db
+          .prepare(
+            `INSERT INTO persistent_world_runtimes(
+               world_id, request_id, game_id, game_config_json, state,
+               starts_at, expires_at, requested_at, updated_at
+             ) VALUES (?, ?, ?, ?, 'provisioning', ?, ?, ?, ?)`,
+          )
+          .run(
+            worldId,
+            requestId,
+            gameId,
+            gameConfigJson,
+            startsAt,
+            expiresAt,
+            requestedAt,
+            requestedAt,
+          );
+      } catch {
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "Runtime request ID or game ID is already reserved",
+        );
+      }
+      this.db
+        .prepare(
+          `UPDATE persistent_worlds
+           SET updated_at = MAX(updated_at, ?)
+           WHERE id = ?`,
+        )
+        .run(requestedAt, worldId);
+      return this.getRuntime(worldId)!;
+    });
+  }
+
+  markRuntimeReady(
+    worldId: string,
+    requestIdValue: string,
+    gameIdValue: string,
+    atValue: number = this.validNow(),
+  ): PersistentWorldRuntime {
+    const requestId = requestIdValue.trim();
+    const gameId = gameIdValue.trim();
+    const at = PersistentWorldTimestampSchema.parse(atValue);
+    if (
+      !RUNTIME_REQUEST_ID_PATTERN.test(requestId) ||
+      !RUNTIME_GAME_ID_PATTERN.test(gameId)
+    ) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime identity is invalid",
+      );
+    }
+
+    return this.transaction(() => {
+      const world = this.requireWorldRow(worldId);
+      const runtime = this.getRuntime(worldId);
+      if (!runtime) {
+        throw new PersistentWorldRepositoryError(
+          "NOT_FOUND",
+          `World ${worldId} has no runtime reservation`,
+        );
+      }
+      if (runtime.requestId !== requestId || runtime.gameId !== gameId) {
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "Runtime readiness does not match the durable reservation",
+        );
+      }
+      if (runtime.state === "ready") return runtime;
+      if (["finished", "cancelled"].includes(String(world.phase))) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          `Cannot ready a runtime for a ${String(world.phase)} world`,
+        );
+      }
+      if (at > runtime.expiresAt) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "Runtime expired before it became ready",
+        );
+      }
+      if (at < runtime.requestedAt) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_ARGUMENT",
+          "Runtime readiness cannot predate its reservation",
+        );
+      }
+
+      this.db
+        .prepare(
+          `UPDATE persistent_world_runtimes
+           SET state = 'ready', ready_at = ?, updated_at = ?
+           WHERE world_id = ? AND state = 'provisioning'`,
+        )
+        .run(at, at, worldId);
+      this.db
+        .prepare(
+          `UPDATE persistent_worlds
+           SET updated_at = MAX(updated_at, ?)
+           WHERE id = ?`,
+        )
+        .run(at, worldId);
+      return this.getRuntime(worldId)!;
+    });
+  }
+
+  getRuntime(worldId: string): PersistentWorldRuntime | undefined {
+    const row = this.db
+      .prepare("SELECT * FROM persistent_world_runtimes WHERE world_id = ?")
+      .get(worldId) as SqlRow | undefined;
+    return row ? this.runtimeFromRow(row) : undefined;
+  }
+
+  /** Resolves a worker journal event to its durable world reservation. */
+  getRuntimeByRequestId(
+    requestIdValue: string,
+  ): PersistentWorldRuntime | undefined {
+    const requestId = requestIdValue.trim();
+    if (!RUNTIME_REQUEST_ID_PATTERN.test(requestId)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime request ID is invalid",
+      );
+    }
+    const row = this.db
+      .prepare("SELECT * FROM persistent_world_runtimes WHERE request_id = ?")
+      .get(requestId) as SqlRow | undefined;
+    return row ? this.runtimeFromRow(row) : undefined;
+  }
+
+  /**
+   * Durably appends an exact, contiguous slice of the managed game's turn
+   * stream. A worker may replay any already-committed prefix after an IPC
+   * timeout; byte-equivalent normalized turns are idempotent, while a gap or
+   * divergent duplicate is rejected before any suffix is inserted.
+   */
+  appendRuntimeTurns(
+    worldId: string,
+    requestIdValue: string,
+    turnsValue: readonly Turn[],
+  ): void {
+    const requestId = requestIdValue.trim();
+    if (!RUNTIME_REQUEST_ID_PATTERN.test(requestId)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime request ID is invalid",
+      );
+    }
+
+    const turns = turnsValue.map((value, index) => {
+      const parsed = TurnSchema.safeParse(value);
+      if (
+        !parsed.success ||
+        !Number.isSafeInteger(parsed.data.turnNumber) ||
+        parsed.data.turnNumber < 0
+      ) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_ARGUMENT",
+          `Runtime turn at batch index ${index} is invalid`,
+        );
+      }
+      if (
+        index > 0 &&
+        parsed.data.turnNumber !== turnsValue[index - 1].turnNumber + 1
+      ) {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_ARGUMENT",
+          "Runtime turn batch must be contiguous and ordered",
+        );
+      }
+      return {
+        value: parsed.data,
+        json: JSON.stringify(parsed.data),
+      };
+    });
+
+    this.transaction(() => {
+      this.requireWorldRow(worldId);
+      const runtime = this.db
+        .prepare(
+          "SELECT request_id FROM persistent_world_runtimes WHERE world_id = ?",
+        )
+        .get(worldId) as SqlRow | undefined;
+      if (!runtime) {
+        throw new PersistentWorldRepositoryError(
+          "NOT_FOUND",
+          `World ${worldId} has no runtime reservation`,
+        );
+      }
+      if (String(runtime.request_id) !== requestId) {
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "Runtime turn batch does not match the durable reservation",
+        );
+      }
+
+      const journal = this.db
+        .prepare(
+          `SELECT COUNT(*) AS count, MAX(turn_number) AS max_turn
+           FROM persistent_world_runtime_turns
+           WHERE world_id = ?`,
+        )
+        .get(worldId) as SqlRow;
+      const count = numberValue(journal.count);
+      let highWatermark = nullableNumber(journal.max_turn) ?? -1;
+      if (count !== highWatermark + 1) {
+        throw new Error("Persistent-world runtime turn journal has a gap");
+      }
+
+      const storedTurn = this.db.prepare(
+        `SELECT turn_json FROM persistent_world_runtime_turns
+         WHERE world_id = ? AND turn_number = ?`,
+      );
+      const insertTurn = this.db.prepare(
+        `INSERT INTO persistent_world_runtime_turns(
+           world_id, turn_number, turn_json, committed_at
+         ) VALUES (?, ?, ?, ?)`,
+      );
+      const committedAt = this.validNow();
+      for (const turn of turns) {
+        if (turn.value.turnNumber <= highWatermark) {
+          const stored = storedTurn.get(worldId, turn.value.turnNumber) as
+            SqlRow | undefined;
+          if (!stored || String(stored.turn_json) !== turn.json) {
+            throw new PersistentWorldRepositoryError(
+              "CONFLICT",
+              `Runtime turn ${turn.value.turnNumber} conflicts with the journal`,
+            );
+          }
+          continue;
+        }
+        if (turn.value.turnNumber !== highWatermark + 1) {
+          throw new PersistentWorldRepositoryError(
+            "CONFLICT",
+            `Runtime turn journal expected turn ${highWatermark + 1}`,
+          );
+        }
+        insertTurn.run(worldId, turn.value.turnNumber, turn.json, committedAt);
+        highWatermark = turn.value.turnNumber;
+      }
+      if (turns.length > 0) {
+        this.db
+          .prepare(
+            `UPDATE persistent_world_runtimes
+             SET updated_at = MAX(updated_at, ?)
+             WHERE world_id = ?`,
+          )
+          .run(committedAt, worldId);
+      }
+    });
+  }
+
+  /** Loads and validates the complete replay stream for worker recovery. */
+  loadRuntimeTurns(worldId: string): Turn[] {
+    this.requireWorldRow(worldId);
+    const runtime = this.db
+      .prepare(
+        "SELECT 1 AS present FROM persistent_world_runtimes WHERE world_id = ?",
+      )
+      .get(worldId) as SqlRow | undefined;
+    if (!runtime) {
+      throw new PersistentWorldRepositoryError(
+        "NOT_FOUND",
+        `World ${worldId} has no runtime reservation`,
+      );
+    }
+
+    const rows = this.db
+      .prepare(
+        `SELECT turn_number, turn_json
+         FROM persistent_world_runtime_turns
+         WHERE world_id = ?
+         ORDER BY turn_number`,
+      )
+      .all(worldId) as SqlRow[];
+    return rows.map((row, index) => {
+      let json: unknown;
+      try {
+        json = JSON.parse(String(row.turn_json));
+      } catch {
+        throw new Error(
+          `Persistent-world runtime turn ${index} contains invalid JSON`,
+        );
+      }
+      const parsed = TurnSchema.safeParse(json);
+      if (
+        !parsed.success ||
+        !Number.isSafeInteger(parsed.data.turnNumber) ||
+        parsed.data.turnNumber !== index ||
+        numberValue(row.turn_number) !== index
+      ) {
+        throw new Error(
+          `Persistent-world runtime turn journal is corrupt at turn ${index}`,
+        );
+      }
+      return parsed.data;
+    });
+  }
+
+  /** Incomplete reservations to resend idempotently after a process restart. */
+  listRuntimeProvisioning(
+    limitValue: number = DEFAULT_DUE_LIMIT,
+  ): PersistentWorldRuntime[] {
+    const limit = Math.min(MAX_DUE_LIMIT, Math.max(1, Math.trunc(limitValue)));
+    const rows = this.db
+      .prepare(
+        `SELECT runtime.*
+         FROM persistent_world_runtimes runtime
+         JOIN persistent_worlds world ON world.id = runtime.world_id
+         WHERE runtime.state = 'provisioning'
+           AND runtime.expires_at > ?
+           AND world.phase IN ('scheduled', 'active')
+         ORDER BY runtime.starts_at, runtime.world_id
+         LIMIT ?`,
+      )
+      .all(this.validNow(), limit) as SqlRow[];
+    return rows.map((row) => this.runtimeFromRow(row));
+  }
+
+  /** Ready runtimes whose active worlds must be recovered after restart. */
+  listRuntimeReady(
+    limitValue: number = DEFAULT_DUE_LIMIT,
+  ): PersistentWorldRuntime[] {
+    const limit = Math.min(MAX_DUE_LIMIT, Math.max(1, Math.trunc(limitValue)));
+    const rows = this.db
+      .prepare(
+        `SELECT runtime.*
+         FROM persistent_world_runtimes runtime
+         JOIN persistent_worlds world ON world.id = runtime.world_id
+         WHERE runtime.state = 'ready'
+           AND runtime.expires_at > ?
+           AND world.phase = 'active'
+         ORDER BY runtime.starts_at, runtime.world_id
+         LIMIT ?`,
+      )
+      .all(this.validNow(), limit) as SqlRow[];
+    return rows.map((row) => this.runtimeFromRow(row));
+  }
+
+  /** Active v3/legacy worlds that still need a durable runtime association. */
+  listActiveWithoutRuntime(
+    limitValue: number = DEFAULT_DUE_LIMIT,
+  ): PersistentWorld[] {
+    const limit = Math.min(MAX_DUE_LIMIT, Math.max(1, Math.trunc(limitValue)));
+    const rows = this.db
+      .prepare(
+        `SELECT
+           world.*,
+           identity.id AS identity_id, identity.kind AS identity_kind,
+           identity.subject AS identity_subject,
+           identity.display_name AS identity_display_name,
+           identity.verified_email AS identity_verified_email
+         FROM persistent_worlds world
+         JOIN persistent_world_identities identity
+           ON identity.id = world.host_identity_id
+         LEFT JOIN persistent_world_runtimes runtime
+           ON runtime.world_id = world.id
+         WHERE world.phase = 'active'
+           AND runtime.world_id IS NULL
+           AND CASE world.target_duration
+             WHEN '1h' THEN world.starts_at + 3600000
+             WHEN '1d' THEN world.starts_at + 86400000
+             WHEN '7d' THEN world.starts_at + 604800000
+           END > ?
+         ORDER BY world.starts_at, world.id
+         LIMIT ?`,
+      )
+      .all(this.validNow(), limit) as SqlRow[];
+    return rows.map((row) => this.worldFromRow(row));
   }
 
   createWorld(inputValue: CreatePersistentWorldInput): PersistentWorld {

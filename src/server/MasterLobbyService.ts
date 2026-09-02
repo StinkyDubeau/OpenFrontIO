@@ -10,8 +10,11 @@ import {
   InternalGameInfo,
   InternalGameInfoSchema,
   MasterCreateGame,
+  MasterCreateManagedGame,
   MasterLobbiesBroadcast,
   MasterUpdateGame,
+  WorkerManagedGameReady,
+  WorkerManagedGameTurns,
   WorkerMessageSchema,
 } from "./IPCBridgeSchema";
 import { logger } from "./Logger";
@@ -35,6 +38,18 @@ export class MasterLobbyService {
   // round-trip); losing twice means the conflict is real, and the loser gets
   // delisted.
   private readonly loserStreaks = new Map<string, number>();
+  private readonly pendingManagedGames = new Map<
+    string,
+    {
+      gameID: string;
+      workerId: number;
+      promise: Promise<WorkerManagedGameReady>;
+      resolve: (message: WorkerManagedGameReady) => void;
+      reject: (error: Error) => void;
+      timeout: NodeJS.Timeout;
+    }
+  >();
+  private managedGameTurnHandler?: (message: WorkerManagedGameTurns) => void;
   private started = false;
 
   constructor(
@@ -60,8 +75,171 @@ export class MasterLobbyService {
         case "lobbyList":
           this.workerLobbies.set(workerId, this.validLobbies(msg.lobbies));
           break;
+        case "managedGameReady":
+          this.handleManagedGameReady(workerId, msg);
+          break;
+        case "managedGameTurns":
+          this.handleManagedGameTurns(workerId, msg);
+          break;
       }
     });
+  }
+
+  /**
+   * Registers the master-owned durable sink for worker turn batches. The
+   * handler is deliberately generic: application composition decides where
+   * managed-game journals live.
+   */
+  setManagedGameTurnHandler(
+    handler: ((message: WorkerManagedGameTurns) => void) | undefined,
+  ): void {
+    this.managedGameTurnHandler = handler;
+  }
+
+  /**
+   * Creates an externally scheduled match on its deterministic shard and
+   * resolves only after that worker confirms the managed GameServer exists.
+   * Repeating an in-flight request ID shares the same promise.
+   */
+  createManagedGame(
+    command: MasterCreateManagedGame,
+  ): Promise<WorkerManagedGameReady> {
+    const pending = this.pendingManagedGames.get(command.requestId);
+    if (pending) {
+      if (pending.gameID !== command.gameID) {
+        return Promise.reject(
+          new Error(
+            `Managed request ${command.requestId} is already bound to ${pending.gameID}`,
+          ),
+        );
+      }
+      return pending.promise;
+    }
+
+    const workerId = ServerEnv.workerIndex(command.gameID);
+    const worker = this.workers.get(workerId);
+    if (!worker || !this.readyWorkers.has(workerId)) {
+      return Promise.reject(
+        new Error(`Worker ${workerId} is not ready for managed game creation`),
+      );
+    }
+
+    let resolvePromise!: (message: WorkerManagedGameReady) => void;
+    let rejectPromise!: (error: Error) => void;
+    const promise = new Promise<WorkerManagedGameReady>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+    const timeout = setTimeout(() => {
+      this.rejectManagedGame(
+        command.requestId,
+        new Error(`Timed out creating managed game ${command.gameID}`),
+      );
+    }, 10_000);
+    timeout.unref?.();
+    this.pendingManagedGames.set(command.requestId, {
+      gameID: command.gameID,
+      workerId,
+      promise,
+      resolve: resolvePromise,
+      reject: rejectPromise,
+      timeout,
+    });
+
+    try {
+      worker.send(command, (error) => {
+        if (!error) return;
+        this.rejectManagedGame(command.requestId, error);
+        this.log.error(
+          `Failed to send managed game ${command.gameID} to worker ${workerId}, killing worker:`,
+          error,
+        );
+        worker.kill();
+      });
+    } catch (error) {
+      this.rejectManagedGame(
+        command.requestId,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
+    return promise;
+  }
+
+  private handleManagedGameReady(
+    registeredWorkerId: number,
+    message: WorkerManagedGameReady,
+  ): void {
+    const pending = this.pendingManagedGames.get(message.requestId);
+    if (!pending) {
+      this.log.warn("Ignoring unexpected managed-game acknowledgement", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+      });
+      return;
+    }
+    if (
+      message.workerId !== registeredWorkerId ||
+      pending.workerId !== registeredWorkerId ||
+      pending.gameID !== message.gameID
+    ) {
+      this.rejectManagedGame(
+        message.requestId,
+        new Error("Managed-game acknowledgement did not match its request"),
+      );
+      return;
+    }
+    if (message.outcome === "conflict") {
+      this.rejectManagedGame(
+        message.requestId,
+        new Error(`Game ID ${message.gameID} is already owned by another game`),
+      );
+      return;
+    }
+    clearTimeout(pending.timeout);
+    this.pendingManagedGames.delete(message.requestId);
+    pending.resolve(message);
+  }
+
+  private handleManagedGameTurns(
+    registeredWorkerId: number,
+    message: WorkerManagedGameTurns,
+  ): void {
+    if (
+      message.workerId !== registeredWorkerId ||
+      ServerEnv.workerIndex(message.gameID) !== registeredWorkerId
+    ) {
+      this.log.error("Ignoring managed turns from the wrong worker", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+        registeredWorkerId,
+        claimedWorkerId: message.workerId,
+      });
+      return;
+    }
+    if (!this.managedGameTurnHandler) {
+      this.log.error("Managed turn batch has no durable handler", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+      });
+      return;
+    }
+    try {
+      this.managedGameTurnHandler(message);
+    } catch (error) {
+      this.log.error("Failed to persist managed turn batch", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private rejectManagedGame(requestId: string, error: Error): void {
+    const pending = this.pendingManagedGames.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pendingManagedGames.delete(requestId);
+    pending.reject(error);
   }
 
   // Lobby entries are validated individually so one malformed entry only
@@ -86,6 +264,14 @@ export class MasterLobbyService {
     this.workers.delete(workerId);
     this.workerLobbies.delete(workerId);
     this.readyWorkers.delete(workerId);
+    for (const [requestId, pending] of this.pendingManagedGames) {
+      if (pending.workerId === workerId) {
+        this.rejectManagedGame(
+          requestId,
+          new Error(`Worker ${workerId} exited during managed game creation`),
+        );
+      }
+    }
   }
 
   isHealthy(): boolean {

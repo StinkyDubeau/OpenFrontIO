@@ -7,6 +7,7 @@ import type {
   PersistentWorldControllerSession,
   PersistentWorldLobbySnapshot,
 } from "../../../core/PersistentWorldSchemas";
+import { getPlayToken } from "../../Auth";
 import type { JoinLobbyEvent } from "../../Main";
 import {
   consumeInvitationFragment,
@@ -715,7 +716,9 @@ export class PersistentWorldPage extends LitElement {
   private async resumeIdentity() {
     if (this.session || !persistentWorldApi.sessionToken()) return;
     try {
-      this.session = await persistentWorldApi.resumeSession();
+      const session = await persistentWorldApi.resumeSession();
+      await persistentWorldApi.bindGameIdentity(await getPlayToken());
+      this.session = session;
     } catch (error) {
       if (error instanceof PersistentWorldApiError && error.status === 401) {
         persistentWorldApi.forgetSession();
@@ -859,7 +862,10 @@ export class PersistentWorldPage extends LitElement {
   private enterRuntime(runtimeGameId: string) {
     this.dispatchEvent(
       new CustomEvent("join-lobby", {
-        detail: { gameID: runtimeGameId, source: "private" } as JoinLobbyEvent,
+        detail: {
+          gameID: runtimeGameId,
+          source: "persistent-world",
+        } as JoinLobbyEvent,
         bubbles: true,
         composed: true,
       }),
@@ -885,6 +891,7 @@ export class PersistentWorldPage extends LitElement {
       const created = await persistentWorldApi.createGuestSession(
         this.identityName.trim(),
       );
+      await persistentWorldApi.bindGameIdentity(await getPlayToken());
       this.session = created.session;
       if (this.identityContinuation === "create") {
         this.view = "wizard";

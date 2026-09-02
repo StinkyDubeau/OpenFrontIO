@@ -442,7 +442,49 @@ export async function startWorker() {
             clientMsg.gameID,
             clientMsg.lastTurn,
           );
-          if (!wasFound) {
+          if (wasFound) return;
+
+          // A managed GameServer is reconstructed from its durable roster and
+          // turn journal after a worker/process replacement. Its in-memory
+          // Client objects intentionally are not durable, so an established
+          // browser's first `rejoin` must be able to reclaim the reserved seat
+          // without requiring a page refresh and a new Turnstile challenge.
+          const managedSeat = gm.managedSeatForPersistentId(
+            clientMsg.gameID,
+            persistentId,
+          );
+          if (managedSeat !== undefined && managedSeat !== null) {
+            const client = new Client(
+              managedSeat.clientID,
+              persistentId,
+              claims,
+              claims?.role ?? null,
+              undefined,
+              ip,
+              managedSeat.username,
+              managedSeat.clanTag,
+              ws,
+              undefined,
+              undefined,
+              [],
+            );
+            const joinResult = gm.joinClient(
+              client,
+              clientMsg.gameID,
+              clientMsg.lastTurn,
+            );
+            if (joinResult === "joined") return;
+            log.warn("managed client could not reclaim its cold seat", {
+              gameID: clientMsg.gameID,
+              workerId,
+              joinResult,
+            });
+            ws.close(1002, "Cannot reclaim reserved seat");
+            return;
+          }
+          if (managedSeat === null) {
+            ws.close(1002, "No reserved seat");
+          } else {
             log.warn(
               `game ${clientMsg.gameID} not found on worker ${workerId}`,
             );
@@ -563,13 +605,30 @@ export async function startWorker() {
           return;
         }
 
+        // Managed games freeze their player roster before start. Resolve the
+        // authenticated identity to that preassigned client ID before Client
+        // is constructed, including for a player's first connection after the
+        // match has begun. `undefined` is the ordinary-game path; `null` means
+        // this managed roster has no seat for the caller.
+        const managedClientID = gm.managedClientIDForPersistentId(
+          clientMsg.gameID,
+          persistentId,
+        );
+        if (managedClientID === null) {
+          log.info("client has no reserved seat in managed game", {
+            gameID: clientMsg.gameID,
+            workerId,
+          });
+          ws.close(1002, "No reserved seat");
+          return;
+        }
+
         let flares: string[] | undefined;
         let publicId: string | undefined;
         let friends: string[] = [];
         let ownedClanTags: string[] = [];
         let accountUsername:
-          | { username?: string | null; usernameStatus?: string }
-          | undefined;
+          { username?: string | null; usernameStatus?: string } | undefined;
 
         const allowedFlares = ServerEnv.allowedFlares();
         if (claims === null) {
@@ -654,7 +713,7 @@ export async function startWorker() {
 
         // Create client and add to game
         const client = new Client(
-          generateID(),
+          managedClientID ?? generateID(),
           persistentId,
           claims,
           claims?.role ?? null,
@@ -724,6 +783,33 @@ export async function startWorker() {
     lobbyService.sendReady(workerId);
     log.info(`signaled ready state to master`);
   });
+
+  // A controlled worker stop journals the final partial batch before closing
+  // IPC. process.disconnect() drains messages already queued on the channel;
+  // the bounded fallback prevents a wedged parent from blocking deployment.
+  let gracefulStopStarted = false;
+  const gracefullyStop = (signal: string) => {
+    if (gracefulStopStarted) return;
+    gracefulStopStarted = true;
+    log.info(`worker received ${signal}, flushing managed games`);
+    gm.flushManagedTurns();
+    server.close();
+
+    const forceExit = setTimeout(() => process.exit(0), 1_000);
+    const finish = () => {
+      clearTimeout(forceExit);
+      process.exit(0);
+    };
+    if (process.connected && typeof process.disconnect === "function") {
+      process.once("disconnect", finish);
+      process.disconnect();
+    } else {
+      setImmediate(finish);
+    }
+  };
+  process.once("SIGTERM", () => gracefullyStop("SIGTERM"));
+  process.once("SIGINT", () => gracefullyStop("SIGINT"));
+  process.once("disconnect", () => gracefullyStop("IPC disconnect"));
 
   // Global error handler
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
