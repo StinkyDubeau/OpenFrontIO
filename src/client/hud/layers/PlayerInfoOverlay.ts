@@ -174,15 +174,16 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   }
 
   setVisible(visible: boolean) {
-    const visibilityChanged = this._isInfoVisible !== visible;
-    this._isInfoVisible = visible;
+    const nextVisible = visible && (this.player !== null || this.unit !== null);
+    const visibilityChanged = this._isInfoVisible !== nextVisible;
+    this._isInfoVisible = nextVisible;
     this.requestUpdate();
     if (visibilityChanged) {
       this.dispatchEvent(
         new CustomEvent("atlas-player-info-visibility", {
           bubbles: true,
           composed: true,
-          detail: { visible },
+          detail: { visible: nextVisible },
         }),
       );
     }
@@ -641,13 +642,16 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   }
 
   render() {
-    if (!this._isActive) {
+    // Do not leave a styled, transparent tray mounted over the map. Besides
+    // reserving an invisible hit/layout surface, the tray's polished border
+    // could still read as a divider on some mobile compositors.
+    if (
+      !this._isActive ||
+      !this._isInfoVisible ||
+      (this.player === null && this.unit === null)
+    ) {
       return html``;
     }
-
-    const containerClasses = this._isInfoVisible
-      ? "opacity-100 visible"
-      : "opacity-0 invisible pointer-events-none";
 
     return html`
       <div
@@ -657,7 +661,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
         <div
-          class="atlas-player-info-surface bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg sm:rounded-b-lg shadow-lg text-white text-lg lg:text-base w-full sm:w-[500px] overflow-hidden ${containerClasses}"
+          class="atlas-player-info-surface bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg sm:rounded-b-lg shadow-lg text-white text-lg lg:text-base w-full sm:w-[500px] overflow-hidden"
         >
           ${this.player !== null ? this.renderPlayerInfo(this.player) : ""}
           ${this.unit !== null ? this.renderUnitInfo(this.unit) : ""}

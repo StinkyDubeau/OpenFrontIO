@@ -65,8 +65,12 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(playerInfo).toContain("atlas-player-info-positioner");
     expect(playerInfo).toContain("atlas-player-info-close");
     expect(playerInfo).toContain("atlas-player-info-visibility");
+    expect(playerInfo).toContain("!this._isInfoVisible");
+    expect(playerInfo).not.toContain("opacity-0 invisible");
     expect(spawnTimer).toContain("--atlas-board-safe-top");
     expect(styles).toContain("--atlas-hud-information-top");
+    expect(styles).toContain("--atlas-hud-edge-gap: 2px");
+    expect(styles).not.toContain("calc(var(--atlas-board-safe-top) + 0.4rem)");
     expect(styles).toContain("atlas-game-hud[data-player-info-visible]");
   });
 
