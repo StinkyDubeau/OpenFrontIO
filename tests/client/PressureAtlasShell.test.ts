@@ -52,16 +52,22 @@ describe("Pressure Atlas OpenFront shell", () => {
   });
 
   test("reserves a Dynamic Island lane above selected-player information", () => {
+    const nativeApp = source("apps/mobile/App.tsx");
     const hudDeck = source("src/client/components/AtlasGameHud.ts");
     const playerInfo = source("src/client/hud/layers/PlayerInfoOverlay.ts");
     const spawnTimer = source("src/client/hud/layers/SpawnTimer.ts");
     const styles = source("src/client/styles/war-room.css");
 
+    expect(nativeApp).toContain('<StatusBar animated style="light" />');
+    expect(nativeApp).not.toContain("<StatusBar hidden");
     expect(hudDeck).toContain("atlas-hud-top-actions");
+    expect(hudDeck).toContain("data-player-info-visible");
     expect(playerInfo).toContain("atlas-player-info-positioner");
+    expect(playerInfo).toContain("atlas-player-info-close");
+    expect(playerInfo).toContain("atlas-player-info-visibility");
     expect(spawnTimer).toContain("--atlas-board-safe-top");
-    expect(styles).toContain("--atlas-hud-utility-top");
     expect(styles).toContain("--atlas-hud-information-top");
+    expect(styles).toContain("atlas-game-hud[data-player-info-visible]");
   });
 
   test("consolidates repeated HTML mounts into reusable page and HUD decks", () => {

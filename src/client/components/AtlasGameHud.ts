@@ -7,6 +7,30 @@ import { customElement } from "lit/decorators.js";
  */
 @customElement("atlas-game-hud")
 export class AtlasGameHud extends LitElement {
+  private readonly onPlayerInfoVisibility = (event: Event) => {
+    const customEvent = event as CustomEvent<{ visible?: boolean }>;
+    this.toggleAttribute(
+      "data-player-info-visible",
+      customEvent.detail?.visible === true,
+    );
+  };
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this.addEventListener(
+      "atlas-player-info-visibility",
+      this.onPlayerInfoVisibility,
+    );
+  }
+
+  disconnectedCallback(): void {
+    this.removeEventListener(
+      "atlas-player-info-visibility",
+      this.onPlayerInfoVisibility,
+    );
+    super.disconnectedCallback();
+  }
+
   createRenderRoot() {
     return this;
   }

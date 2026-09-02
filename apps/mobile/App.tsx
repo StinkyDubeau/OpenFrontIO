@@ -8,7 +8,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.root}>
-        <StatusBar hidden />
+        <StatusBar animated style="light" />
         <GameSurface />
       </View>
     </SafeAreaProvider>

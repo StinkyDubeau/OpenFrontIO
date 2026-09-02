@@ -174,8 +174,18 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   }
 
   setVisible(visible: boolean) {
+    const visibilityChanged = this._isInfoVisible !== visible;
     this._isInfoVisible = visible;
     this.requestUpdate();
+    if (visibilityChanged) {
+      this.dispatchEvent(
+        new CustomEvent("atlas-player-info-visibility", {
+          bubbles: true,
+          composed: true,
+          detail: { visible },
+        }),
+      );
+    }
   }
 
   private getPlayerNameColor(isFriendly: boolean): string {
@@ -480,7 +490,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
           class="flex flex-col justify-between self-stretch w-[100%] flex-grow-1"
         >
           <div
-            class="flex items-center gap-1 lg:gap-2 font-bold text-sm lg:text-lg ${this.getPlayerNameColor(
+            class="flex items-center gap-1 pr-7 lg:gap-2 font-bold text-sm lg:text-lg ${this.getPlayerNameColor(
               isFriendly ?? false,
             )}"
           >
@@ -509,9 +519,9 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
                     <span class="text-xs font-normal text-gray-400"
                       >[<span
                         style="color: ${themeProvider
-                        .current()
-                        .teamColor(player.team()!)
-                        .toHex()}"
+                          .current()
+                          .teamColor(player.team()!)
+                          .toHex()}"
                         >${playerTeam}</span
                       >]</span
                     >
@@ -651,6 +661,18 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         >
           ${this.player !== null ? this.renderPlayerInfo(this.player) : ""}
           ${this.unit !== null ? this.renderUnitInfo(this.unit) : ""}
+          <button
+            class="atlas-player-info-close"
+            type="button"
+            aria-label=${translateText("common.close")}
+            title=${translateText("common.close")}
+            @click=${(event: MouseEvent) => {
+              event.stopPropagation();
+              this.hide();
+            }}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
       </div>
     `;
