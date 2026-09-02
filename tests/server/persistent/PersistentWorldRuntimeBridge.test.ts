@@ -11,6 +11,7 @@ import type { GameConfig } from "../../../src/core/Schemas";
 import type {
   MasterCreateManagedGame,
   WorkerManagedGameReady,
+  WorkerManagedGameStats,
   WorkerManagedGameTurns,
 } from "../../../src/server/IPCBridgeSchema";
 import type { MapPlaylist } from "../../../src/server/MapPlaylist";
@@ -111,6 +112,7 @@ describe("persistent-world runtime bridge", () => {
       bots: 400,
       randomSpawn: true,
       publicGameModifiers: expect.objectContaining({ isRandomSpawn: true }),
+      liveStatsEnabled: true,
     });
     expect(commands).toHaveLength(1);
     expect(commands[0].initialTurns).toEqual([]);
@@ -124,6 +126,39 @@ describe("persistent-world runtime bridge", () => {
     expect(service.getSnapshot(world.id, host.bearerToken).runtimeGameId).toBe(
       runtime.gameId,
     );
+
+    const statsMessage: WorkerManagedGameStats = {
+      type: "managedGameStats",
+      requestId: runtime.requestId,
+      gameID: runtime.gameId,
+      workerId: 0,
+      stats: {
+        turn: 240,
+        players: [
+          {
+            clientID: commands[0].reservedSeats[0].clientID,
+            tilesOwned: 0,
+            troops: 0,
+            gold: "0",
+            isAlive: false,
+            team: null,
+            killedBy: null,
+            deathPosition: 2,
+          },
+        ],
+      },
+    };
+    bridge.persistStats(statsMessage);
+    expect(service.listMine(host.bearerToken)[0]).toMatchObject({
+      viewerEliminated: true,
+    });
+    expect(
+      repository.runtimePlayerStatus(world.id, host.session.identity.id),
+    ).toMatchObject({
+      clientId: commands[0].reservedSeats[0].clientID,
+      isAlive: false,
+      observedTurn: 240,
+    });
 
     await bridge.reconcile();
     expect(dispatch).toHaveBeenCalledTimes(1);

@@ -235,6 +235,9 @@ export async function startMaster() {
   lobbyService.setManagedGameTurnHandler((message) =>
     persistentWorldRuntimeBridge!.persistTurns(message),
   );
+  lobbyService.setManagedGameStatsHandler((message) =>
+    persistentWorldRuntimeBridge!.persistStats(message),
+  );
   persistentWorldService = new PersistentWorldService(
     persistentWorldRepository,
     {

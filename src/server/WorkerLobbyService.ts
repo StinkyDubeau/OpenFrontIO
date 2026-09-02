@@ -13,6 +13,7 @@ import {
   MasterMessageSchema,
   type WorkerLobbyList,
   type WorkerManagedGameReady,
+  type WorkerManagedGameStats,
   type WorkerManagedGameTurns,
   type WorkerMessage,
 } from "./IPCBridgeSchema";
@@ -142,6 +143,14 @@ export class WorkerLobbyService {
                   workerId: ServerEnv.workerId() ?? 0,
                   turns,
                 } satisfies WorkerManagedGameTurns),
+              onLiveStatsCommitted: (stats) =>
+                this.sendToMaster({
+                  type: "managedGameStats",
+                  requestId: msg.requestId,
+                  gameID: msg.gameID,
+                  workerId: ServerEnv.workerId() ?? 0,
+                  stats,
+                } satisfies WorkerManagedGameStats),
             },
           );
           outcome = game === null ? "conflict" : "created";

@@ -382,6 +382,8 @@ export const PersistentWorldCardSchema = z
     host: PersistentWorldPublicIdentitySchema,
     rsvpCount: z.number().int().nonnegative(),
     isViewerMember: z.boolean(),
+    /** Last durably observed simulation state for the signed-in RSVP seat. */
+    viewerEliminated: z.boolean(),
   })
   .strict();
 export type PersistentWorldCard = z.infer<typeof PersistentWorldCardSchema>;

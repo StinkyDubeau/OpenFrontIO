@@ -14,6 +14,7 @@ import {
   MasterLobbiesBroadcast,
   MasterUpdateGame,
   WorkerManagedGameReady,
+  WorkerManagedGameStats,
   WorkerManagedGameTurns,
   WorkerMessageSchema,
 } from "./IPCBridgeSchema";
@@ -50,6 +51,7 @@ export class MasterLobbyService {
     }
   >();
   private managedGameTurnHandler?: (message: WorkerManagedGameTurns) => void;
+  private managedGameStatsHandler?: (message: WorkerManagedGameStats) => void;
   private started = false;
 
   constructor(
@@ -81,6 +83,9 @@ export class MasterLobbyService {
         case "managedGameTurns":
           this.handleManagedGameTurns(workerId, msg);
           break;
+        case "managedGameStats":
+          this.handleManagedGameStats(workerId, msg);
+          break;
       }
     });
   }
@@ -94,6 +99,12 @@ export class MasterLobbyService {
     handler: ((message: WorkerManagedGameTurns) => void) | undefined,
   ): void {
     this.managedGameTurnHandler = handler;
+  }
+
+  setManagedGameStatsHandler(
+    handler: ((message: WorkerManagedGameStats) => void) | undefined,
+  ): void {
+    this.managedGameStatsHandler = handler;
   }
 
   /**
@@ -227,6 +238,40 @@ export class MasterLobbyService {
       this.managedGameTurnHandler(message);
     } catch (error) {
       this.log.error("Failed to persist managed turn batch", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private handleManagedGameStats(
+    registeredWorkerId: number,
+    message: WorkerManagedGameStats,
+  ): void {
+    if (
+      message.workerId !== registeredWorkerId ||
+      ServerEnv.workerIndex(message.gameID) !== registeredWorkerId
+    ) {
+      this.log.error("Ignoring managed stats from the wrong worker", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+        registeredWorkerId,
+        claimedWorkerId: message.workerId,
+      });
+      return;
+    }
+    if (!this.managedGameStatsHandler) {
+      this.log.error("Managed stats have no durable handler", {
+        requestId: message.requestId,
+        gameID: message.gameID,
+      });
+      return;
+    }
+    try {
+      this.managedGameStatsHandler(message);
+    } catch (error) {
+      this.log.error("Failed to persist managed stats", {
         requestId: message.requestId,
         gameID: message.gameID,
         error: error instanceof Error ? error.message : String(error),

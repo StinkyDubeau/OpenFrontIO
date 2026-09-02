@@ -145,6 +145,7 @@ describe("persistent-world notifications", () => {
     // while v3 notification data and later additive schema do not.
     const versionTwo = new DatabaseSync(dbPath);
     versionTwo.exec(`
+      DROP TABLE persistent_world_runtime_player_status;
       DROP TABLE persistent_world_runtime_turns;
       DROP TABLE persistent_world_runtimes;
       DROP INDEX persistent_world_identities_gameplay_hash_idx;

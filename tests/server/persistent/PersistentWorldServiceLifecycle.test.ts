@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PersistentWorldRepository } from "../../../src/server/persistent/PersistentWorldRepository";
 import {
   PersistentWorldService,
@@ -132,8 +132,29 @@ describe("PersistentWorldService lifecycle", () => {
       expect.objectContaining({
         world: expect.objectContaining({ id: worldId }),
         isViewerMember: true,
+        viewerEliminated: false,
       }),
     ]);
+  });
+
+  it("warns an eliminated RSVP on the world card before lobby entry", () => {
+    const host = guest("Eliminated Host");
+    const created = createWorld(host.bearerToken);
+    vi.spyOn(repository, "runtimePlayerStatus").mockReturnValue({
+      worldId: created.snapshot.world.id,
+      identityId: host.session.identity.id,
+      clientId: "Seat0001",
+      isAlive: false,
+      killedBy: "Seat0002",
+      deathPosition: 3,
+      observedTurn: 200,
+      updatedAt: now,
+    });
+
+    expect(service.listMine(host.bearerToken)[0]).toMatchObject({
+      isViewerMember: true,
+      viewerEliminated: true,
+    });
   });
 
   it("requires a private invitation until a guest has durably RSVPed", () => {
@@ -315,6 +336,7 @@ describe("PersistentWorldService lifecycle", () => {
       host: { displayName: "Host" },
       rsvpCount: 2,
       isViewerMember: true,
+      viewerEliminated: false,
     });
     expect(
       new Set(

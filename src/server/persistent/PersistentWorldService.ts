@@ -425,13 +425,19 @@ export class PersistentWorldService {
     world: PersistentWorld,
     viewer?: PersistentWorldIdentity,
   ): PersistentWorldCard {
+    const isViewerMember = world.rsvps.some(
+      (rsvp) => rsvp.identity.id === viewer?.id,
+    );
+    const viewerStatus =
+      viewer && isViewerMember
+        ? this.repository.runtimePlayerStatus(world.id, viewer.id)
+        : undefined;
     return PersistentWorldCardSchema.parse({
       world: this.worldView(world),
       host: this.publicIdentity(world.host),
       rsvpCount: world.rsvps.length,
-      isViewerMember: world.rsvps.some(
-        (rsvp) => rsvp.identity.id === viewer?.id,
-      ),
+      isViewerMember,
+      viewerEliminated: viewerStatus?.isAlive === false,
     });
   }
 

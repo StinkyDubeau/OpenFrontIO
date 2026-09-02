@@ -20,7 +20,10 @@ let gameRunner: Promise<GameRunner> | null = null;
 const mapLoader = new FetchGameMapLoader((path) => assetUrl(`maps/${path}`));
 // Yield threshold; not a backlog cap. Used to avoid monopolizing the worker task
 // and flooding the main thread with messages during catch-up.
-const MAX_TICKS_BEFORE_YIELD = 4;
+const NORMAL_TICKS_BEFORE_YIELD = 4;
+const FAST_FORWARD_MAX_TICKS_BEFORE_YIELD = 256;
+const FAST_FORWARD_TIME_SLICE_MS = 12;
+let fastForward = false;
 
 let drainScheduled = false;
 let draining = false;
@@ -72,12 +75,22 @@ async function drain(): Promise<void> {
     tickUpdateSink = onTickUpdate;
 
     let ticksRun = 0;
-    while (ticksRun < MAX_TICKS_BEFORE_YIELD && gr.pendingTurns() > 0) {
+    const drainStartedAt = performance.now();
+    const tickLimit = fastForward
+      ? FAST_FORWARD_MAX_TICKS_BEFORE_YIELD
+      : NORMAL_TICKS_BEFORE_YIELD;
+    while (ticksRun < tickLimit && gr.pendingTurns() > 0) {
       const ok = gr.executeNextTick(gr.pendingTurns());
       if (!ok) {
         break;
       }
       ticksRun++;
+      if (
+        fastForward &&
+        performance.now() - drainStartedAt >= FAST_FORWARD_TIME_SLICE_MS
+      ) {
+        break;
+      }
     }
 
     tickUpdateSink = null;
@@ -177,6 +190,25 @@ ctx.addEventListener("message", async (e: MessageEvent<MainThreadMessage>) => {
         console.error("Failed to process turn:", error);
         throw error;
       }
+      break;
+
+    case "turn_batch":
+      if (!gameRunner) {
+        throw new Error("Game runner not initialized");
+      }
+      try {
+        const gr = await gameRunner;
+        for (const turn of message.turns) gr.addTurn(turn);
+        scheduleDrain();
+      } catch (error) {
+        console.error("Failed to process turn batch:", error);
+        throw error;
+      }
+      break;
+
+    case "set_fast_forward":
+      fastForward = message.enabled;
+      scheduleDrain();
       break;
 
     case "player_actions":

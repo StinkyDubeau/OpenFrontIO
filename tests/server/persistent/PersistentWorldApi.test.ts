@@ -268,6 +268,7 @@ describe("persistent-world HTTP API", () => {
     expect(mine.body[0]).toMatchObject({
       rsvpCount: 2,
       isViewerMember: true,
+      viewerEliminated: false,
       world: { id: worldId },
     });
 
@@ -354,6 +355,7 @@ describe("persistent-world HTTP API", () => {
       host: { id: host.session.identity.id, displayName: "Public Host" },
       rsvpCount: 1,
       isViewerMember: false,
+      viewerEliminated: false,
     });
     expect(discovery.body[0].host).not.toHaveProperty("subject");
 

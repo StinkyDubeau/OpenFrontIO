@@ -292,7 +292,9 @@ describe("managed-game master/worker bridge", () => {
     worker.kill = vi.fn();
     const master = new MasterLobbyService({} as any, log);
     const turnHandler = vi.fn();
+    const statsHandler = vi.fn();
     master.setManagedGameTurnHandler(turnHandler);
+    master.setManagedGameStatsHandler(statsHandler);
     master.registerWorker(0, worker as any);
     worker.emit("message", { type: "workerReady", workerId: 0 });
 
@@ -319,6 +321,16 @@ describe("managed-game master/worker bridge", () => {
     };
     worker.emit("message", turnBatch);
     expect(turnHandler).toHaveBeenCalledWith(turnBatch);
+
+    const stats = {
+      type: "managedGameStats",
+      requestId: managedCommand.requestId,
+      gameID: managedCommand.gameID,
+      workerId: 0,
+      stats: { turn: 10, players: [] },
+    };
+    worker.emit("message", stats);
+    expect(statsHandler).toHaveBeenCalledWith(stats);
   });
 
   it("creates a managed GameServer once and acknowledges an idempotent replay", () => {
@@ -353,7 +365,10 @@ describe("managed-game master/worker bridge", () => {
         reservedSeats: managedCommand.reservedSeats,
         initialTurns: undefined,
       },
-      expect.objectContaining({ onTurnsCommitted: expect.any(Function) }),
+      expect.objectContaining({
+        onTurnsCommitted: expect.any(Function),
+        onLiveStatsCommitted: expect.any(Function),
+      }),
     );
     expect(sendToMaster).toHaveBeenLastCalledWith(
       expect.objectContaining({

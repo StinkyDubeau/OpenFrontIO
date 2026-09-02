@@ -123,6 +123,26 @@ export class WorkerClient {
     });
   }
 
+  sendTurns(turns: readonly Turn[]) {
+    if (!this.isInitialized) {
+      throw new Error("Worker not initialized");
+    }
+    // Avoid one browser task and structured clone per historical turn while
+    // still keeping each message small enough for mobile browsers.
+    const chunkSize = 2_000;
+    for (let offset = 0; offset < turns.length; offset += chunkSize) {
+      this.worker!.postMessage({
+        type: "turn_batch",
+        turns: turns.slice(offset, offset + chunkSize),
+      });
+    }
+  }
+
+  setFastForward(enabled: boolean) {
+    if (!this.isInitialized) return;
+    this.worker!.postMessage({ type: "set_fast_forward", enabled });
+  }
+
   playerProfile(playerID: number): Promise<PlayerProfile> {
     return new Promise((resolve, reject) => {
       if (!this.isInitialized) {

@@ -46,7 +46,7 @@ import {
   type Turn,
 } from "../../core/Schemas";
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 const DEFAULT_DUE_LIMIT = 100;
 const MAX_DUE_LIMIT = 500;
 const DEFAULT_CHAT_LIMIT = 100;
@@ -148,6 +148,18 @@ export interface PersistentWorldRuntimeSeat {
   isHost: boolean;
   teamId: string | null;
   joinedAt: number;
+}
+
+/** Latest consensus-backed simulation status for a durable RSVP seat. */
+export interface PersistentWorldRuntimePlayerStatus {
+  worldId: string;
+  identityId: string;
+  clientId: string;
+  isAlive: boolean;
+  killedBy: string | null;
+  deathPosition: number | null;
+  observedTurn: number;
+  updatedAt: number;
 }
 
 export class PersistentWorldRepositoryError extends Error {
@@ -566,6 +578,40 @@ export class PersistentWorldRepository {
         this.db
           .prepare(
             "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (5, ?)",
+          )
+          .run(this.validNow());
+      });
+    }
+
+    if (version < 6) {
+      this.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE persistent_world_runtime_player_status (
+            world_id TEXT NOT NULL
+              REFERENCES persistent_world_runtimes(world_id) ON DELETE CASCADE,
+            identity_id TEXT NOT NULL,
+            client_id TEXT NOT NULL
+              CHECK (length(client_id) = 8),
+            is_alive INTEGER NOT NULL CHECK (is_alive IN (0, 1)),
+            killed_by TEXT CHECK (
+              killed_by IS NULL OR length(killed_by) = 8
+            ),
+            death_position INTEGER CHECK (
+              death_position IS NULL OR death_position > 0
+            ),
+            observed_turn INTEGER NOT NULL CHECK (observed_turn >= 0),
+            updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
+            PRIMARY KEY(world_id, identity_id),
+            FOREIGN KEY(world_id, identity_id)
+              REFERENCES persistent_world_rsvps(world_id, identity_id)
+              ON DELETE CASCADE
+          ) STRICT;
+          CREATE UNIQUE INDEX persistent_world_runtime_player_client_idx
+            ON persistent_world_runtime_player_status(world_id, client_id);
+        `);
+        this.db
+          .prepare(
+            "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (6, ?)",
           )
           .run(this.validNow());
       });
@@ -1458,6 +1504,120 @@ export class PersistentWorldRepository {
       }
       return parsed.data;
     });
+  }
+
+  /**
+   * Persists the latest agreed client-simulation view of each RSVP seat.
+   * Elimination is intentionally sticky: a stale or corrupt later report may
+   * not resurrect a seat on the invitation card.
+   */
+  recordRuntimePlayerStatuses(
+    worldId: string,
+    requestIdValue: string,
+    observedTurnValue: number,
+    statuses: readonly Omit<
+      PersistentWorldRuntimePlayerStatus,
+      "worldId" | "observedTurn" | "updatedAt"
+    >[],
+  ): void {
+    const requestId = requestIdValue.trim();
+    if (!RUNTIME_REQUEST_ID_PATTERN.test(requestId)) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime request ID is invalid",
+      );
+    }
+    const observedTurn = Number(observedTurnValue);
+    if (!Number.isSafeInteger(observedTurn) || observedTurn < 0) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime status turn is invalid",
+      );
+    }
+
+    this.transaction(() => {
+      const runtime = this.db
+        .prepare(
+          "SELECT request_id FROM persistent_world_runtimes WHERE world_id = ?",
+        )
+        .get(worldId) as SqlRow | undefined;
+      if (!runtime) {
+        throw new PersistentWorldRepositoryError(
+          "NOT_FOUND",
+          `World ${worldId} has no runtime reservation`,
+        );
+      }
+      if (String(runtime.request_id) !== requestId) {
+        throw new PersistentWorldRepositoryError(
+          "CONFLICT",
+          "Runtime status does not match the durable reservation",
+        );
+      }
+
+      const updatedAt = this.validNow();
+      const upsert = this.db.prepare(`
+        INSERT INTO persistent_world_runtime_player_status(
+          world_id, identity_id, client_id, is_alive, killed_by,
+          death_position, observed_turn, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(world_id, identity_id) DO UPDATE SET
+          client_id = excluded.client_id,
+          is_alive = MIN(persistent_world_runtime_player_status.is_alive, excluded.is_alive),
+          killed_by = COALESCE(persistent_world_runtime_player_status.killed_by, excluded.killed_by),
+          death_position = COALESCE(persistent_world_runtime_player_status.death_position, excluded.death_position),
+          observed_turn = excluded.observed_turn,
+          updated_at = excluded.updated_at
+        WHERE excluded.observed_turn > persistent_world_runtime_player_status.observed_turn
+      `);
+      for (const status of statuses) {
+        if (
+          !RUNTIME_GAME_ID_PATTERN.test(status.clientId) ||
+          (status.killedBy !== null &&
+            !RUNTIME_GAME_ID_PATTERN.test(status.killedBy)) ||
+          (status.deathPosition !== null &&
+            (!Number.isSafeInteger(status.deathPosition) ||
+              status.deathPosition <= 0))
+        ) {
+          throw new PersistentWorldRepositoryError(
+            "INVALID_ARGUMENT",
+            "Runtime player status is invalid",
+          );
+        }
+        upsert.run(
+          worldId,
+          status.identityId,
+          status.clientId,
+          status.isAlive ? 1 : 0,
+          status.killedBy,
+          status.deathPosition,
+          observedTurn,
+          updatedAt,
+        );
+      }
+    });
+  }
+
+  runtimePlayerStatus(
+    worldId: string,
+    identityId: string,
+  ): PersistentWorldRuntimePlayerStatus | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM persistent_world_runtime_player_status
+         WHERE world_id = ? AND identity_id = ?`,
+      )
+      .get(worldId, identityId) as SqlRow | undefined;
+    if (!row) return undefined;
+    return {
+      worldId: String(row.world_id),
+      identityId: String(row.identity_id),
+      clientId: String(row.client_id),
+      isAlive: numberValue(row.is_alive) === 1,
+      killedBy: row.killed_by === null ? null : String(row.killed_by),
+      deathPosition: nullableNumber(row.death_position),
+      observedTurn: numberValue(row.observed_turn),
+      updatedAt: numberValue(row.updated_at),
+    };
   }
 
   /** Incomplete reservations to resend idempotently after a process restart. */

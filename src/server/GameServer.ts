@@ -78,6 +78,7 @@ export interface IntentOutcome {
 
 export interface ManagedGameHooks {
   onTurnsCommitted?: (turns: Turn[]) => void;
+  onLiveStatsCommitted?: (stats: LiveStats) => void;
 }
 
 export function hashPersistentID(persistentID: string): string {
@@ -2218,6 +2219,17 @@ export class GameServer {
     }
 
     this.latestLiveStats = result.value;
+    if (this.managedHooks?.onLiveStatsCommitted) {
+      try {
+        this.managedHooks.onLiveStatsCommitted(result.value);
+      } catch (error) {
+        this.log.error("Failed to emit managed live stats", {
+          gameID: this.id,
+          turn,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     // This turn (and any older still-pending ones) are now settled.
     for (const t of this.liveStatsVotes.keys()) {
       if (t <= turn) {

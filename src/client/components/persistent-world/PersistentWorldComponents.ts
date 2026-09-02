@@ -656,8 +656,15 @@ export class PersistentWorldList extends LitElement {
     const world = card.world;
     return html`
       <button
-        class="pw-world-card"
+        class="pw-world-card${
+          card.viewerEliminated ? " pw-world-card--eliminated" : ""
+        }"
         type="button"
+        aria-label=${
+          card.viewerEliminated
+            ? `${world.name}, eliminated, open spectator view`
+            : `Open ${world.name}`
+        }
         @click=${() =>
           this.dispatchEvent(
             new CustomEvent("world-open", {
@@ -668,14 +675,18 @@ export class PersistentWorldList extends LitElement {
           )}
       >
         <span
-          class="pw-world-card__status pw-world-card__status--${world.phase}"
-          >${world.phase}</span
+          class="pw-world-card__status pw-world-card__status--${
+            card.viewerEliminated ? "eliminated" : world.phase
+          }"
+          >${card.viewerEliminated ? "Eliminated" : world.phase}</span
         >
         <span class="pw-world-card__copy">
           <strong>${world.name}</strong>
           <small
             >Hosted by ${card.host.displayName} ·
-            ${formatWorldDate(world.startsAt)}</small
+            ${formatWorldDate(world.startsAt)}${
+              card.viewerEliminated ? " · Spectate only" : ""
+            }</small
           >
         </span>
         <span class="pw-world-card__facts">

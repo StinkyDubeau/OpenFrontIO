@@ -220,6 +220,7 @@ describe("PersistentWorldRepository", () => {
     repository.close();
     const v3 = new DatabaseSync(dbPath);
     v3.exec(`
+      DROP TABLE persistent_world_runtime_player_status;
       DROP TABLE persistent_world_runtime_turns;
       DROP TABLE persistent_world_runtimes;
       DROP INDEX persistent_world_identities_gameplay_hash_idx;
@@ -273,7 +274,9 @@ describe("PersistentWorldRepository", () => {
         "SELECT version FROM persistent_world_schema_migrations ORDER BY version",
       )
       .all() as Array<{ version: number }>;
-    expect(migrations.map(({ version }) => version)).toEqual([1, 2, 3, 4, 5]);
+    expect(migrations.map(({ version }) => version)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
     const stored = audit
       .prepare(
         "SELECT gameplay_persistent_id_hash FROM persistent_world_identities WHERE id = ?",
@@ -715,6 +718,93 @@ describe("PersistentWorldRepository", () => {
     expect(() => repository.loadRuntimeTurns("world_turn_journal")).toThrow(
       "Persistent-world runtime turn journal is corrupt at turn 1",
     );
+  });
+
+  it("durably records sticky elimination state for an RSVP seat", () => {
+    const host = account("identity_status_owner", "Status Owner");
+    const startsAt = now + 10_000;
+    repository.createWorld({
+      id: "world_player_status",
+      name: "Player Status",
+      targetDuration: "1d",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 4,
+      startsAt,
+      host,
+    });
+    repository.reserveRuntime(
+      "world_player_status",
+      "request_player_status",
+      "Stat0001",
+      RUNTIME_GAME_CONFIG,
+      startsAt,
+      startsAt + persistentWorldDurationMs("1d"),
+    );
+
+    repository.recordRuntimePlayerStatuses(
+      "world_player_status",
+      "request_player_status",
+      200,
+      [
+        {
+          identityId: host.id,
+          clientId: "Seat0001",
+          isAlive: false,
+          killedBy: "Seat0002",
+          deathPosition: 3,
+        },
+      ],
+    );
+    expect(
+      repository.runtimePlayerStatus("world_player_status", host.id),
+    ).toMatchObject({
+      clientId: "Seat0001",
+      isAlive: false,
+      killedBy: "Seat0002",
+      deathPosition: 3,
+      observedTurn: 200,
+    });
+
+    // Older reports are ignored; even a newer inconsistent report cannot
+    // resurrect a player after an agreed elimination.
+    repository.recordRuntimePlayerStatuses(
+      "world_player_status",
+      "request_player_status",
+      199,
+      [
+        {
+          identityId: host.id,
+          clientId: "Seat0001",
+          isAlive: true,
+          killedBy: null,
+          deathPosition: null,
+        },
+      ],
+    );
+    repository.recordRuntimePlayerStatuses(
+      "world_player_status",
+      "request_player_status",
+      201,
+      [
+        {
+          identityId: host.id,
+          clientId: "Seat0001",
+          isAlive: true,
+          killedBy: null,
+          deathPosition: null,
+        },
+      ],
+    );
+    expect(
+      repository.runtimePlayerStatus("world_player_status", host.id),
+    ).toMatchObject({ isAlive: false, observedTurn: 201 });
+
+    repository.close();
+    repository = new PersistentWorldRepository({ dbPath, now: () => now });
+    expect(
+      repository.runtimePlayerStatus("world_player_status", host.id),
+    ).toMatchObject({ isAlive: false, observedTurn: 201 });
   });
 
   it("persists private invitations, durable RSVPs, schedule locking, and quick-chat keys", () => {

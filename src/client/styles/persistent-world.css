@@ -1348,6 +1348,24 @@ persistent-world-list:nth-child(2) .pw-world-list {
   color: #102b1d;
 }
 
+.pw-world-card--eliminated {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.11), transparent 31%),
+    repeating-linear-gradient(
+      0deg,
+      rgb(63 28 25 / 0.09) 0 1px,
+      transparent 1px 4px
+    ),
+    linear-gradient(135deg, #d7c4a1, #a58b72);
+}
+
+.pw-world-card__status--eliminated {
+  border-color: #6b211d;
+  background: linear-gradient(#bd5a4c, #70231f);
+  color: #fff5e3;
+  text-shadow: 0 1px rgb(45 8 6 / 0.8);
+}
+
 .pw-world-card__status--finished,
 .pw-world-card__status--cancelled {
   filter: grayscale(0.72);

@@ -95,6 +95,39 @@ valid checkpoint, replays the journal, advances missed wall-clock ticks in
 headless mode, and only then accepts controllers. A bad newest checkpoint falls
 back to the preceding valid generation.
 
+### Catch-up delivery stages
+
+The first playtest implementation remains journal-first. A returning client
+receives the exact missing OpenFront turns and applies every deterministic
+update. The visible **Skip wait** control switches that replay to a bounded
+fast-forward worker mode: historical turns cross the main-thread boundary in
+batches, and the simulation runs a larger batch for up to 12 ms before each
+yield. This removes avoidable browser task overhead without changing game
+rules, discarding updates, or freezing the page indefinitely.
+
+That fast path is an accelerator, not the week-world solution. Replay cost is
+still linear in world age, so a sufficiently old world can still take minutes
+or hours. Before seven-day playtests, implement versioned simulation
+checkpoints with these invariants:
+
+1. A checkpoint contains the complete deterministic engine state and the last
+   committed turn; visual/UI state is never authoritative.
+2. The worker hashes and writes a new generation in the background, then the
+   master atomically records it only after durable storage acknowledges it.
+3. Join sends the newest compatible checkpoint plus the journal suffix. An
+   incompatible or corrupt checkpoint falls back to the previous generation,
+   then ultimately to turn zero.
+4. Keep at least two generations, cap the journal suffix by both elapsed time
+   and turn count, and exercise recovery across an ordinary four-hour deploy.
+5. A client never supplies an authoritative checkpoint. Client hashes may
+   audit the server-owned result but cannot choose or mutate it.
+
+Durable elimination labels use the current consensus live-stat path as an
+intermediate measure. Once any in-sync client reports an agreed death, it is
+stored against the RSVP seat and is sticky on the world card. Detecting an
+elimination before the first client returns from a wholly unattended interval
+requires the same authoritative headless simulation/checkpoint work above.
+
 The first `idlefront.io` host follows the proven sightings.today shape:
 
 - one Debian VM on the private Proxmox host;

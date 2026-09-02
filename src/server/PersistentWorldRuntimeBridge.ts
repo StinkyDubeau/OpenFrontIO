@@ -10,6 +10,7 @@ import type {
   ManagedReservedSeat,
   MasterCreateManagedGame,
   WorkerManagedGameReady,
+  WorkerManagedGameStats,
   WorkerManagedGameTurns,
 } from "./IPCBridgeSchema";
 import type { MapPlaylist } from "./MapPlaylist";
@@ -103,6 +104,47 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
     );
   }
 
+  /** Persists consensus simulation state so the hub can warn eliminated RSVPs. */
+  persistStats(message: WorkerManagedGameStats): void {
+    const runtime = this.repository.getRuntimeByRequestId(message.requestId);
+    if (!runtime || runtime.gameId !== message.gameID) {
+      throw new Error(
+        `Managed stats do not match runtime ${message.requestId}`,
+      );
+    }
+    const world = this.repository.getWorld(runtime.worldId);
+    if (!world) throw new Error(`Managed world ${runtime.worldId} is missing`);
+
+    const seats = this.repository.runtimeSeats(world.id);
+    const managedSeats = this.managedSeats(world, seats);
+    const identityByClientId = new Map(
+      managedSeats.map((seat, index) => [
+        seat.clientID,
+        seats[index].identityId,
+      ]),
+    );
+    const statuses = message.stats.players.flatMap((player) => {
+      const identityId = identityByClientId.get(player.clientID);
+      return identityId
+        ? [
+            {
+              identityId,
+              clientId: player.clientID,
+              isAlive: player.isAlive,
+              killedBy: player.killedBy,
+              deathPosition: player.deathPosition,
+            },
+          ]
+        : [];
+    });
+    this.repository.recordRuntimePlayerStatuses(
+      world.id,
+      runtime.requestId,
+      message.stats.turn,
+      statuses,
+    );
+  }
+
   private async ensureOnce(world: PersistentWorld): Promise<void> {
     if (world.phase !== "active") return;
 
@@ -170,6 +212,9 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
         ...upstream.publicGameModifiers,
         isRandomSpawn: true,
       },
+      // In-sync clients vote on deterministic player state. The master stores
+      // the agreed result so elimination survives worker and web restarts.
+      liveStatsEnabled: true,
       // Team choices are pinned into the roster below. Two named sides are
       // the wizard's present contract; the rest of the upstream team rules
       // (donations, nations, structures, etc.) remain untouched.

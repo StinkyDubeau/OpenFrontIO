@@ -14,6 +14,8 @@ export type WorkerMessageType =
   | "init"
   | "initialized"
   | "turn"
+  | "turn_batch"
+  | "set_fast_forward"
   | "game_update"
   | "game_update_batch"
   | "game_error"
@@ -47,6 +49,16 @@ export interface InitMessage extends BaseWorkerMessage {
 export interface TurnMessage extends BaseWorkerMessage {
   type: "turn";
   turn: Turn;
+}
+
+export interface TurnBatchMessage extends BaseWorkerMessage {
+  type: "turn_batch";
+  turns: Turn[];
+}
+
+export interface SetFastForwardMessage extends BaseWorkerMessage {
+  type: "set_fast_forward";
+  enabled: boolean;
 }
 
 // Messages from worker to main thread
@@ -141,6 +153,8 @@ export interface TransportShipSpawnResultMessage extends BaseWorkerMessage {
 export type MainThreadMessage =
   | InitMessage
   | TurnMessage
+  | TurnBatchMessage
+  | SetFastForwardMessage
   | PlayerActionsMessage
   | PlayerBuildablesMessage
   | PlayerProfileMessage

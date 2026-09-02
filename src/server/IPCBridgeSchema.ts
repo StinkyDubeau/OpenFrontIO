@@ -3,6 +3,7 @@ import {
   ClanTagSchema,
   GameConfigSchema,
   ID,
+  LiveStatsSchema,
   PublicGameInfoSchema,
   PublicGameTypeSchema,
   TurnSchema,
@@ -29,6 +30,9 @@ export type WorkerManagedGameReady = z.infer<
 >;
 export type WorkerManagedGameTurns = z.infer<
   typeof WorkerManagedGameTurnsSchema
+>;
+export type WorkerManagedGameStats = z.infer<
+  typeof WorkerManagedGameStatsSchema
 >;
 export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 export type MasterMessage = z.infer<typeof MasterMessageSchema>;
@@ -158,11 +162,22 @@ const WorkerManagedGameTurnsSchema = z
     }
   });
 
+const WorkerManagedGameStatsSchema = z
+  .object({
+    type: z.literal("managedGameStats"),
+    requestId: ManagedRequestIdSchema,
+    gameID: ID,
+    workerId: z.number().int().nonnegative(),
+    stats: LiveStatsSchema,
+  })
+  .strict();
+
 export const WorkerMessageSchema = z.discriminatedUnion("type", [
   WorkerLobbyListSchema,
   WorkerReadySchema,
   WorkerManagedGameReadySchema,
   WorkerManagedGameTurnsSchema,
+  WorkerManagedGameStatsSchema,
 ]);
 
 // --- Master Messages ---

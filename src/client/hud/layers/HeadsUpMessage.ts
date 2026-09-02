@@ -27,6 +27,8 @@ export class HeadsUpMessage extends LitElement implements Controller {
 
   @state()
   private isCatchingUp = false;
+  @state()
+  private fastForwardRequested = false;
   private catchingUpTicks = 0;
 
   private static readonly CATCHING_UP_SHOW_THRESHOLD = 10;
@@ -111,6 +113,7 @@ export class HeadsUpMessage extends LitElement implements Controller {
       this.catchingUpTicks++;
     } else {
       this.catchingUpTicks = 0;
+      this.fastForwardRequested = false;
     }
 
     this.isCatchingUp =
@@ -151,76 +154,116 @@ export class HeadsUpMessage extends LitElement implements Controller {
     this.requestUpdate();
   };
 
+  private onSkipCatchup = (): void => {
+    if (this.fastForwardRequested) return;
+    this.fastForwardRequested = true;
+    window.dispatchEvent(new CustomEvent("skip-game-catchup"));
+  };
+
   render() {
     return html`
       <div style="pointer-events: none;">
-        ${this.toastMessage
-          ? html`
-              <div
-                class="fixed top-6 left-1/2 -translate-x-1/2 z-[800] px-6 py-4 rounded-xl transition-all duration-300 animate-fade-in-out"
-                style="max-width: 90vw; min-width: 200px; text-align: center;
-                  background: ${this.toastColor === "red"
-                  ? "rgba(239,68,68,0.1)"
-                  : "rgba(34,197,94,0.1)"};
-                  border: 1px solid ${this.toastColor === "red"
-                  ? "rgba(239,68,68,0.5)"
-                  : "rgba(34,197,94,0.5)"};
+        ${
+          this.toastMessage
+            ? html`
+                <div
+                  class="fixed top-6 left-1/2 -translate-x-1/2 z-[800] px-6 py-4 rounded-xl transition-all duration-300 animate-fade-in-out"
+                  style="max-width: 90vw; min-width: 200px; text-align: center;
+                  background: ${
+                    this.toastColor === "red"
+                      ? "rgba(239,68,68,0.1)"
+                      : "rgba(34,197,94,0.1)"
+                  };
+                  border: 1px solid ${
+                    this.toastColor === "red"
+                      ? "rgba(239,68,68,0.5)"
+                      : "rgba(34,197,94,0.5)"
+                  };
                   color: white;
-                  box-shadow: 0 0 30px 0 ${this.toastColor === "red"
-                  ? "rgba(239,68,68,0.3)"
-                  : "rgba(34,197,94,0.3)"};
+                  box-shadow: 0 0 30px 0 ${
+                    this.toastColor === "red"
+                      ? "rgba(239,68,68,0.3)"
+                      : "rgba(34,197,94,0.3)"
+                  };
                   backdrop-filter: blur(12px);"
-                @contextmenu=${(e: MouseEvent) => e.preventDefault()}
-              >
-                ${typeof this.toastMessage === "string"
-                  ? html`<span class="font-medium">${this.toastMessage}</span>`
-                  : this.toastMessage}
-              </div>
-            `
-          : null}
-        ${this.isVisible
-          ? html`
-              <div
-                class="fixed top-[15%] left-1/2 -translate-x-1/2 z-[799]
+                  @contextmenu=${(e: MouseEvent) => e.preventDefault()}
+                >
+                  ${
+                  typeof this.toastMessage === "string"
+                    ? html`<span class="font-medium"
+                        >${this.toastMessage}</span
+                      >`
+                    : this.toastMessage
+                }
+                </div>
+              `
+            : null
+        }
+        ${
+          this.isVisible
+            ? html`
+                <div
+                  class="fixed top-[15%] left-1/2 -translate-x-1/2 z-[799]
                             inline-flex items-center justify-center min-h-8 lg:min-h-10
                             w-fit max-w-[90vw]
                             bg-gray-800/70 rounded-md lg:rounded-lg
                             backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-1
                             text-center break-words"
-                style="word-wrap: break-word; hyphens: auto;"
-                @contextmenu=${(e: MouseEvent) => e.preventDefault()}
-              >
-                ${this.getMessage()}
-              </div>
-            `
-          : null}
-        ${this.game?.inSpawnPhase() &&
-        !this.game.config().isReplay() &&
-        this.game.config().gameConfig().rankedType !== RankedType.OneVOne &&
-        this.game.config().gameConfig().gameMode === GameMode.FFA &&
-        this.game.config().gameConfig().gameType === GameType.Public &&
-        !this.hasClosedCollusionWarning
-          ? html`
-              <div
-                class="fixed top-[25%] left-1/2 -translate-x-1/2 z-[799]
+                  style="word-wrap: break-word; hyphens: auto; ${
+                  this.isCatchingUp ? "pointer-events: auto; gap: 0.55rem;" : ""
+                }"
+                  @contextmenu=${(e: MouseEvent) => e.preventDefault()}
+                >
+                  <span>${this.getMessage()}</span>
+                  ${
+                  this.isCatchingUp
+                    ? html`<button
+                        type="button"
+                        class="rounded-md border border-white/35 bg-white/15 px-3 py-1 text-sm font-semibold shadow-inner transition active:translate-y-px disabled:opacity-70"
+                        ?disabled=${this.fastForwardRequested}
+                        @click=${this.onSkipCatchup}
+                      >
+                        ${
+                        this.fastForwardRequested
+                          ? translateText("heads_up_message.fast_forwarding")
+                          : translateText("heads_up_message.skip_catchup")
+                      }
+                      </button>`
+                    : null
+                }
+                </div>
+              `
+            : null
+        }
+        ${
+          this.game?.inSpawnPhase() &&
+          !this.game.config().isReplay() &&
+          this.game.config().gameConfig().rankedType !== RankedType.OneVOne &&
+          this.game.config().gameConfig().gameMode === GameMode.FFA &&
+          this.game.config().gameConfig().gameType === GameType.Public &&
+          !this.hasClosedCollusionWarning
+            ? html`
+                <div
+                  class="fixed top-[25%] left-1/2 -translate-x-1/2 z-[799]
                             inline-flex flex-col items-center justify-center min-h-8 lg:min-h-10
                             w-fit max-w-[90vw]
                             bg-amber-500/70 rounded-md lg:rounded-lg
                             backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-3
                             text-center break-words"
-                style="word-wrap: break-word; hyphens: auto; pointer-events: auto;"
-                @contextmenu=${(e: MouseEvent) => e.preventDefault()}
-              >
-                <div>${translateText("heads_up_message.ffa_collusion")}</div>
-                <button
-                  class="mt-2 px-3 py-1 rounded bg-black/20 hover:bg-black/30 text-sm"
-                  @click=${this.onCloseCollusionWarning}
+                  style="word-wrap: break-word; hyphens: auto; pointer-events: auto;"
+                  @contextmenu=${(e: MouseEvent) => e.preventDefault()}
                 >
-                  ${translateText("heads_up_message.dont_show_again")}
-                </button>
-              </div>
-            `
-          : null}
+                  <div>${translateText("heads_up_message.ffa_collusion")}</div>
+                  <button
+                    class="mt-2 px-3 py-1 rounded bg-black/20 hover:bg-black/30 text-sm"
+                    @click=${this.onCloseCollusionWarning}
+                  >
+                    ${translateText("heads_up_message.dont_show_again")}
+                  </button>
+                </div>
+              `
+            : null
+        }
       </div>
     `;
   }

@@ -10,6 +10,7 @@ import {
   PlayerCosmeticRefs,
   PlayerRecord,
   ServerMessage,
+  Turn,
 } from "../core/Schemas";
 import { createPartialGameRecord, findClosestBy, replacer } from "../core/Util";
 import {
@@ -748,6 +749,7 @@ export class ClientGameRunner {
 
   private lastTickReceiveTime: number = 0;
   private currentTickDelay: number | undefined = undefined;
+  private catchupControlAbort: AbortController | null = null;
 
   constructor(
     private lobby: LobbyConfig,
@@ -819,6 +821,12 @@ export class ClientGameRunner {
     console.log("starting client game");
 
     this.isActive = true;
+    this.catchupControlAbort = new AbortController();
+    window.addEventListener(
+      "skip-game-catchup",
+      () => this.worker.setFastForward(true),
+      { signal: this.catchupControlAbort.signal },
+    );
     this.lastMessageTime = Date.now();
     setTimeout(() => {
       this.connectionCheckInterval = setInterval(
@@ -932,20 +940,22 @@ export class ClientGameRunner {
           goToPlayer();
         }
 
+        const replayTurns: Turn[] = [];
         for (const turn of message.turns) {
           if (turn.turnNumber < this.turnsSeen) {
             continue;
           }
           while (turn.turnNumber - 1 > this.turnsSeen) {
-            this.worker.sendTurn({
+            replayTurns.push({
               turnNumber: this.turnsSeen,
               intents: [],
             });
             this.turnsSeen++;
           }
-          this.worker.sendTurn(turn);
+          replayTurns.push(turn);
           this.turnsSeen++;
         }
+        this.worker.sendTurns(replayTurns);
       }
       if (message.type === "desync") {
         if (this.lobby.gameStartInfo === undefined) {
@@ -1025,6 +1035,8 @@ export class ClientGameRunner {
 
   public stop() {
     this.soundManager.dispose();
+    this.catchupControlAbort?.abort();
+    this.catchupControlAbort = null;
     this.graphicsListenerAbort?.abort();
     this.disposeRenderer?.();
     if (!this.isActive) return;
