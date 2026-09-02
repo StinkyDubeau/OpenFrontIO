@@ -396,9 +396,9 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
       if (alliance !== undefined) {
         allianceHtml = isAllianceWrapped
           ? html`<div
-              class="${traitorTicks === 0
-                ? "ml-auto"
-                : ""} flex flex-col items-center gap-0 text-xs font-bold leading-none shrink-0"
+              class="${
+                traitorTicks === 0 ? "ml-auto" : ""
+              } flex flex-col items-center gap-0 text-xs font-bold leading-none shrink-0"
             >
               <img
                 src=${allianceIcon}
@@ -411,9 +411,9 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
               >
             </div>`
           : html`<div
-              class="${traitorTicks === 0
-                ? "ml-auto"
-                : ""} flex items-center mr-0 gap-1 text-xs font-bold leading-tight shrink-0"
+              class="${
+                traitorTicks === 0 ? "ml-auto" : ""
+              } flex items-center mr-0 gap-1 text-xs font-bold leading-tight shrink-0"
             >
               <img
                 src=${allianceIcon}
@@ -451,17 +451,16 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
               <span class="px-0.5">${renderNumber(player.gold())}</span>
             </div>
             <div
-              class="flex flex-1 flex-col items-center justify-center text-xs font-bold ${attackingTroops >
-              0
-                ? "text-aquarius"
-                : "text-white/40"} drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]"
+              class="flex flex-1 flex-col items-center justify-center text-xs font-bold ${
+                attackingTroops > 0 ? "text-aquarius" : "text-white/40"
+              } drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]"
               translate="no"
             >
               <span class="flex items-center gap-px leading-none text-xs"
                 ><img
-                  class="w-2.5 h-2.5 inline-block ${attackingTroops > 0
-                    ? ""
-                    : "brightness-0 invert opacity-40"}"
+                  class="w-2.5 h-2.5 inline-block ${
+                    attackingTroops > 0 ? "" : "brightness-0 invert opacity-40"
+                  }"
                   src=${attackingTroops > 0 ? soldierIconAquarius : soldierIcon}
                   alt=""
                   aria-hidden="true"
@@ -485,12 +484,14 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
               isFriendly ?? false,
             )}"
           >
-            ${player.cosmetics.flag
-              ? html`<img
-                  class="h-6 object-contain shrink-0"
-                  src=${assetUrl(player.cosmetics.flag!)}
-                />`
-              : html``}
+            ${
+              player.cosmetics.flag
+                ? html`<img
+                    class="h-6 object-contain shrink-0"
+                    src=${assetUrl(player.cosmetics.flag!)}
+                  />`
+                : html``
+            }
             <div class="shrink min-w-0">
               <span
                 class="font-mono inline-block leading-[1.2] wrap-anywhere"
@@ -499,24 +500,26 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
               >
             </div>
             ${this.getRelationSmiley(player, myPlayer)}
-            ${playerTeam !== "" && player.type() !== PlayerType.Bot
-              ? html`<div class="flex flex-col leading-tight">
-                  <span class="text-gray-400 text-xs font-normal"
-                    >${playerType}</span
-                  >
-                  <span class="text-xs font-normal text-gray-400"
-                    >[<span
-                      style="color: ${themeProvider
+            ${
+              playerTeam !== "" && player.type() !== PlayerType.Bot
+                ? html`<div class="flex flex-col leading-tight">
+                    <span class="text-gray-400 text-xs font-normal"
+                      >${playerType}</span
+                    >
+                    <span class="text-xs font-normal text-gray-400"
+                      >[<span
+                        style="color: ${themeProvider
                         .current()
                         .teamColor(player.team()!)
                         .toHex()}"
-                      >${playerTeam}</span
-                    >]</span
-                  >
-                </div>`
-              : html`<span class="text-gray-400 text-xs font-normal"
-                  >${playerType}</span
-                >`}
+                        >${playerTeam}</span
+                      >]</span
+                    >
+                  </div>`
+                : html`<span class="text-gray-400 text-xs font-normal"
+                    >${playerType}</span
+                  >`
+            }
             ${this.renderPlayerNameIcons(playerIcons)} ${betrayalHtml ?? ""}
             ${allianceHtml ?? ""}
           </div>
@@ -567,8 +570,9 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
           ></div>
           <div
             class="absolute inset-y-0 left-0 w-full origin-left bg-malibu-blue transition-transform duration-200 ease-out"
-            style="transform: translateX(${greenPercent}%) scaleX(${orangePercent /
-            100});"
+            style="transform: translateX(${greenPercent}%) scaleX(${
+              orangePercent / 100
+            });"
           ></div>
         </div>
         <div
@@ -607,16 +611,20 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         </div>
         <div class="mt-1">
           <div class="text-sm opacity-80">${unit.type()}</div>
-          ${unit.hasHealth()
-            ? html` <div class="text-sm">Health: ${unit.health()}</div> `
-            : ""}
-          ${unit.type() === UnitType.TransportShip
-            ? html`
-                <div class="text-sm">
-                  Troops: ${renderTroops(unit.troops())}
-                </div>
-              `
-            : ""}
+          ${
+            unit.hasHealth()
+              ? html` <div class="text-sm">Health: ${unit.health()}</div> `
+              : ""
+          }
+          ${
+            unit.type() === UnitType.TransportShip
+              ? html`
+                  <div class="text-sm">
+                    Troops: ${renderTroops(unit.troops())}
+                  </div>
+                `
+              : ""
+          }
         </div>
       </div>
     `;
@@ -633,13 +641,13 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
 
     return html`
       <div
-        class="fixed top-0 left-0 right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[1001]"
+        class="atlas-player-info-positioner fixed top-0 left-0 right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[1001]"
         style="margin-top: ${this.barOffset}px;"
         @click=${() => this.hide()}
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
         <div
-          class="bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg sm:rounded-b-lg shadow-lg text-white text-lg lg:text-base w-full sm:w-[500px] overflow-hidden ${containerClasses}"
+          class="atlas-player-info-surface bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg sm:rounded-b-lg shadow-lg text-white text-lg lg:text-base w-full sm:w-[500px] overflow-hidden ${containerClasses}"
         >
           ${this.player !== null ? this.renderPlayerInfo(this.player) : ""}
           ${this.unit !== null ? this.renderUnitInfo(this.unit) : ""}

@@ -119,17 +119,6 @@ export class AtlasGauge extends LitElement {
   }
 }
 
-@customElement("atlas-map-bezel")
-export class AtlasMapBezel extends LitElement {
-  createRenderRoot() {
-    return this;
-  }
-
-  render() {
-    return html`<div class="atlas-map-bezel__edge" aria-hidden="true"></div>`;
-  }
-}
-
 @customElement("atlas-status-lamp")
 export class AtlasStatusLamp extends LitElement {
   @property() label = "";

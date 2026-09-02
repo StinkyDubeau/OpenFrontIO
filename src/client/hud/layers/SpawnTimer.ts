@@ -28,7 +28,7 @@ export class SpawnTimer extends LitElement implements Controller {
 
   createRenderRoot() {
     this.style.position = "fixed";
-    this.style.top = "0";
+    this.style.top = "var(--atlas-board-safe-top, 0px)";
     this.style.left = "0";
     this.style.width = "100%";
     this.style.height = "9px";

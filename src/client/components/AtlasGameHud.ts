@@ -52,7 +52,7 @@ export class AtlasGameHud extends LitElement {
       <new-lobby-prompt></new-lobby-prompt>
       <game-starting-modal></game-starting-modal>
       <div
-        class="atlas-hud-corner-stack flex flex-col items-end fixed top-0 right-0 min-[1200px]:top-4 min-[1200px]:right-4 z-1000 gap-2"
+        class="atlas-hud-corner-stack atlas-hud-top-actions flex flex-col items-end fixed top-0 right-0 min-[1200px]:top-4 min-[1200px]:right-4 z-1000 gap-2"
       >
         <game-right-sidebar></game-right-sidebar>
         <replay-panel></replay-panel>

@@ -42,23 +42,26 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(viteConfig).not.toContain("idleStandaloneDocument");
   });
 
-  test("mounts the precision bezel beside, never around, the renderer host", () => {
+  test("keeps the renderer edge-to-edge without a decorative bezel", () => {
     const document = source("index.html");
-    const persistentWorldStyles = source(
-      "src/client/styles/persistent-world.css",
-    );
     const warRoomStyles = source("src/client/styles/war-room.css");
-    const rendererHost = document.indexOf('<div id="app"></div>');
-    const bezel = document.indexOf("<atlas-map-bezel></atlas-map-bezel>");
 
-    expect(rendererHost).toBeGreaterThan(-1);
-    expect(bezel).toBeGreaterThan(rendererHost);
-    expect(persistentWorldStyles).not.toMatch(
-      /body\[data-page="page-persistent-worlds"\][^{]*atlas-map-bezel/,
-    );
-    expect(warRoomStyles).toContain("atlas-map-bezel *::before");
-    expect(warRoomStyles).toContain("pointer-events: none !important");
-    expect(warRoomStyles).toContain("var(--war-mahogany-texture) top left");
+    expect(document).toContain('<div id="app"></div>');
+    expect(document).not.toContain("atlas-map-bezel");
+    expect(warRoomStyles).not.toContain("atlas-map-bezel");
+  });
+
+  test("reserves a Dynamic Island lane above selected-player information", () => {
+    const hudDeck = source("src/client/components/AtlasGameHud.ts");
+    const playerInfo = source("src/client/hud/layers/PlayerInfoOverlay.ts");
+    const spawnTimer = source("src/client/hud/layers/SpawnTimer.ts");
+    const styles = source("src/client/styles/war-room.css");
+
+    expect(hudDeck).toContain("atlas-hud-top-actions");
+    expect(playerInfo).toContain("atlas-player-info-positioner");
+    expect(spawnTimer).toContain("--atlas-board-safe-top");
+    expect(styles).toContain("--atlas-hud-utility-top");
+    expect(styles).toContain("--atlas-hud-information-top");
   });
 
   test("consolidates repeated HTML mounts into reusable page and HUD decks", () => {
@@ -82,7 +85,6 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(rootCustomElements).toEqual([
       "atlas-game-hud",
       "atlas-global-overlays",
-      "atlas-map-bezel",
       "atlas-page-deck",
       "desktop-nav-bar",
       "main-layout",

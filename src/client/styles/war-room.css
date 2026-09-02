@@ -1764,103 +1764,6 @@ body.atlas-theme.in-game {
   );
 }
 
-atlas-map-bezel {
-  position: fixed;
-  inset: 0;
-  z-index: 190;
-  display: none;
-  pointer-events: none;
-}
-
-body.in-game atlas-map-bezel {
-  display: block;
-}
-
-body.atlas-theme.in-game > atlas-map-bezel {
-  contain: layout paint;
-}
-
-atlas-map-bezel,
-atlas-map-bezel *,
-atlas-map-bezel *::before,
-atlas-map-bezel *::after {
-  pointer-events: none !important;
-}
-
-.atlas-map-bezel__edge {
-  position: absolute;
-  inset: var(--atlas-board-safe-top) var(--atlas-board-safe-right)
-    var(--atlas-board-safe-bottom) var(--atlas-board-safe-left);
-  overflow: hidden;
-  border: 3px solid transparent;
-  border-image: var(--war-brass-edge) 3;
-  box-shadow:
-    inset 0 0 0 1px rgb(255 237 174 / 0.5),
-    inset 0 0 0 3px rgb(31 14 7 / 0.88),
-    inset 0 0 11px rgb(0 0 0 / 0.72),
-    0 0 0 1px #f4d77d,
-    0 0 0 2px rgb(52 29 8 / 0.9);
-}
-
-.atlas-map-bezel__edge::before {
-  position: absolute;
-  inset: 0;
-  background:
-    var(--war-mahogany-texture) top left / 100% 7px no-repeat,
-    var(--war-mahogany-texture) bottom left / 100% 7px no-repeat,
-    var(--war-mahogany-texture) top left / 7px 100% no-repeat,
-    var(--war-mahogany-texture) top right / 7px 100% no-repeat;
-  box-shadow:
-    inset 0 7px 4px -5px rgb(255 225 148 / 0.2),
-    inset 0 -7px 4px -5px rgb(0 0 0 / 0.68),
-    inset 7px 0 4px -5px rgb(255 225 148 / 0.14),
-    inset -7px 0 4px -5px rgb(0 0 0 / 0.62);
-  content: "";
-}
-
-.atlas-map-bezel__edge::after {
-  position: absolute;
-  inset: 6px;
-  border: 1px solid rgb(247 220 143 / 0.42);
-  background:
-    radial-gradient(
-        circle,
-        #f9dc83 0 18%,
-        #76501a 22% 38%,
-        #211308 42% 55%,
-        transparent 58%
-      )
-      top left / 12px 12px no-repeat,
-    radial-gradient(
-        circle,
-        #f9dc83 0 18%,
-        #76501a 22% 38%,
-        #211308 42% 55%,
-        transparent 58%
-      )
-      top right / 12px 12px no-repeat,
-    radial-gradient(
-        circle,
-        #f9dc83 0 18%,
-        #76501a 22% 38%,
-        #211308 42% 55%,
-        transparent 58%
-      )
-      bottom left / 12px 12px no-repeat,
-    radial-gradient(
-        circle,
-        #f9dc83 0 18%,
-        #76501a 22% 38%,
-        #211308 42% 55%,
-        transparent 58%
-      )
-      bottom right / 12px 12px no-repeat;
-  box-shadow:
-    0 0 0 1px rgb(19 10 5 / 0.88),
-    inset 0 0 0 1px rgb(255 255 255 / 0.08);
-  content: "";
-}
-
 body.atlas-theme.in-game
   > atlas-game-hud
   :where(.atlas-hud-corner-stack, game-left-sidebar > aside) {
@@ -1876,6 +1779,61 @@ body.atlas-theme.in-game > atlas-game-hud game-left-sidebar > aside {
   max-height: calc(
     100dvh - var(--atlas-board-safe-top) - var(--atlas-board-safe-bottom) - 5rem
   );
+}
+
+body.atlas-theme.in-game > atlas-game-hud .atlas-player-info-positioner {
+  top: max(0.35rem, calc(var(--atlas-board-safe-top) + 0.35rem));
+}
+
+@media (max-width: 767px) {
+  body.atlas-theme.in-game {
+    /* Native safe-top describes the complete sensor/status region. Compact
+       controls live at its outer edges; centered information starts below it. */
+    --atlas-hud-utility-top: max(
+      0.3rem,
+      calc(var(--atlas-board-safe-top) - 3rem)
+    );
+    --atlas-hud-information-top: max(
+      3.25rem,
+      calc(var(--atlas-board-safe-top) + 0.4rem)
+    );
+  }
+
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    :where(.atlas-hud-top-actions, game-left-sidebar > .atlas-game-overview) {
+    top: var(--atlas-hud-utility-top);
+  }
+
+  body.atlas-theme.in-game > atlas-game-hud .atlas-player-info-positioner {
+    top: var(--atlas-hud-information-top);
+    right: max(0.4rem, var(--atlas-board-safe-right));
+    left: max(0.4rem, var(--atlas-board-safe-left));
+    width: auto;
+    transform: none;
+  }
+
+  body.atlas-theme.in-game > atlas-game-hud .atlas-player-info-surface {
+    width: 100%;
+    border-radius: 0.65rem;
+  }
+
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    game-right-sidebar
+    > .atlas-game-actions {
+    gap: 0.45rem;
+    border-radius: 0.65rem;
+    padding: 0.38rem 0.5rem;
+  }
+
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    game-left-sidebar
+    > .atlas-game-overview {
+    border-radius: 0.65rem;
+    padding: 0.42rem;
+  }
 }
 
 body.atlas-theme.in-game .atlas-hud-dock {

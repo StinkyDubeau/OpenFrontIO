@@ -43,7 +43,9 @@ export class ImmunityTimer extends LitElement implements Controller {
       this.game.config().gameConfig().gameMode === GameMode.Team &&
       !this.game.inSpawnPhase();
 
-    this.style.top = showTeamOwnershipBar ? "7px" : "0px";
+    this.style.top = showTeamOwnershipBar
+      ? "calc(var(--atlas-board-safe-top, 0px) + 7px)"
+      : "var(--atlas-board-safe-top, 0px)";
 
     const immunityDuration = this.game.config().spawnImmunityDuration();
     const spawnPhaseTurns = this.game.config().numSpawnPhaseTurns();
