@@ -1,8 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { correspondingSourceUrl, sourceFileUrl } from "../SourceLinks";
 import "./ProductWordmark";
-
-const repositoryUrl = "https://github.com/StinkyDubeau/OpenFrontIO";
 
 @customElement("legal-notice-page")
 export class LegalNoticePage extends LitElement {
@@ -51,23 +50,26 @@ export class LegalNoticePage extends LitElement {
         </div>
 
         <nav class="atlas-legal-page__links" aria-label="Legal documents">
-          <a href=${repositoryUrl} target="_blank" rel="noopener noreferrer"
+          <a
+            href=${correspondingSourceUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
             >Complete source</a
           >
           <a
-            href="${repositoryUrl}/blob/main/LICENSE"
+            href=${sourceFileUrl("LICENSE")}
             target="_blank"
             rel="noopener noreferrer"
             >AGPL license</a
           >
           <a
-            href="${repositoryUrl}/blob/main/LICENSE-ASSETS"
+            href=${sourceFileUrl("LICENSE-ASSETS")}
             target="_blank"
             rel="noopener noreferrer"
             >Asset license</a
           >
           <a
-            href="${repositoryUrl}/blob/main/CREDITS.md"
+            href=${sourceFileUrl("CREDITS.md")}
             target="_blank"
             rel="noopener noreferrer"
             >Credits</a

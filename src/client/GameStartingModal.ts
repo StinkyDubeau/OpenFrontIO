@@ -1,5 +1,6 @@
 import { LitElement, html } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { correspondingSourceUrl } from "./SourceLinks";
 import { translateText } from "./Utils";
 
 @customElement("game-starting-modal")
@@ -32,7 +33,7 @@ export class GameStartingModal extends LitElement {
           IdleFront independent build
         </div>
         <a
-          href="https://github.com/StinkyDubeau/OpenFrontIO"
+          href=${correspondingSourceUrl()}
           target="_blank"
           rel="noopener noreferrer"
           class="block mb-4 text-lg font-medium tracking-wider uppercase text-malibu-blue no-underline transition-colors duration-200 hover:text-aquarius"

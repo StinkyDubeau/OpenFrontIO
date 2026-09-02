@@ -7,6 +7,7 @@ import {
 } from "../../../core/game/GameUpdates";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { Controller } from "../../Controller";
+import { requestHaptic } from "../../ui/Haptics";
 import { GameView, PlayerView } from "../../view";
 
 // Parameters for the alert animation
@@ -136,6 +137,7 @@ export class AlertFrame extends LitElement implements Controller {
     if (this.userSettings.alertFrame()) {
       this.isActive = true;
       this.lastAlertTick = this.game.ticks();
+      requestHaptic("alert");
       this.requestUpdate();
     }
   }

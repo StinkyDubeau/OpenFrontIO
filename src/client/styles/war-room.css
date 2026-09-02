@@ -36,6 +36,7 @@
   --war-motion: 260ms;
   --war-motion-slow: 420ms;
   --war-spring: cubic-bezier(0.18, 0.86, 0.24, 1.08);
+  --war-button-spring: cubic-bezier(0.16, 1.42, 0.3, 1);
   --war-ease: cubic-bezier(0.2, 0.72, 0.2, 1);
   --war-mahogany-texture: url("/resources/images/ui/materials/mahogany@2x.webp");
   --war-felt-texture: url("/resources/images/ui/materials/felt@4x.webp");
@@ -3378,23 +3379,42 @@ body[data-page="page-play"] > footer {
 
 .atlas-title-stage .atlas-launch-console {
   display: grid;
-  width: min(27rem, 100%);
+  width: min(28rem, 100%);
   height: auto;
   max-height: none;
-  grid-template-rows: auto auto auto;
-  gap: 0.75rem;
-  overflow: visible;
+  grid-template-rows: auto auto auto auto;
+  gap: 0.62rem;
+  overflow: hidden;
   border-width: 1px !important;
   border-radius: 24px !important;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 22%),
-    radial-gradient(circle at 50% 0%, rgb(99 181 151 / 0.13), transparent 42%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 18%),
+    radial-gradient(
+      circle at 50% -8%,
+      rgb(112 203 165 / 0.18),
+      transparent 46%
+    ),
+    linear-gradient(
+      90deg,
+      rgb(0 0 0 / 0.18),
+      transparent 18% 82%,
+      rgb(0 0 0 / 0.18)
+    ),
     var(--war-felt-texture), #071c17 !important;
-  padding: 0.75rem !important;
+  background-size:
+    auto,
+    auto,
+    auto,
+    256px 256px,
+    auto !important;
+  padding: 0.7rem !important;
   box-shadow:
-    0 30px 80px rgb(0 0 0 / 0.55),
-    0 8px 24px rgb(0 0 0 / 0.48),
-    inset 0 1px rgb(255 255 255 / 0.18) !important;
+    0 34px 84px rgb(0 0 0 / 0.58),
+    0 9px 26px rgb(0 0 0 / 0.5),
+    inset 0 1px rgb(255 255 255 / 0.23),
+    inset 0 -1px rgb(0 0 0 / 0.72),
+    inset 0 0 0 2px rgb(4 12 10 / 0.58),
+    inset 0 0 34px rgb(0 0 0 / 0.34) !important;
   animation: atlas-app-arrival 620ms var(--war-spring) both;
 }
 
@@ -3403,9 +3423,12 @@ body[data-page="page-play"] > footer {
 }
 
 .atlas-title-stage .atlas-launch-console::after {
-  inset: 5px;
-  border-color: rgb(255 255 255 / 0.12);
-  border-radius: 19px;
+  inset: 4px;
+  border-color: rgb(255 231 154 / 0.2);
+  border-radius: 20px;
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.48),
+    0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
 @keyframes atlas-app-arrival {
@@ -3426,18 +3449,54 @@ body[data-page="page-play"] > footer {
 }
 
 .atlas-app-identity {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  min-height: 7rem;
+  min-height: 7.35rem;
   place-items: center;
-  padding: 1.1rem 1rem 0.65rem;
+  overflow: hidden;
+  border: 1px solid rgb(218 171 76 / 0.46);
+  border-radius: 18px;
+  background:
+    radial-gradient(
+      ellipse at 50% -18%,
+      rgb(255 246 203 / 0.12),
+      transparent 52%
+    ),
+    linear-gradient(180deg, rgb(16 66 49 / 0.62), rgb(4 34 25 / 0.74)),
+    var(--war-felt-texture);
+  background-size:
+    auto,
+    auto,
+    256px 256px;
+  padding: 1.05rem 1rem 0.7rem;
+  box-shadow:
+    inset 0 1px rgb(255 245 204 / 0.16),
+    inset 0 -10px 24px rgb(0 0 0 / 0.28),
+    inset 0 0 0 3px rgb(0 0 0 / 0.16),
+    0 1px rgb(255 236 173 / 0.08),
+    0 5px 14px rgb(0 0 0 / 0.24);
 }
 
-.atlas-app-identity product-wordmark {
+.atlas-app-identity::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 52%;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.09), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+body[data-page="page-play"].atlas-theme:not(.in-game)
+  .atlas-app-identity
+  product-wordmark {
   --atlas-accent: #e2b65c;
   --atlas-accent-strong: #fff0a7;
   --atlas-text: #fff8dc;
   --atlas-text-faint: #b9aa80;
-  transform: scale(1.14);
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 0.42));
+  transform: scale(1.08);
 }
 
 .atlas-title-stage .atlas-identity-card {
@@ -3453,6 +3512,7 @@ body[data-page="page-play"] > footer {
   padding: 0.55rem 0.65rem 0.65rem;
   box-shadow:
     inset 0 1px rgb(255 236 174 / 0.15),
+    inset 0 0 0 1px rgb(24 7 4 / 0.68),
     inset 0 -8px 18px rgb(0 0 0 / 0.2),
     0 4px 12px rgb(0 0 0 / 0.27) !important;
 }
@@ -3482,8 +3542,19 @@ body[data-page="page-play"] > footer {
   font-size: 1rem !important;
   text-shadow: 0 1px rgb(255 255 255 / 0.75) !important;
   box-shadow:
-    inset 0 1px 2px rgb(0 0 0 / 0.25),
-    0 1px rgb(255 255 255 / 0.18) !important;
+    inset 0 2px 3px rgb(0 0 0 / 0.28),
+    inset 0 -1px rgb(255 255 255 / 0.82),
+    0 1px rgb(255 255 255 / 0.18),
+    0 2px 6px rgb(0 0 0 / 0.28) !important;
+}
+
+.atlas-title-stage .atlas-username-input input:focus {
+  outline: 2px solid rgb(255 219 113 / 0.82) !important;
+  outline-offset: 1px;
+  box-shadow:
+    inset 0 2px 3px rgb(0 0 0 / 0.24),
+    0 0 0 4px rgb(236 181 69 / 0.14),
+    0 4px 10px rgb(0 0 0 / 0.34) !important;
 }
 
 .atlas-title-stage .atlas-username-input > div > .no-crazygames,
@@ -3548,9 +3619,9 @@ body[data-page="page-play"] > footer {
     0 0 0 1px rgb(224 193 255 / 0.18);
   transition:
     background-position 210ms var(--war-ease),
-    transform 130ms var(--war-ease),
+    transform 360ms var(--war-button-spring),
     filter 130ms ease,
-    box-shadow 170ms var(--war-ease);
+    box-shadow 270ms var(--war-button-spring);
 }
 
 .atlas-quick-play::before {
@@ -3580,7 +3651,7 @@ body[data-page="page-play"] > footer {
   transform-origin: 50% 0;
   transition:
     opacity 120ms ease,
-    transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    transform 300ms var(--war-button-spring);
 }
 
 .atlas-quick-play::after {
@@ -3635,6 +3706,8 @@ body[data-page="page-play"] > footer {
     inset 0 6px 13px rgb(0 0 0 / 0.44),
     inset 0 1px rgb(0 0 0 / 0.42),
     0 1px 2px rgb(0 0 0 / 0.42);
+  transition-duration: 90ms;
+  transition-timing-function: ease-out;
 }
 
 .atlas-quick-play:active:not(:disabled)::before {
@@ -3675,7 +3748,7 @@ body[data-page="page-play"] > footer {
     0 1px rgb(255 255 255 / 0.38),
     0 3px 5px rgb(0 0 0 / 0.28);
   transition:
-    transform 160ms cubic-bezier(0.2, 0.8, 0.25, 1.25),
+    transform 340ms var(--war-button-spring),
     box-shadow 120ms ease;
 }
 
@@ -3692,6 +3765,69 @@ body[data-page="page-play"] > footer {
 
 .atlas-quick-play:active:not(:disabled) .atlas-quick-play__icon {
   transform: translateY(1px) scale(0.96);
+  transition-duration: 80ms;
+  transition-timing-function: ease-out;
+}
+
+.atlas-compliance-rail {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.48rem;
+  border-top: 1px solid rgb(255 226 151 / 0.14);
+  padding: 0.42rem 0.25rem 0.02rem;
+  color: rgb(231 218 180 / 0.72);
+  font-size: 0.61rem;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  line-height: 1.25;
+  text-shadow: 0 -1px rgb(0 0 0 / 0.72);
+}
+
+.atlas-compliance-rail__disclosure {
+  color: rgb(204 192 158 / 0.54);
+  white-space: nowrap;
+}
+
+.atlas-compliance-rail nav {
+  display: inline-flex;
+  gap: 0.28rem;
+}
+
+.atlas-compliance-rail :where(a, button) {
+  border: 0;
+  border-bottom: 1px solid rgb(255 224 139 / 0.42);
+  background: transparent;
+  padding: 0.1rem 0.16rem;
+  color: #ffe49a;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+  text-shadow: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.atlas-compliance-rail :where(a, button):focus-visible {
+  border-radius: 3px;
+  outline: 2px solid rgb(255 226 132 / 0.88);
+  outline-offset: 1px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .atlas-quick-play {
+    transition:
+      background-position 240ms var(--war-ease),
+      transform 410ms cubic-bezier(0.14, 1.52, 0.28, 1),
+      filter 150ms ease,
+      box-shadow 330ms var(--war-button-spring);
+  }
+
+  .atlas-quick-play:active:not(:disabled) {
+    transform: translateY(3px) scale(0.984);
+    transition-duration: 76ms;
+    transition-timing-function: ease-out;
+  }
 }
 
 .atlas-quick-play__copy {
@@ -3746,8 +3882,8 @@ body[data-page="page-play"] > footer {
   }
 
   .atlas-app-identity {
-    min-height: 6.15rem;
-    padding-top: 0.75rem;
+    min-height: 6.35rem;
+    padding-top: 0.8rem;
   }
 
   .atlas-title-stage .atlas-identity-card {
@@ -3756,6 +3892,21 @@ body[data-page="page-play"] > footer {
 
   .atlas-title-stage .atlas-username-input {
     height: 3rem;
+  }
+
+  .atlas-compliance-rail {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.1rem;
+  }
+
+  .atlas-compliance-rail__disclosure {
+    grid-column: 1;
+    font-size: 0.55rem;
+  }
+
+  .atlas-compliance-rail nav {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 }
 

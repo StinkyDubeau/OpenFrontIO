@@ -240,7 +240,7 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(document).toContain('data-product="idlefront"');
     expect(wordmark).toContain('aria-label="IdleFront"');
     expect(wordmark).toContain("<span>Idle</span><span>Front</span>");
-    expect(playPage).not.toMatch(/Pressure Atlas|OpenFront/);
+    expect(playPage).not.toContain("Pressure Atlas");
     expect(worldPage).not.toMatch(/Pressure Atlas|OpenFront/);
     expect(wizard).not.toMatch(/Pressure Atlas|OpenFront/);
     expect(language).toContain('document.body.dataset.product === "idlefront"');
@@ -248,6 +248,29 @@ describe("Pressure Atlas OpenFront shell", () => {
       "IdleFront is an independent modification of OpenFront",
     );
     expect(legal).toContain("© OpenFront and Contributors");
+    expect(playPage).toContain("© OpenFront and Contributors");
+    expect(playPage).toContain("Independent modification");
+    expect(playPage).toContain("correspondingSourceUrl()");
+  });
+
+  test("keeps unfinished product prose in a centralized copywriter handoff", () => {
+    const copy = source("src/client/copy/PlaceholderCopy.ts");
+    const handoff = source("docs/COPYWRITING.md");
+    const playPage = source("src/client/components/PlayPage.ts");
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+    const wizard = source(
+      "src/client/components/persistent-world/PersistentWorldCreationWizard.ts",
+    );
+
+    expect(copy).toContain('subtitle: "Game subtitle"');
+    expect(copy).toContain('heading: "Page header"');
+    expect(copy).toContain('stepInstructions: "Step instructions"');
+    expect(playPage).toContain("placeholderCopy.landing.identityLabel");
+    expect(worldPage).toContain("placeholderCopy.worlds.heading");
+    expect(wizard).toContain("placeholderCopy.wizard.stepInstructions");
+    expect(handoff).toContain("copyright, source, license, attribution");
   });
 
   test("keeps inherited promotions out of the IdleFront customer journey", () => {
@@ -322,7 +345,7 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(lobbyChat).toContain('translateText("chat.build")');
     expect(lobbyChat).toContain('translateText("chat.send")');
     expect(lobbyChat).toContain("private selectedPhraseKey");
-    expect(lobbyChat).toContain("Same phrases used in play");
+    expect(lobbyChat).toContain("placeholderCopy.lobby.chatHint");
   });
 
   test("uses a quiet header instrument instead of overlaying toast popups", () => {
@@ -412,6 +435,36 @@ describe("Pressure Atlas OpenFront shell", () => {
     );
     expect(worldPage).toContain('source: "persistent-world"');
     expect(main).toContain('lobby.source !== "persistent-world"');
-    expect(worldPage).toMatch(/you did not miss the\s+start/);
+    expect(worldPage).toContain("placeholderCopy.worlds.pendingDescription");
+  });
+
+  test("returns wizard cancellation to the worlds menu without a stale route", () => {
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+
+    expect(worldPage).toContain("@world-wizard-close=${this.returnFromWizard}");
+    expect(worldPage).toContain(
+      'history.replaceState(history.state, "", "/worlds")',
+    );
+    expect(worldPage).not.toContain("history.back()");
+    expect(worldPage).not.toContain(
+      "@world-wizard-close=${() => this.showHub(false)}",
+    );
+  });
+
+  test("bridges semantic haptics to Expo and reserves signatures for alerts and nukes", () => {
+    const haptics = source("src/client/ui/Haptics.ts");
+    const nativeSurface = source("apps/mobile/src/GameSurface.tsx");
+    const buildMenu = source("src/client/hud/layers/BuildMenu.ts");
+    const alertFrame = source("src/client/hud/layers/AlertFrame.ts");
+
+    expect(haptics).toContain('type: "idlefront:haptic"');
+    expect(haptics).toContain("export class UiHapticController");
+    expect(nativeSurface).toContain("onMessage={handleBridgeMessage}");
+    expect(nativeSurface).toContain("Haptics.ImpactFeedbackStyle.Rigid");
+    expect(nativeSurface).toContain("Haptics.NotificationFeedbackType.Warning");
+    expect(buildMenu).toContain('nuclearAction ? "nuke" : "selection"');
+    expect(alertFrame).toContain('requestHaptic("alert")');
   });
 });

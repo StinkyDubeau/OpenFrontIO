@@ -127,12 +127,9 @@ export class ClientEnv {
  * Resolve the game-server WebSocket origin.
  *
  * When an explicit `serverHost` is configured, target it over TLS (wss). Only
- * the desktop app sets this: it loads the renderer from `app://openfront`,
- * where `window.location.host` is just "openfront" (not a real server), and the
- * game-server host is NOT derivable from the API audience — it is the bare
- * audience host in prod (`openfront.io`) but a branch-variable subdomain on
- * dev/staging (default `main.openfront.dev`, or `<branch>.openfront.dev`). So
- * the host is injected explicitly rather than derived.
+ * the desktop app sets this: it loads the renderer from a custom application
+ * scheme whose location host is not a real game server. The operator-owned
+ * game-server host is therefore injected explicitly rather than derived.
  *
  * When no `serverHost` is configured — the normal web build — the game server
  * is same-origin as the document, so we keep the historical behaviour exactly:

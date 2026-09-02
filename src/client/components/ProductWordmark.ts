@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
+import { placeholderCopy } from "../copy/PlaceholderCopy";
 
 /**
  * IdleFront's code-native product mark.
@@ -59,8 +60,8 @@ export class ProductWordmark extends LitElement {
           <span
             class="atlas-wordmark__descriptor"
             aria-hidden="true"
-            data-i18n="pressure_atlas.brand_descriptor"
-            >Persistent frontiers</span
+            data-copy-slot="landing.subtitle"
+            >${placeholderCopy.landing.subtitle}</span
           >
         </span>
       </span>

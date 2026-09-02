@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -9,7 +10,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import WebView, { WebViewNavigation } from "react-native-webview";
+import WebView, {
+  WebViewMessageEvent,
+  WebViewNavigation,
+} from "react-native-webview";
 
 import { AtlasButton } from "./components/AtlasButton";
 import {
@@ -20,6 +24,63 @@ import {
 } from "./config/game";
 
 type LoadState = "connecting" | "live" | "error";
+
+type HapticPattern =
+  | "selection"
+  | "light"
+  | "medium"
+  | "heavy"
+  | "success"
+  | "warning"
+  | "error"
+  | "nuke"
+  | "alert";
+
+async function playHaptic(pattern: HapticPattern): Promise<void> {
+  switch (pattern) {
+    case "light":
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      return;
+    case "medium":
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return;
+    case "heavy":
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      return;
+    case "success":
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    case "warning":
+    case "alert":
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    case "error":
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    case "nuke":
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+      setTimeout(() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }, 62);
+      return;
+    default:
+      await Haptics.selectionAsync();
+  }
+}
+
+function handleBridgeMessage(event: WebViewMessageEvent): void {
+  try {
+    const message = JSON.parse(event.nativeEvent.data) as {
+      type?: string;
+      pattern?: HapticPattern;
+    };
+    if (message.type === "idlefront:haptic" && message.pattern) {
+      void playHaptic(message.pattern);
+    }
+  } catch {
+    // Ignore messages that do not belong to the small native bridge protocol.
+  }
+}
 
 export function GameSurface() {
   const webView = useRef<WebView>(null);
@@ -83,7 +144,7 @@ export function GameSurface() {
         ref={webView}
         allowsBackForwardNavigationGestures
         allowsInlineMediaPlayback
-        applicationNameForUserAgent="PressureAtlasNative/0.1.0"
+        applicationNameForUserAgent="IdleFrontNative/0.1.0"
         bounces={false}
         cacheEnabled
         contentInsetAdjustmentBehavior="never"
@@ -109,6 +170,7 @@ export function GameSurface() {
           loadFailed.current = false;
           setLoadState("connecting");
         }}
+        onMessage={handleBridgeMessage}
         onNavigationStateChange={updateNavigation}
         originWhitelist={["http://*", "https://*"]}
         overScrollMode="never"
@@ -142,16 +204,13 @@ export function GameSurface() {
             colors={["#543921", "#211711", "#0f0d0b"]}
             style={styles.errorPanel}
           >
-            <Text style={styles.errorEyebrow}>FIELD TERMINAL</Text>
-            <Text style={styles.errorTitle}>
-              The game surface is unreachable.
-            </Text>
+            <Text style={styles.errorEyebrow}>STATUS LABEL</Text>
+            <Text style={styles.errorTitle}>Connection error header</Text>
             <Text style={styles.errorCopy}>
-              Confirm that this phone can reach {GAME_URL} and that the game
-              server is still running.
+              Connection recovery instructions
             </Text>
             <AtlasButton
-              detail="Reconnect without deleting your stored session"
+              detail="Recovery action description"
               glyph="↻"
               label="Try again"
               onPress={hardReload}

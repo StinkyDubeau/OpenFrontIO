@@ -8,6 +8,7 @@ import type {
   PersistentWorldLobbySnapshot,
 } from "../../../core/PersistentWorldSchemas";
 import { getPlayToken } from "../../Auth";
+import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import type { JoinLobbyEvent } from "../../Main";
 import {
   consumeInvitationFragment,
@@ -98,7 +99,7 @@ export class PersistentWorldPage extends LitElement {
                   .submitting=${this.submitting}
                   .error=${this.error}
                   @world-create=${this.createWorld}
-                  @world-wizard-close=${() => this.showHub(false)}
+                  @world-wizard-close=${this.returnFromWizard}
                 ></persistent-world-creation-wizard>`
               : html`${this.renderHeader()}${
                   this.view === "hub" ? this.renderHub() : this.renderLobby()
@@ -207,12 +208,14 @@ export class PersistentWorldPage extends LitElement {
       <main class="pw-hub">
         <section class="pw-hub__intro">
           <div>
-            <span class="pw-eyebrow">Return when it matters</span>
-            <h1>Worlds that wait for you.</h1>
-            <p>
-              Invite friends, agree on a start, and return across the day or
-              week. The map is the game board, and its core rules stay intact
-              between visits.
+            <span class="pw-eyebrow" data-copy-slot="worlds.eyebrow"
+              >${placeholderCopy.worlds.eyebrow}</span
+            >
+            <h1 data-copy-slot="worlds.heading">
+              ${placeholderCopy.worlds.heading}
+            </h1>
+            <p data-copy-slot="worlds.description">
+              ${placeholderCopy.worlds.description}
             </p>
           </div>
           <button
@@ -222,8 +225,11 @@ export class PersistentWorldPage extends LitElement {
           >
             <span class="pw-button__medallion" aria-hidden="true">＋</span>
             <span
-              ><strong>Create a world</strong
-              ><small>Schedule an invitation</small></span
+              ><strong data-copy-slot="worlds.primaryAction"
+                >${placeholderCopy.worlds.primaryAction}</strong
+              ><small data-copy-slot="worlds.primaryActionDetail"
+                >${placeholderCopy.worlds.primaryActionDetail}</small
+              ></span
             >
           </button>
         </section>
@@ -235,16 +241,16 @@ export class PersistentWorldPage extends LitElement {
               : html`
                   <div class="pw-hub__lists">
                     <persistent-world-list
-                      heading="Your worlds"
-                      eyebrow="Continue"
-                      emptyMessage="RSVP to a world or prepare an invitation."
+                      heading=${placeholderCopy.worlds.playerListHeading}
+                      eyebrow=${placeholderCopy.worlds.playerListEyebrow}
+                      emptyMessage=${placeholderCopy.worlds.playerListEmpty}
                       .worlds=${this.myWorlds}
                       @world-open=${this.openWorldEvent}
                     ></persistent-world-list>
                     <persistent-world-list
-                      heading="Open invitations"
-                      eyebrow="Discover"
-                      emptyMessage="Public invitations will appear here as hosts schedule them."
+                      heading=${placeholderCopy.worlds.publicListHeading}
+                      eyebrow=${placeholderCopy.worlds.publicListEyebrow}
+                      emptyMessage=${placeholderCopy.worlds.publicListEmpty}
                       .worlds=${this.publicWorlds}
                       @world-open=${this.openWorldEvent}
                     ></persistent-world-list>
@@ -347,13 +353,16 @@ export class PersistentWorldPage extends LitElement {
                       ><i></i
                     ></span>
                     <div>
-                      <span class="pw-eyebrow">Game server pending</span>
-                      <h2>This world does not have a playable map yet.</h2>
-                      <p>
-                        The invitation and RSVP clock activated correctly, but
-                        this build has not created the game server behind it.
-                        Your place is still reserved; you did not miss the
-                        start.
+                      <span
+                        class="pw-eyebrow"
+                        data-copy-slot="worlds.pendingEyebrow"
+                        >${placeholderCopy.worlds.pendingEyebrow}</span
+                      >
+                      <h2 data-copy-slot="worlds.pendingHeading">
+                        ${placeholderCopy.worlds.pendingHeading}
+                      </h2>
+                      <p data-copy-slot="worlds.pendingDescription">
+                        ${placeholderCopy.worlds.pendingDescription}
                       </p>
                     </div>
                   </section>`
@@ -363,11 +372,16 @@ export class PersistentWorldPage extends LitElement {
                         >✓</span
                       >
                       <div>
-                        <span class="pw-eyebrow">Archive sealed</span>
-                        <h2>This world has concluded.</h2>
-                        <p>
-                          The permanent replay becomes available here when its
-                          runtime archive is attached.
+                        <span
+                          class="pw-eyebrow"
+                          data-copy-slot="worlds.finishedEyebrow"
+                          >${placeholderCopy.worlds.finishedEyebrow}</span
+                        >
+                        <h2 data-copy-slot="worlds.finishedHeading">
+                          ${placeholderCopy.worlds.finishedHeading}
+                        </h2>
+                        <p data-copy-slot="worlds.finishedDescription">
+                          ${placeholderCopy.worlds.finishedDescription}
                         </p>
                       </div>
                     </section>`
@@ -442,7 +456,9 @@ export class PersistentWorldPage extends LitElement {
           <span class="pw-membership-check" aria-hidden="true">✓</span
           ><span
             ><strong>RSVP confirmed</strong
-            ><small>You remain on the roster while offline.</small></span
+            ><small data-copy-slot="worlds.membershipDescription"
+              >${placeholderCopy.worlds.membershipDescription}</small
+            ></span
           >
         </div>
         ${
@@ -472,8 +488,11 @@ export class PersistentWorldPage extends LitElement {
     if (snapshot.viewer.canRsvp) {
       return html` <div class="pw-lobby-actions">
         <div>
-          <span class="pw-eyebrow">Invitation received</span
-          ><strong>Reserve your nation.</strong>
+          <span class="pw-eyebrow" data-copy-slot="worlds.invitationEyebrow"
+            >${placeholderCopy.worlds.invitationEyebrow}</span
+          ><strong data-copy-slot="worlds.invitationHeading"
+            >${placeholderCopy.worlds.invitationHeading}</strong
+          >
         </div>
         ${
           world.mode === "teams"
@@ -550,7 +569,7 @@ export class PersistentWorldPage extends LitElement {
         aria-label="Go back"
         @click=${() =>
           this.identityContinuation === "create"
-            ? this.showHub(false)
+            ? this.returnFromWizard()
             : this.restoreLobby()}
       >
         ×
@@ -562,11 +581,14 @@ export class PersistentWorldPage extends LitElement {
         <div class="pw-identity-card__crest" aria-hidden="true">
           <span>IF</span>
         </div>
-        <span class="pw-eyebrow">Commander identity</span>
-        <h1>How should this world remember you?</h1>
-        <p>
-          Your guest identity stays on this device. Connect an account later to
-          carry it across devices.
+        <span class="pw-eyebrow" data-copy-slot="worlds.identityEyebrow"
+          >${placeholderCopy.worlds.identityEyebrow}</span
+        >
+        <h1 data-copy-slot="worlds.identityHeading">
+          ${placeholderCopy.worlds.identityHeading}
+        </h1>
+        <p data-copy-slot="worlds.identityDescription">
+          ${placeholderCopy.worlds.identityDescription}
         </p>
         <label class="pw-field"
           ><span>Display name</span
@@ -596,7 +618,9 @@ export class PersistentWorldPage extends LitElement {
         >
           ${this.submitting ? "Sealing identity…" : "Continue"}
         </button>
-        <small>No email is exposed to a lobby or its members.</small>
+        <small data-copy-slot="worlds.identityPrivacy"
+          >${placeholderCopy.worlds.identityPrivacy}</small
+        >
       </section>
     </main>`;
   }
@@ -607,14 +631,11 @@ export class PersistentWorldPage extends LitElement {
         <span>!</span><i></i>
       </div>
       <div>
-        <span class="pw-eyebrow">Signal lost</span>
+        <span class="pw-eyebrow" data-copy-slot="worlds.errorEyebrow"
+          >${placeholderCopy.worlds.errorEyebrow}</span
+        >
         <h2>${heading}</h2>
-        <p>
-          ${
-            this.error ||
-            "The request did not complete. Your existing invitations are unchanged."
-          }
-        </p>
+        <p>${this.error || placeholderCopy.worlds.errorDescription}</p>
       </div>
       <button
         class="pw-button pw-button--secondary"
@@ -925,6 +946,11 @@ export class PersistentWorldPage extends LitElement {
     this.stopPolling();
     if (updateUrl) this.navigate("/worlds", false);
     void this.loadHub();
+  };
+
+  private returnFromWizard = () => {
+    history.replaceState(history.state, "", "/worlds");
+    this.showHub(false);
   };
 
   private navigate(path: string, route = true) {

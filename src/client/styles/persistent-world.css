@@ -40,6 +40,7 @@ persistent-world-page {
   --pw-safe-bottom: max(0.7rem, env(safe-area-inset-bottom));
   --pw-safe-left: max(0.75rem, env(safe-area-inset-left));
   --pw-spring: cubic-bezier(0.18, 0.89, 0.26, 1.18);
+  --pw-button-spring: cubic-bezier(0.16, 1.42, 0.3, 1);
   --pw-glide: cubic-bezier(0.2, 0.72, 0.2, 1);
   color: var(--pw-ink);
   font-family: var(--atlas-font-body, "SF Pro Text", Inter, sans-serif);
@@ -606,8 +607,8 @@ idlefront-wordmark {
   transition:
     background-position 190ms var(--pw-glide),
     filter 130ms ease,
-    transform 130ms var(--pw-glide),
-    box-shadow 160ms var(--pw-glide);
+    transform 330ms var(--pw-button-spring),
+    box-shadow 250ms var(--pw-button-spring);
 }
 
 .pw-icon-button::before {
@@ -665,6 +666,8 @@ idlefront-wordmark {
     inset 0 -2px 4px rgb(255 255 255 / 0.13),
     0 1px rgb(255 255 255 / 0.12);
   transform: translateY(2px);
+  transition-duration: 78ms;
+  transition-timing-function: ease-out;
 }
 
 .pw-icon-button:active::before {
@@ -725,8 +728,8 @@ idlefront-wordmark {
   transition:
     background-position 190ms var(--pw-glide),
     filter 130ms ease,
-    transform 130ms var(--pw-glide),
-    box-shadow 160ms var(--pw-glide);
+    transform 340ms var(--pw-button-spring),
+    box-shadow 260ms var(--pw-button-spring);
 }
 
 .pw-header-action::before {
@@ -795,6 +798,8 @@ idlefront-wordmark {
     inset 0 1px rgb(0 0 0 / 0.42),
     0 1px rgb(255 255 255 / 0.12);
   transform: translateY(2px);
+  transition-duration: 80ms;
+  transition-timing-function: ease-out;
 }
 
 .pw-header-action:active::before {
@@ -890,8 +895,8 @@ idlefront-wordmark {
   transition:
     background-position 210ms var(--pw-glide),
     filter 130ms ease,
-    transform 130ms var(--pw-glide),
-    box-shadow 170ms var(--pw-glide);
+    transform 360ms var(--pw-button-spring),
+    box-shadow 280ms var(--pw-button-spring);
 }
 
 .pw-button::before {
@@ -921,7 +926,7 @@ idlefront-wordmark {
   transform-origin: 50% 0;
   transition:
     opacity 120ms ease,
-    transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    transform 300ms var(--pw-button-spring);
 }
 
 .pw-button::after {
@@ -977,6 +982,8 @@ idlefront-wordmark {
     inset 0 -2px 4px rgb(255 255 255 / 0.13),
     0 1px 2px rgb(0 0 0 / 0.36);
   transform: translateY(2px) scale(0.995);
+  transition-duration: 86ms;
+  transition-timing-function: ease-out;
 }
 
 .pw-button:active:not(:disabled)::before {
@@ -4165,6 +4172,26 @@ persistent-world-creation-wizard {
   }
   .pw-invitation-card {
     background-image: linear-gradient(145deg, #ead9a6, #c3aa72);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .pw-button,
+  .pw-header-action,
+  .pw-icon-button {
+    transition:
+      background-position 230ms var(--pw-glide),
+      filter 150ms ease,
+      transform 400ms cubic-bezier(0.14, 1.5, 0.28, 1),
+      box-shadow 320ms var(--pw-button-spring);
+  }
+
+  .pw-button:active:not(:disabled),
+  .pw-header-action:active:not(:disabled),
+  .pw-icon-button:active:not(:disabled) {
+    transform: translateY(3px) scale(0.985);
+    transition-duration: 74ms;
+    transition-timing-function: ease-out;
   }
 }
 

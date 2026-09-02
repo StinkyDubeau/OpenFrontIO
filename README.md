@@ -1,15 +1,16 @@
-# Pressure Atlas
+# IdleFront
 
-Pressure Atlas is a persistent multiplayer strategy game built as an
+IdleFront is a persistent multiplayer strategy game built as an
 independent modified version of [OpenFront](https://github.com/openfrontio/OpenFrontIO).
 It is not affiliated with, endorsed by, or an official product of OpenFront
 Inc. This repository was modified by StinkyDubeau in 2026.
 
 The inherited OpenFront strategy simulation remains focused on territorial
-control, structures, alliances, and real-world geography. Pressure Atlas adds
+control, structures, alliances, and real-world geography. IdleFront adds
 its own product identity, interface, and persistent multiplayer foundation.
 
-This is a fork/rewrite of WarFront.io. Credit to https://github.com/WarFrontIO.
+OpenFront itself began as a fork/rewrite of WarFront.io. Credit to
+https://github.com/WarFrontIO.
 
 ![CI](https://github.com/openfrontio/OpenFrontIO/actions/workflows/ci.yml/badge.svg)
 [![Crowdin](https://badges.crowdin.net/openfront-mls/localized.svg)](https://crowdin.com/project/openfront-mls)
@@ -19,7 +20,7 @@ This is a fork/rewrite of WarFront.io. Credit to https://github.com/WarFrontIO.
 
 ## License
 
-Pressure Atlas and the inherited OpenFront source code are licensed under the
+IdleFront and the inherited OpenFront source code are licensed under the
 **GNU Affero General Public License v3.0**, including OpenFront's Section 7
 additional terms.
 
@@ -60,7 +61,7 @@ independently licensed tracks are available.
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/openfrontio/OpenFrontIO.git
+   git clone https://github.com/StinkyDubeau/OpenFrontIO.git
    cd OpenFrontIO
    ```
 
@@ -104,24 +105,13 @@ To run just the server with development settings:
 npm run start:server-dev
 ```
 
-### Connecting to staging or production backends
+### Standalone backend boundary
 
-Sometimes it's useful to connect to production servers when replaying a game, testing user profiles, purchases, or login flow.
-
-> To replay a production game, make sure you're on the same commit that the game you want to replay was executed on, you can find the `gitCommit` value via `https://api.openfront.io/game/[gameId]`.
-> Unfinished games cannot be replayed on localhost.
-
-To connect to staging api servers:
-
-```bash
-npm run dev:staging
-```
-
-To connect to production api servers:
-
-```bash
-npm run dev:prod
-```
+IdleFront development and production builds connect only to IdleFront-owned
+services. The fork intentionally does not ship convenience commands for
+connecting a modified client to OpenFront's hosted staging or production
+services. Set `DOMAIN`, deployment secrets, and observability properties to
+IdleFront-owned values when deploying.
 
 ## 🛠️ Development Tools
 

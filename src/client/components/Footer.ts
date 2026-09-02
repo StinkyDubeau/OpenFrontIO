@@ -1,5 +1,6 @@
 import { LitElement, html } from "lit";
 import { customElement } from "lit/decorators.js";
+import { correspondingSourceUrl } from "../SourceLinks";
 
 @customElement("page-footer")
 export class Footer extends LitElement {
@@ -30,7 +31,7 @@ export class Footer extends LitElement {
             Legal &amp; source
           </button>
           <a
-            href="https://github.com/StinkyDubeau/OpenFrontIO"
+            href=${correspondingSourceUrl()}
             target="_blank"
             rel="noopener noreferrer"
             data-i18n="main.github"

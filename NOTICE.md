@@ -1,6 +1,6 @@
-# Pressure Atlas legal notice
+# IdleFront legal notice
 
-Pressure Atlas is an independent modified version of OpenFront. It is not
+IdleFront is an independent modified version of OpenFront. It is not
 affiliated with, endorsed by, or an official product of OpenFront Inc.
 
 This fork was modified by StinkyDubeau in 2026. The original OpenFront code and
@@ -25,7 +25,7 @@ attribution terms described in [`LICENSE-ASSETS`](LICENSE-ASSETS) and
 attribution to “OpenFront” or “OpenFront Inc.”
 
 The all-rights-reserved OpenFront assets formerly stored under `proprietary/`
-are intentionally excluded from this standalone fork. Pressure Atlas does not
+are intentionally excluded from this standalone fork. IdleFront does not
 load those assets or OpenFront's proprietary music at runtime.
 
 OpenFront names and marks belong to their respective owners. Their appearance

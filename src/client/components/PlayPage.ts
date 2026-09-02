@@ -1,5 +1,7 @@
 import { LitElement, html } from "lit";
 import { customElement } from "lit/decorators.js";
+import { placeholderCopy } from "../copy/PlaceholderCopy";
+import { correspondingSourceUrl } from "../SourceLinks";
 import "./ProductWordmark";
 
 @customElement("play-page")
@@ -18,19 +20,45 @@ export class PlayPage extends LitElement {
           <section class="atlas-launch-console" aria-label="IdleFront">
             <h1 class="sr-only">IdleFront</h1>
             <div class="atlas-app-identity" aria-hidden="true">
-              <product-wordmark compact></product-wordmark>
+              <product-wordmark></product-wordmark>
             </div>
 
             <div class="atlas-identity-card">
               <span
                 class="atlas-identity-card__label"
-                data-i18n="pressure_atlas.commander_identity"
-                >Commander identity</span
+                data-copy-slot="landing.identityLabel"
+                >${placeholderCopy.landing.identityLabel}</span
               >
               <username-input class="atlas-username-input"></username-input>
             </div>
 
             <game-mode-selector></game-mode-selector>
+
+            <footer
+              class="atlas-compliance-rail"
+              aria-label="Attribution and source"
+            >
+              <span>© OpenFront and Contributors</span>
+              <span class="atlas-compliance-rail__disclosure"
+                >Independent modification</span
+              >
+              <nav aria-label="Legal links">
+                <a
+                  href=${correspondingSourceUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Source</a
+                >
+                <button
+                  type="button"
+                  class="nav-menu-item"
+                  data-page="page-legal"
+                  data-haptic="light"
+                >
+                  Legal
+                </button>
+              </nav>
+            </footer>
           </section>
         </div>
       </div>

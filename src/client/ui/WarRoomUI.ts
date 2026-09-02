@@ -1,6 +1,7 @@
 import { Howl } from "howler";
 import { assetUrl } from "../../core/AssetUrls";
 import { UserSettings } from "../../core/game/UserSettings";
+import { UiHapticController } from "./Haptics";
 
 export type UiFidelity = "full" | "reduced" | "static";
 
@@ -260,9 +261,11 @@ export class UiFlourishController {
 let fidelityController: UiFidelityController | null = null;
 let soundController: UiSoundController | null = null;
 let flourishController: UiFlourishController | null = null;
+let hapticController: UiHapticController | null = null;
 
 export function initWarRoomUI(): void {
   fidelityController ??= new UiFidelityController();
   soundController ??= new UiSoundController();
   flourishController ??= new UiFlourishController();
+  hapticController ??= new UiHapticController();
 }

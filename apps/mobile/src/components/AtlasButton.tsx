@@ -41,11 +41,11 @@ export function AtlasButton({
 }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const animate = (toValue: number) => {
+  const animate = (toValue: number, release = false) => {
     Animated.spring(scale, {
-      damping: 17,
-      mass: 0.45,
-      stiffness: 340,
+      damping: release ? 11 : 18,
+      mass: release ? 0.58 : 0.42,
+      stiffness: release ? 255 : 360,
       toValue,
       useNativeDriver: true,
     }).start();
@@ -63,7 +63,7 @@ export function AtlasButton({
           animate(0.965);
           void Haptics.selectionAsync();
         }}
-        onPressOut={() => animate(1)}
+        onPressOut={() => animate(1, true)}
         style={[styles.pressable, disabled && styles.disabled]}
       >
         <LinearGradient

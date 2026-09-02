@@ -7,6 +7,7 @@ import type {
   PersistentWorldLobbySnapshot,
   PersistentWorldQuickChatView,
 } from "../../../core/PersistentWorldSchemas";
+import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import { translateText } from "../../Utils";
 
 @customElement("idlefront-wordmark")
@@ -30,7 +31,9 @@ export class IdleFrontWordmark extends LitElement {
         </svg>
         <span
           ><strong>Idle</strong><strong>Front</strong
-          ><small>Persistent strategy</small></span
+          ><small data-copy-slot="landing.subtitle"
+            >${placeholderCopy.landing.subtitle}</small
+          ></span
         >
       </span>
     `;
@@ -287,7 +290,9 @@ export class PersistentWorldRoster extends LitElement {
       <section class="pw-panel pw-roster" aria-labelledby="pw-roster-title">
         <header class="pw-panel__header">
           <div>
-            <span class="pw-eyebrow">RSVP list</span>
+            <span class="pw-eyebrow" data-copy-slot="lobby.rosterEyebrow"
+              >${placeholderCopy.lobby.rosterEyebrow}</span
+            >
             <h2 id="pw-roster-title">Commanders</h2>
           </div>
           <span class="pw-panel__count"
@@ -381,17 +386,25 @@ export class PersistentWorldQuickChat extends LitElement {
       <section class="pw-panel pw-chat" aria-labelledby="pw-chat-title">
         <header class="pw-panel__header">
           <div>
-            <span class="pw-eyebrow">Signal channel</span>
+            <span class="pw-eyebrow" data-copy-slot="lobby.chatEyebrow"
+              >${placeholderCopy.lobby.chatEyebrow}</span
+            >
             <h2 id="pw-chat-title">Quick chat</h2>
           </div>
-          <span class="pw-panel__hint">Same phrases used in play</span>
+          <span class="pw-panel__hint" data-copy-slot="lobby.chatHint"
+            >${placeholderCopy.lobby.chatHint}</span
+          >
         </header>
         <div class="pw-chat__messages pw-intentional-scroll" aria-live="polite">
           ${
             this.messages.length === 0
               ? html`<div class="pw-empty-state pw-empty-state--compact">
-                  <strong>The channel is quiet.</strong>
-                  <span>Send a signal when your allies arrive.</span>
+                  <strong data-copy-slot="lobby.chatEmptyHeading"
+                    >${placeholderCopy.lobby.chatEmptyHeading}</strong
+                  >
+                  <span data-copy-slot="lobby.chatEmptyDescription"
+                    >${placeholderCopy.lobby.chatEmptyDescription}</span
+                  >
                 </div>`
               : this.messages.map(
                   (message) => html`
@@ -466,8 +479,11 @@ export class PersistentWorldQuickChat extends LitElement {
               </div>
             </div>
           </div>
-          <p class="pw-chat__catalog-note">
-            In a match, some phrases also ask you to choose a player.
+          <p
+            class="pw-chat__catalog-note"
+            data-copy-slot="lobby.chatInstructions"
+          >
+            ${placeholderCopy.lobby.chatInstructions}
           </p>
           <div class="pw-chat__preview">
             <span>Preview</span>
@@ -551,7 +567,9 @@ export class PersistentWorldReminderPicker extends LitElement {
       >
         <header class="pw-panel__header">
           <div>
-            <span class="pw-eyebrow">Return protocol</span>
+            <span class="pw-eyebrow" data-copy-slot="lobby.reminderEyebrow"
+              >${placeholderCopy.lobby.reminderEyebrow}</span
+            >
             <h2 id="pw-reminders-title">Notify me</h2>
           </div>
         </header>
@@ -578,12 +596,8 @@ export class PersistentWorldReminderPicker extends LitElement {
             `,
           )}
         </div>
-        <p>
-          ${
-            this.disabled
-              ? "RSVP to choose reminders."
-              : "Email delivery becomes available when you verify an address."
-          }
+        <p data-copy-slot="lobby.reminderDescription">
+          ${placeholderCopy.lobby.reminderDescription}
         </p>
       </section>
     `;

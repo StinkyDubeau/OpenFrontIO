@@ -1,8 +1,8 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import "./components/IOSAddToHomeScreenBanner";
+import { placeholderCopy } from "./copy/PlaceholderCopy";
 import { UsernameInput } from "./UsernameInput";
-import { translateText } from "./Utils";
 
 @customElement("game-mode-selector")
 export class GameModeSelector extends LitElement {
@@ -57,11 +57,16 @@ export class GameModeSelector extends LitElement {
           class="atlas-quick-play ${disabled ? "is-disabled" : ""}"
           ?disabled=${disabled}
           @click=${this.openWorlds}
+          data-haptic="medium"
         >
           <span class="atlas-quick-play__icon" aria-hidden="true">▶</span>
           <span class="atlas-quick-play__copy">
-            <strong>${translateText("main.play")}</strong>
-            <small>${translateText("main.persistent_worlds")}</small>
+            <strong data-copy-slot="landing.primaryAction"
+              >${placeholderCopy.landing.primaryAction}</strong
+            >
+            <small data-copy-slot="landing.primaryActionDetail"
+              >${placeholderCopy.landing.primaryActionDetail}</small
+            >
           </span>
           <svg
             class="atlas-quick-play__chevron"

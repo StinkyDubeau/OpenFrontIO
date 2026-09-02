@@ -1018,7 +1018,6 @@
     "login_discord": "Login with Discord",
     "login_google": "Login with Google",
     "menu": "Menu",
-    "persistent_worlds": "Persistent worlds",
     "play": "Play",
     "settings": "Settings",
     "sign_in": "Sign in",
@@ -1398,8 +1397,6 @@
     "player": "Player"
   },
   "pressure_atlas": {
-    "brand_descriptor": "Persistent frontiers",
-    "commander_identity": "Commander identity",
     "footer_build": "IdleFront working build",
     "footer_credit": "Engine licensed under AGPL-3.0 · Open map assets CC BY-SA",
     "footer_links_label": "Project links",

@@ -6,6 +6,7 @@ import type {
   PersistentWorldDuration,
   PersistentWorldMode,
 } from "../../../core/PersistentWorldSchemas";
+import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import {
   formatWorldDate,
   formatWorldDuration,
@@ -29,25 +30,25 @@ const SCHEDULE_PRESETS: SchedulePreset[] = [
   {
     id: "soon",
     label: "In 10 minutes",
-    description: "Gather whoever is nearby.",
+    description: placeholderCopy.wizard.scheduleDescription,
     value: () => Date.now() + 10 * 60 * 1000,
   },
   {
     id: "hour",
     label: "In one hour",
-    description: "A short invitation window.",
+    description: placeholderCopy.wizard.scheduleDescription,
     value: () => Date.now() + 60 * 60 * 1000,
   },
   {
     id: "tomorrow",
     label: "Tomorrow evening",
-    description: "Starts at 7:00 PM local time.",
+    description: placeholderCopy.wizard.scheduleDescription,
     value: startOfTomorrowEvening,
   },
   {
     id: "week",
     label: "In one week",
-    description: "Leave time for every RSVP.",
+    description: placeholderCopy.wizard.scheduleDescription,
     value: () => Date.now() + 7 * 24 * 60 * 60 * 1000,
   },
 ];
@@ -57,7 +58,7 @@ export class PersistentWorldCreationWizard extends LitElement {
   @property({ type: Boolean }) submitting = false;
   @property() error = "";
   @state() private step = 0;
-  @state() private name = "The Long Table";
+  @state() private name = "Game title";
   @state() private duration: PersistentWorldDuration = "1d";
   @state() private access: PersistentWorldAccess = "private";
   @state() private mode: PersistentWorldMode = "ffa";
@@ -85,7 +86,9 @@ export class PersistentWorldCreationWizard extends LitElement {
             ×
           </button>
           <div>
-            <span class="pw-eyebrow">New persistent world</span>
+            <span class="pw-eyebrow" data-copy-slot="wizard.eyebrow"
+              >${placeholderCopy.wizard.eyebrow}</span
+            >
             <h1 id="pw-wizard-title">${stepNames[this.step]}</h1>
           </div>
           <span class="pw-wizard__position"
@@ -173,10 +176,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">01</span>
           <div>
-            <h2>Name the world</h2>
-            <p>
-              This invitation and its commanders remain available across devices
-              and visits.
+            <h2 data-copy-slot="wizard.stepHeading">
+              ${placeholderCopy.wizard.stepHeading}
+            </h2>
+            <p data-copy-slot="wizard.stepInstructions">
+              ${placeholderCopy.wizard.stepInstructions}
             </p>
           </div>
         </div>
@@ -213,22 +217,13 @@ export class PersistentWorldCreationWizard extends LitElement {
                   }</span
                 >
                 <strong>${formatWorldDuration(duration)}</strong>
-                <small
-                  >${
-                    duration === "1h"
-                      ? "Focused session"
-                      : duration === "1d"
-                        ? "Return through the day"
-                        : "A week-long campaign"
-                  }</small
-                >
+                <small>${placeholderCopy.wizard.pacingDescription}</small>
               </label>
             `,
           )}
         </fieldset>
-        <p class="pw-disclosure">
-          The duration is a pacing target, not a forced deadline. The world
-          still ends through territorial victory, not when this timer expires.
+        <p class="pw-disclosure" data-copy-slot="wizard.pacingDisclosure">
+          ${placeholderCopy.wizard.pacingDisclosure}
         </p>
       </div>
     `;
@@ -240,10 +235,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">02</span>
           <div>
-            <h2>Set the table</h2>
-            <p>
-              Choose who can discover the invitation. Players pick their own
-              team when they RSVP.
+            <h2 data-copy-slot="wizard.stepHeading">
+              ${placeholderCopy.wizard.stepHeading}
+            </h2>
+            <p data-copy-slot="wizard.stepInstructions">
+              ${placeholderCopy.wizard.stepInstructions}
             </p>
           </div>
         </div>
@@ -252,8 +248,12 @@ export class PersistentWorldCreationWizard extends LitElement {
             <legend>Visibility</legend>
             ${this.binaryChoices(
               [
-                ["private", "Private", "Only people with the invitation"],
-                ["public", "Public", "Listed for any commander"],
+                [
+                  "private",
+                  "Private",
+                  placeholderCopy.wizard.optionDescription,
+                ],
+                ["public", "Public", placeholderCopy.wizard.optionDescription],
               ],
               this.access,
               (value) => (this.access = value as PersistentWorldAccess),
@@ -264,8 +264,12 @@ export class PersistentWorldCreationWizard extends LitElement {
             <legend>Diplomacy</legend>
             ${this.binaryChoices(
               [
-                ["ffa", "Free for all", "Alliances form in the world"],
-                ["teams", "Teams", "Commanders choose a side"],
+                [
+                  "ffa",
+                  "Free for all",
+                  placeholderCopy.wizard.optionDescription,
+                ],
+                ["teams", "Teams", placeholderCopy.wizard.optionDescription],
               ],
               this.mode,
               (value) => (this.mode = value as PersistentWorldMode),
@@ -276,7 +280,9 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-stepper-field">
           <div>
             <span>Human commanders</span
-            ><small>AI nations fill the rest of the map at launch.</small>
+            ><small data-copy-slot="wizard.optionDescription"
+              >${placeholderCopy.wizard.optionDescription}</small
+            >
           </div>
           <div class="pw-stepper">
             <button
@@ -304,9 +310,9 @@ export class PersistentWorldCreationWizard extends LitElement {
                 <select
                   .value=${this.teamId}
                   @change=${(event: Event) =>
-                  (this.teamId = (
-                    event.currentTarget as HTMLSelectElement
-                  ).value)}
+                    (this.teamId = (
+                      event.currentTarget as HTMLSelectElement
+                    ).value)}
                 >
                   <option value="team-1">Team 1</option>
                   <option value="team-2">Team 2</option>
@@ -326,10 +332,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">03</span>
           <div>
-            <h2>Choose launch time</h2>
-            <p>
-              The countdown continues even while everyone is offline. The world
-              starts automatically.
+            <h2 data-copy-slot="wizard.stepHeading">
+              ${placeholderCopy.wizard.stepHeading}
+            </h2>
+            <p data-copy-slot="wizard.stepInstructions">
+              ${placeholderCopy.wizard.stepInstructions}
             </p>
           </div>
         </div>
@@ -356,7 +363,9 @@ export class PersistentWorldCreationWizard extends LitElement {
             @click=${() => (this.exactSchedule = true)}
           >
             <strong>Exact date & time</strong
-            ><small>Schedule up to fourteen days ahead.</small>
+            ><small data-copy-slot="wizard.scheduleDescription"
+              >${placeholderCopy.wizard.scheduleDescription}</small
+            >
           </button>
         </div>
         ${
@@ -368,8 +377,8 @@ export class PersistentWorldCreationWizard extends LitElement {
                   .value=${this.toDateTimeLocal(this.startsAt)}
                   min=${this.toDateTimeLocal(Date.now() + 2 * 60 * 1000)}
                   max=${this.toDateTimeLocal(
-                  Date.now() + 14 * 24 * 60 * 60 * 1000,
-                )}
+                    Date.now() + 14 * 24 * 60 * 60 * 1000,
+                  )}
                   @change=${this.updateExactTime}
               /></label>`
             : nothing
@@ -389,10 +398,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-review-seal" aria-hidden="true"><span>IV</span></div>
         <div class="pw-wizard-step__intro pw-wizard-step__intro--centered">
           <div>
-            <h2>Prepare the invitation</h2>
-            <p>
-              After creation, share the invitation card. Friends can RSVP now
-              and return to the lobby later.
+            <h2 data-copy-slot="wizard.stepHeading">
+              ${placeholderCopy.wizard.stepHeading}
+            </h2>
+            <p data-copy-slot="wizard.stepInstructions">
+              ${placeholderCopy.wizard.stepInstructions}
             </p>
           </div>
         </div>
@@ -428,10 +438,11 @@ export class PersistentWorldCreationWizard extends LitElement {
             </dd>
           </div>
         </dl>
-        <div class="pw-disclosure pw-disclosure--emphasis">
-          <strong>Core rules stay intact.</strong> This setup records app
-          structure and a target pace; it does not change buildings, roads,
-          factories, defenses, economy, or conquest.
+        <div
+          class="pw-disclosure pw-disclosure--emphasis"
+          data-copy-slot="wizard.reviewDisclosure"
+        >
+          ${placeholderCopy.wizard.reviewDisclosure}
         </div>
       </div>
     `;

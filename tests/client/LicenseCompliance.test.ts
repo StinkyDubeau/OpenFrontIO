@@ -17,14 +17,34 @@ describe("standalone fork license compliance", () => {
   it("offers corresponding source and the appropriate legal notices", () => {
     const notice = read("NOTICE.md");
     const page = read("src/client/components/LegalNoticePage.ts");
+    const sourceLinks = read("src/client/SourceLinks.ts");
     const drawer = read("src/client/components/MobileNavBar.ts");
 
     for (const source of [notice, page, drawer]) {
       expect(source).toContain("© OpenFront and Contributors");
     }
     expect(page).toContain("provided without");
-    expect(page).toContain("https://github.com/StinkyDubeau/OpenFrontIO");
+    expect(page).toContain("correspondingSourceUrl()");
+    expect(sourceLinks).toContain(
+      "https://github.com/StinkyDubeau/OpenFrontIO",
+    );
+    expect(sourceLinks).toContain("ClientEnv.gitCommit()");
     expect(drawer).toContain('data-page="page-legal"');
+  });
+
+  it("never connects the fork to OpenFront hosted services or ad properties", () => {
+    const packageJson = read("package.json");
+    const main = read("src/client/Main.ts");
+    const store = read("src/client/Store.ts");
+    const deployment = read(".github/workflows/deploy.yml");
+    const dockerfile = read("Dockerfile");
+
+    expect(packageJson).not.toMatch(/api\.openfront\.(?:io|dev)/);
+    expect(main).toContain("window.adsEnabled = false");
+    expect(main).not.toMatch(/loadAdmiral|onAdmiralMeasured|adGatekeeper/);
+    expect(store).not.toMatch(/https?:\/\/[^\s"']*openfront\.(?:io|dev)/);
+    expect(deployment).not.toMatch(/openfront\.(?:io|dev)/);
+    expect(dockerfile).not.toMatch(/openfront\.(?:io|dev)/);
   });
 
   it("does not ship or load the restricted proprietary asset directory", () => {

@@ -3,7 +3,8 @@ import { Platform } from "react-native";
 const LAN_GAME_URL = "http://192.168.2.118:9000/";
 
 function normalizeGameUrl(value: string | undefined): string {
-  const candidate = value?.trim() || LAN_GAME_URL;
+  const configured = value?.trim();
+  const candidate = configured?.length ? configured : LAN_GAME_URL;
   return candidate.endsWith("/") ? candidate : `${candidate}/`;
 }
 
@@ -17,6 +18,7 @@ export const NATIVE_BRIDGE_BOOTSTRAP = `
       capabilities: ["app-state", "haptics", "persistent-session"]
     };
     window.__PRESSURE_ATLAS_NATIVE__ = detail;
+    window.__IDLEFRONT_NATIVE__ = detail;
     window.dispatchEvent(new CustomEvent("pressureatlas:native-ready", { detail: detail }));
   })();
   true;
