@@ -1968,7 +1968,7 @@ body.atlas-theme.in-game .atlas-control-instruments {
 
 body.atlas-theme.in-game .atlas-resource-row,
 body.atlas-theme.in-game .atlas-attack-console,
-body.atlas-theme.in-game .atlas-mobile-instrument-row {
+body.atlas-theme.in-game .atlas-mobile-control-layout {
   position: relative;
   z-index: 1;
 }
@@ -2018,8 +2018,448 @@ body.atlas-theme.in-game .atlas-troop-meter::after {
   pointer-events: none;
 }
 
-body.atlas-theme.in-game .atlas-attack-slider {
-  min-height: 20px;
+body.atlas-theme.in-game .atlas-desktop-attack-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  align-items: stretch;
+  gap: 7px;
+}
+
+body.atlas-theme.in-game .atlas-structure-count {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+body.atlas-theme.in-game .atlas-structure-count img {
+  filter: brightness(0) invert(1);
+  opacity: 0.82;
+}
+
+body.atlas-theme.in-game .atlas-structure-count span {
+  overflow: hidden;
+  color: #bcae91;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.atlas-theme.in-game .atlas-structure-count strong {
+  color: #fff2ca;
+  font-size: 0.92rem;
+  letter-spacing: 0;
+  text-shadow: 0 1px 2px #000;
+}
+
+body.atlas-theme.in-game attack-ratio-dial {
+  display: block;
+  min-width: 0;
+  color: #fff2ca;
+  font-family: var(--war-font);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__touchfield {
+  position: relative;
+  display: flex;
+  min-height: 94px;
+  cursor: grab;
+  touch-action: none;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid #60431c;
+  border-radius: 8px;
+  outline: none;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.055), transparent 22%),
+    radial-gradient(circle at 50% 43%, rgb(58 112 91 / 0.2), transparent 62%),
+    #07100f;
+  box-shadow:
+    inset 0 2px 12px rgb(0 0 0 / 0.82),
+    inset 0 1px rgb(255 238 186 / 0.08),
+    0 1px rgb(255 229 155 / 0.09);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__touchfield::before {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 9px,
+      rgb(255 255 255 / 0.014) 9px 10px
+    ),
+    linear-gradient(
+      115deg,
+      transparent 25%,
+      rgb(255 255 255 / 0.045),
+      transparent 62%
+    );
+  content: "";
+  pointer-events: none;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__touchfield::after {
+  position: absolute;
+  z-index: 1;
+  right: 8px;
+  bottom: -16px;
+  left: 8px;
+  height: 48px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse, rgb(90 226 169 / 0.2), transparent 64%),
+    repeating-radial-gradient(
+      ellipse at 50% 15%,
+      rgb(255 226 145 / 0.09) 0 1px,
+      transparent 1px 7px
+    );
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scaleX(0.72) translateY(7px);
+  transition:
+    opacity 180ms var(--war-ease),
+    transform 260ms var(--war-spring);
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__touchfield:focus-visible {
+  border-color: #e1b35b;
+  box-shadow:
+    0 0 0 2px rgb(225 179 91 / 0.3),
+    inset 0 2px 12px rgb(0 0 0 / 0.82);
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__legend {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  padding: 4px 4px 1px;
+  overflow: hidden;
+  color: #bcae91;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__bezel {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  border: 1px solid #f1cd75;
+  border-radius: 50%;
+  background:
+    linear-gradient(145deg, rgb(255 250 209 / 0.72), transparent 19%),
+    linear-gradient(
+      145deg,
+      #7e5219 0 19%,
+      #d1a44c 38%,
+      #5b360f 69%,
+      #bd8433 100%
+    );
+  box-shadow:
+    0 4px 5px rgb(0 0 0 / 0.7),
+    0 0 0 2px #241508,
+    0 0 0 3px rgb(255 216 123 / 0.26),
+    inset 0 1px 1px #fff2b0,
+    inset 0 -3px 5px rgb(39 18 3 / 0.8);
+  transition:
+    transform 120ms var(--war-ease),
+    box-shadow 120ms var(--war-ease);
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__bezel::after {
+  position: absolute;
+  z-index: 2;
+  inset: 4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 225deg,
+    #b7f3cf 0deg,
+    #62c899 var(--atlas-ratio-sweep),
+    rgb(21 39 34 / 0.82) var(--atlas-ratio-sweep),
+    rgb(21 39 34 / 0.82) 270deg,
+    transparent 270deg
+  );
+  content: "";
+  filter: drop-shadow(0 0 2px rgb(84 231 169 / 0.34));
+  pointer-events: none;
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 4px),
+    #000 calc(100% - 3px)
+  );
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__bezel::before {
+  position: absolute;
+  z-index: 6;
+  inset: 2px 8px 60%;
+  border-top: 1px solid rgb(255 251 218 / 0.78);
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.2), transparent);
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__scale {
+  position: absolute;
+  z-index: 1;
+  inset: 5px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 225deg,
+    rgb(255 240 180 / 0.66) 0deg 1deg,
+    transparent 1deg 13.5deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3px),
+    #000 calc(100% - 2px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3px),
+    #000 calc(100% - 2px)
+  );
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__face {
+  position: absolute;
+  z-index: 3;
+  inset: 9px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 243 201 / 0.42);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 34% 25%,
+      rgb(255 255 255 / 0.36),
+      transparent 24%
+    ),
+    radial-gradient(circle at 63% 73%, rgb(52 106 86 / 0.28), transparent 44%),
+    linear-gradient(145deg, #364542, #101d1b 52%, #050b0a);
+  box-shadow:
+    inset 2px 3px 5px rgb(255 255 255 / 0.13),
+    inset -3px -4px 8px rgb(0 0 0 / 0.76),
+    0 2px 3px rgb(0 0 0 / 0.64);
+  overflow: hidden;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__face::after {
+  position: absolute;
+  inset: 1px 4px 56%;
+  border-radius: 50% 50% 44% 44%;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.2), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__rotor {
+  position: absolute;
+  z-index: 1;
+  inset: 3px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      ellipse at 29% 22%,
+      rgb(218 255 238 / 0.16),
+      transparent 25%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 0 31%,
+      rgb(130 205 178 / 0.09) 32%,
+      transparent 34% 62%,
+      rgb(255 230 160 / 0.07) 63%,
+      transparent 65%
+    ),
+    conic-gradient(
+      from 24deg,
+      rgb(255 255 255 / 0.07),
+      transparent 16%,
+      rgb(32 88 68 / 0.18) 34%,
+      transparent 55%,
+      rgb(255 221 133 / 0.08) 73%,
+      transparent
+    );
+  opacity: 0.9;
+  transform: rotate(var(--atlas-ratio-needle));
+  transition: transform 190ms var(--war-spring);
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__needle {
+  position: absolute;
+  z-index: 2;
+  bottom: 50%;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 19px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #63400d, #ffe898 45% 70%, #815a1a);
+  box-shadow: 0 0 3px rgb(255 226 135 / 0.5);
+  transform: rotate(var(--atlas-ratio-needle));
+  transform-origin: 50% 100%;
+  transition: transform 110ms var(--war-ease);
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__cap {
+  position: absolute;
+  z-index: 4;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #ffe6a0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #fff5c1, #a16e20 45%, #3b2107);
+  box-shadow: 0 1px 2px #000;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__value {
+  position: absolute;
+  z-index: 5;
+  bottom: 5px;
+  left: 50%;
+  color: #fff6d8;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px #000;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__gesture-hint {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 3px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24rem;
+  color: #9e927b;
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__gesture-hint span {
+  color: #d7b96f;
+  font-size: 0.68rem;
+}
+
+body.atlas-theme.in-game .atlas-attack-dial__gesture-hint--pointer {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body.atlas-theme.in-game .atlas-attack-dial__gesture-hint--touch {
+    display: none;
+  }
+
+  body.atlas-theme.in-game .atlas-attack-dial__gesture-hint--pointer {
+    display: flex;
+  }
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial:is([data-dragging], [data-wheel-active])
+  .atlas-attack-dial__bezel {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.8),
+    0 0 0 2px #241508,
+    0 0 0 3px rgb(255 216 123 / 0.2),
+    inset 0 2px 4px rgb(34 16 3 / 0.7);
+  transform: translateY(2px) scale(0.97);
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial:is([data-dragging], [data-wheel-active])
+  .atlas-attack-dial__touchfield::after {
+  opacity: 1;
+  transform: scaleX(1) translateY(0);
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial:is([data-dragging], [data-wheel-active])
+  .atlas-attack-dial__cap {
+  animation: atlas-attack-dial-cap 720ms ease-in-out infinite alternate;
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial[data-dragging]
+  .atlas-attack-dial__touchfield {
+  cursor: grabbing;
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial[data-gesture-mode="dial"]
+  .atlas-attack-dial__rotor,
+body.atlas-theme.in-game
+  attack-ratio-dial[data-gesture-mode="dial"]
+  .atlas-attack-dial__needle {
+  transition-duration: 0ms;
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial[data-gesture-mode="linear"]
+  .atlas-attack-dial__needle {
+  transition-duration: 35ms;
+}
+
+body.atlas-theme.in-game
+  attack-ratio-dial[data-gesture-mode="linear"]
+  .atlas-attack-dial__gesture-hint {
+  color: #f2d28a;
+  text-shadow: 0 0 6px rgb(98 220 166 / 0.44);
+  transform: translateY(-1px);
+}
+
+@keyframes atlas-attack-dial-cap {
+  from {
+    box-shadow:
+      0 1px 2px #000,
+      0 0 0 rgb(255 226 135 / 0);
+  }
+
+  to {
+    box-shadow:
+      0 1px 2px #000,
+      0 0 7px rgb(255 226 135 / 0.62);
+  }
 }
 
 body.atlas-theme.in-game
@@ -2578,7 +3018,109 @@ body[data-ui-fidelity="static"] *::after {
     border-bottom-width: 0 !important;
     border-left-width: 0 !important;
     border-radius: 10px 10px 0 0 !important;
-    padding: 4px 5px max(4px, env(safe-area-inset-bottom));
+    padding: 4px 5px;
+  }
+
+  body.atlas-theme.in-game .atlas-control-instruments {
+    padding: 4px 5px 3px !important;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-control-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 116px;
+    align-items: stretch;
+    gap: 7px;
+    min-height: 132px;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-control-ledger {
+    display: grid;
+    min-width: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 6px;
+    padding: 3px 0 4px;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-ledger-row {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-ledger-row .atlas-instrument-readout {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 29px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    border-radius: 6px;
+    padding: 0.25rem 0.35rem;
+    overflow: visible;
+    font-size: 0.74rem;
+  }
+
+  body.atlas-theme.in-game
+    .atlas-mobile-ledger-row
+    .atlas-instrument-readout
+    strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-troop-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-troop-row .atlas-troop-meter {
+    height: 27px !important;
+  }
+
+  body.atlas-theme.in-game .atlas-mobile-control-ledger .atlas-structure-count {
+    align-self: stretch;
+    padding: 0.38rem 0.48rem;
+  }
+
+  body.atlas-theme.in-game .atlas-attack-dial--mobile,
+  body.atlas-theme.in-game .atlas-attack-dial--mobile > div {
+    height: 100%;
+  }
+
+  body.atlas-theme.in-game
+    .atlas-attack-dial--mobile
+    .atlas-attack-dial__touchfield {
+    min-height: 132px;
+    padding-bottom: 27px;
+  }
+
+  body.atlas-theme.in-game
+    .atlas-attack-dial--mobile
+    .atlas-attack-dial__bezel {
+    width: 82px;
+    height: 82px;
+    flex-basis: 82px;
+  }
+
+  body.atlas-theme.in-game .atlas-attack-dial--mobile .atlas-attack-dial__face {
+    inset: 10px;
+  }
+
+  body.atlas-theme.in-game
+    .atlas-attack-dial--mobile
+    .atlas-attack-dial__needle {
+    height: 26px;
+  }
+
+  body.atlas-theme.in-game
+    .atlas-attack-dial--mobile
+    .atlas-attack-dial__value {
+    bottom: 7px;
+    font-size: 0.88rem;
   }
 
   .atlas-ui-lab__grid {

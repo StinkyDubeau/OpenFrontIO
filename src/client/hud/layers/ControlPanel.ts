@@ -1,14 +1,14 @@
 import { LitElement, html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
-import { assetUrl } from "../../../core/AssetUrls";
-import { EventBus } from "../../../core/EventBus";
-import { ClientID } from "../../../core/Schemas";
 import { Config } from "../../../core/configuration/Config";
-import { GameMode, GameType, Gold } from "../../../core/game/Game";
+import { EventBus } from "../../../core/EventBus";
+import { GameMode, GameType, Gold, Structures } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
 import { UserSettings } from "../../../core/game/UserSettings";
+import { ClientID } from "../../../core/Schemas";
+import "../../components/AttackRatioDial";
 import { Controller } from "../../Controller";
 import { AttackRatioEvent } from "../../InputHandler";
 import { UIState } from "../../UIState";
@@ -20,8 +20,7 @@ import {
 } from "../../Utils";
 import { GameView } from "../../view";
 import { PlayerView } from "../../view/PlayerView";
-import { goldCoinIcon, soldierIcon } from "../HotbarIcons";
-const swordIcon = assetUrl("images/SwordIcon.svg");
+import { cityIcon, goldCoinIcon, soldierIcon } from "../HotbarIcons";
 
 @customElement("control-panel")
 export class ControlPanel extends LitElement implements Controller {
@@ -29,6 +28,7 @@ export class ControlPanel extends LitElement implements Controller {
   public clientID: ClientID;
   public eventBus: EventBus;
   public uiState: UIState;
+  private readonly userSettings = new UserSettings();
 
   @state()
   private attackRatio: number = 0.2;
@@ -56,6 +56,9 @@ export class ControlPanel extends LitElement implements Controller {
   private _attackingTroops: number = 0;
 
   @state()
+  private _structures: number = 0;
+
+  @state()
   private _goldGain: bigint | null = null;
   @state()
   private _goldGainPulseId: number = 0;
@@ -75,7 +78,7 @@ export class ControlPanel extends LitElement implements Controller {
   private static readonly ATTACK_THRESHOLD_TICKS = 15 * 10; // 15 seconds
 
   init() {
-    this.attackRatio = new UserSettings().attackRatio();
+    this.attackRatio = this.userSettings.attackRatio();
     this.uiState.attackRatio = this.attackRatio;
     this.eventBus.on(AttackRatioEvent, (event) => {
       let newAttackRatio = this.attackRatio + event.attackRatio / 100;
@@ -119,6 +122,7 @@ export class ControlPanel extends LitElement implements Controller {
       .outgoingAttacks()
       .map((a) => a.troops)
       .reduce((a, b) => a + b, 0);
+    this._structures = player.units(...Structures.types).length;
     this.troopRate = config.troopIncreaseRate(player) * 10;
 
     const helpEnabled = new UserSettings().helpMessages();
@@ -315,15 +319,10 @@ export class ControlPanel extends LitElement implements Controller {
     this.requestUpdate();
   }
 
-  private handleRatioSliderInput(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const value = Number(input.value);
+  private handleRatioDialInput(e: CustomEvent<{ value: number }>) {
+    const value = e.detail.value;
     this.attackRatio = value / 100;
     this.onAttackRatioChange(this.attackRatio);
-  }
-
-  private handleRatioSliderPointerUp(e: Event) {
-    (e.target as HTMLInputElement).blur();
   }
 
   private calculateTroopBar(): { greenPercent: number; orangePercent: number } {
@@ -353,8 +352,9 @@ export class ControlPanel extends LitElement implements Controller {
           ></div>
           <div
             class="absolute inset-y-0 left-0 w-full origin-left bg-aquarius transition-transform duration-200 ease-out"
-            style="transform: translateX(${greenPercent}%) scaleX(${orangePercent /
-            100});"
+            style="transform: translateX(${greenPercent}%) scaleX(${
+              orangePercent / 100
+            });"
           ></div>
         </div>
         <div
@@ -381,10 +381,9 @@ export class ControlPanel extends LitElement implements Controller {
             class="brightness-0 invert drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]"
           />
           <span
-            class="text-[10px] font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] ${this
-              ._troopRateIsIncreasing
-              ? "text-green-400"
-              : "text-orange-400"}"
+            class="text-[10px] font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] ${
+              this._troopRateIsIncreasing ? "text-green-400" : "text-orange-400"
+            }"
             >+${renderTroops(this.troopRate)}/s</span
           >
         </div>
@@ -405,8 +404,9 @@ export class ControlPanel extends LitElement implements Controller {
           ></div>
           <div
             class="absolute inset-y-0 left-0 w-full origin-left bg-aquarius transition-transform duration-200 ease-out"
-            style="transform: translateX(${greenPercent}%) scaleX(${orangePercent /
-            100});"
+            style="transform: translateX(${greenPercent}%) scaleX(${
+              orangePercent / 100
+            });"
           ></div>
         </div>
         <div
@@ -448,9 +448,11 @@ export class ControlPanel extends LitElement implements Controller {
     const isWarning = this._notification.type === "warning";
     return html`
       <div
-        class="flex items-center gap-1.5 px-1.5 py-1 rounded-md border text-xs font-medium mb-1 ${isWarning
-          ? "border-orange-400/60 bg-orange-400/10 text-orange-300"
-          : "border-blue-400/60 bg-blue-400/10 text-blue-300"}"
+        class="flex items-center gap-1.5 px-1.5 py-1 rounded-md border text-xs font-medium mb-1 ${
+          isWarning
+            ? "border-orange-400/60 bg-orange-400/10 text-orange-300"
+            : "border-blue-400/60 bg-blue-400/10 text-blue-300"
+        }"
       >
         <span class="shrink-0">${isWarning ? "⚠" : "ℹ"}</span>
         <span>${translateText(this._notification.message)}</span>
@@ -465,10 +467,11 @@ export class ControlPanel extends LitElement implements Controller {
       <div class="atlas-resource-row flex gap-1.5 items-center mb-1">
         <!-- Troop rate -->
         <div
-          class="atlas-instrument-readout atlas-instrument-readout--rate flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${this
-            ._troopRateIsIncreasing
-            ? "border-green-400"
-            : "border-orange-400"}"
+          class="atlas-instrument-readout atlas-instrument-readout--rate flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${
+            this._troopRateIsIncreasing
+              ? "border-green-400"
+              : "border-orange-400"
+          }"
           translate="no"
         >
           <img
@@ -478,14 +481,16 @@ export class ControlPanel extends LitElement implements Controller {
             width="13"
             height="13"
             class="shrink-0"
-            style="filter: ${this._troopRateIsIncreasing
-              ? "brightness(0) saturate(100%) invert(74%) sepia(44%) saturate(500%) hue-rotate(83deg) brightness(103%)"
-              : "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(105%)"}"
+            style="filter: ${
+              this._troopRateIsIncreasing
+                ? "brightness(0) saturate(100%) invert(74%) sepia(44%) saturate(500%) hue-rotate(83deg) brightness(103%)"
+                : "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(105%)"
+            }"
           />
           <span
-            class="text-sm font-bold tabular-nums ${this._troopRateIsIncreasing
-              ? "text-green-400"
-              : "text-orange-400"}"
+            class="text-sm font-bold tabular-nums ${
+              this._troopRateIsIncreasing ? "text-green-400" : "text-orange-400"
+            }"
             >+${renderTroops(this.troopRate)}/s</span
           >
         </div>
@@ -496,51 +501,44 @@ export class ControlPanel extends LitElement implements Controller {
           class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center gap-1 shrink-0 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm py-0.5 px-1 min-w-[4.5rem] relative"
           translate="no"
         >
-          ${this._goldGain !== null
-            ? keyed(
-                this._goldGainPulseId,
-                html`<span
-                  class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-sm font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
-                  >+${renderNumber(this._goldGain)}</span
-                >`,
-              )
-            : ""}
+          ${
+            this._goldGain !== null
+              ? keyed(
+                  this._goldGainPulseId,
+                  html`<span
+                    class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-sm font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
+                    >+${renderNumber(this._goldGain)}</span
+                  >`,
+                )
+              : ""
+          }
           <img src=${goldCoinIcon} width="13" height="13" class="shrink-0" />
           <span class="tabular-nums">${renderNumber(this._gold)}</span>
         </div>
       </div>
-      <!-- Row 2: attack ratio | slider -->
-      <div
-        class="atlas-attack-console flex items-center gap-1.5"
-        translate="no"
-      >
-        <div
-          class="atlas-instrument-readout atlas-instrument-readout--attack flex items-center gap-1 shrink-0 border border-gray-600 rounded-md px-1 py-0.5 text-sm font-bold text-white cursor-pointer w-[8rem]"
-        >
+      <!-- Row 2: structure ledger | tactile ratio dial -->
+      <div class="atlas-attack-console atlas-desktop-attack-row" translate="no">
+        <div class="atlas-instrument-readout atlas-structure-count">
           <img
-            src=${swordIcon}
+            src=${cityIcon}
             alt=""
             aria-hidden="true"
-            width="12"
-            height="12"
-            style="filter: brightness(0) invert(1);"
+            width="14"
+            height="14"
           />
-          <span
-            >${(this.attackRatio * 100).toFixed(0)}%
-            (${renderTroops(
-              (this.game?.myPlayer()?.troops() ?? 0) * this.attackRatio,
-            )})</span
-          >
+          <span>${translateText("effects.type.structures")}</span>
+          <strong>${this._structures}</strong>
         </div>
-        <input
-          type="range"
-          min="1"
-          max="100"
-          .value=${String(Math.round(this.attackRatio * 100))}
-          @input=${(e: Event) => this.handleRatioSliderInput(e)}
-          @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-          class="atlas-attack-slider flex-1 h-1.5 accent-aquarius cursor-pointer"
-        />
+        <attack-ratio-dial
+          class="atlas-attack-dial--desktop"
+          .value=${Math.round(this.attackRatio * 100)}
+          .step=${this.userSettings.attackRatioIncrement()}
+          .label=${translateText("user_setting.attack_ratio_label")}
+          .displayValue=${renderTroops(
+            (this.game?.myPlayer()?.troops() ?? 0) * this.attackRatio,
+          )}
+          @attack-ratio-input=${this.handleRatioDialInput}
+        ></attack-ratio-dial>
       </div>
     `;
   }
@@ -548,57 +546,70 @@ export class ControlPanel extends LitElement implements Controller {
   private renderMobile() {
     return html`
       ${this.renderNotification()}
-      <div class="atlas-mobile-instrument-row flex gap-2 items-center">
-        <!-- Gold -->
-        <div
-          class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center justify-center p-1 gap-0.5 border rounded-md border-yellow-400 font-bold text-yellow-400 text-xs w-1/5 shrink-0 relative"
-          translate="no"
-        >
-          ${this._goldGain !== null
-            ? keyed(
-                this._goldGainPulseId,
-                html`<span
-                  class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-xs font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
-                  >+${renderNumber(this._goldGain)}</span
-                >`,
-              )
-            : ""}
-          <img src=${goldCoinIcon} width="13" height="13" />
-          <span class="px-0.5">${renderNumber(this._gold)}</span>
-        </div>
-        <!-- Troop bar -->
-        <div class="w-[40%] shrink-0 flex items-center">
-          ${this.renderMobileTroopBar()}
-        </div>
-        <!-- Sword + % label -->
-        <div
-          class="atlas-instrument-readout atlas-instrument-readout--attack flex flex-col items-center shrink-0 gap-0.5 w-8"
-          translate="no"
-        >
-          <img
-            src=${swordIcon}
-            alt=""
-            aria-hidden="true"
-            width="10"
-            height="10"
-            style="filter: brightness(0) invert(1);"
-          />
-          <span class="text-white text-xs font-bold tabular-nums"
-            >${(this.attackRatio * 100).toFixed(0)}%</span
+      <div class="atlas-mobile-control-layout">
+        <div class="atlas-mobile-control-ledger">
+          <div class="atlas-mobile-ledger-row">
+            <div
+              class="atlas-instrument-readout atlas-instrument-readout--gold"
+              translate="no"
+            >
+              ${
+                this._goldGain !== null
+                  ? keyed(
+                      this._goldGainPulseId,
+                      html`<span
+                        class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-xs font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
+                        >+${renderNumber(this._goldGain)}</span
+                      >`,
+                    )
+                  : ""
+              }
+              <img src=${goldCoinIcon} width="14" height="14" />
+              <strong>${renderNumber(this._gold)}</strong>
+            </div>
+            <div
+              class="atlas-instrument-readout atlas-instrument-readout--rate"
+              translate="no"
+            >
+              <img src=${soldierIcon} alt="" width="13" height="13" />
+              <strong
+                class=${
+                  this._troopRateIsIncreasing
+                    ? "text-green-400"
+                    : "text-orange-400"
+                }
+                >+${renderTroops(this.troopRate)}/s</strong
+              >
+            </div>
+          </div>
+          <div class="atlas-mobile-troop-row">
+            ${this.renderMobileTroopBar()}
+          </div>
+          <div
+            class="atlas-instrument-readout atlas-structure-count"
+            translate="no"
           >
+            <img
+              src=${cityIcon}
+              alt=""
+              aria-hidden="true"
+              width="14"
+              height="14"
+            />
+            <span>${translateText("effects.type.structures")}</span>
+            <strong>${this._structures}</strong>
+          </div>
         </div>
-        <!-- Attack ratio slider -->
-        <div class="flex-1" translate="no">
-          <input
-            type="range"
-            min="1"
-            max="100"
-            .value=${String(Math.round(this.attackRatio * 100))}
-            @input=${(e: Event) => this.handleRatioSliderInput(e)}
-            @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-            class="atlas-attack-slider w-full h-1.5 accent-aquarius cursor-pointer"
-          />
-        </div>
+        <attack-ratio-dial
+          class="atlas-attack-dial--mobile"
+          .value=${Math.round(this.attackRatio * 100)}
+          .step=${this.userSettings.attackRatioIncrement()}
+          .label=${translateText("user_setting.attack_ratio_label")}
+          .displayValue=${renderTroops(
+            (this.game?.myPlayer()?.troops() ?? 0) * this.attackRatio,
+          )}
+          @attack-ratio-input=${this.handleRatioDialInput}
+        ></attack-ratio-dial>
       </div>
     `;
   }
@@ -621,10 +632,9 @@ export class ControlPanel extends LitElement implements Controller {
         }
       </style>
       <div
-        class="atlas-control-instruments relative pointer-events-auto ${this
-          ._isVisible
-          ? "relative w-full text-sm px-2 py-1"
-          : "hidden"}"
+        class="atlas-control-instruments relative pointer-events-auto ${
+          this._isVisible ? "relative w-full text-sm px-2 py-1" : "hidden"
+        }"
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
         <div class="lg:hidden">${this.renderMobile()}</div>

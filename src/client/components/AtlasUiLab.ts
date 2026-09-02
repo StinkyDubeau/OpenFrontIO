@@ -2,6 +2,7 @@ import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 import "../styles/stone-button-specimen.css";
 import "./AtlasPrimitives";
+import "./AttackRatioDial";
 
 const STONE_BUTTON_LAB = "stone-buttons";
 
@@ -92,6 +93,13 @@ export class AtlasUiLab extends LitElement {
               Break alliance
             </button>
             <button class="atlas-war-button" disabled>Unavailable</button>
+            <attack-ratio-dial
+              class="atlas-attack-dial--mobile"
+              value="42"
+              step="10"
+              label="Attack ratio"
+              display-value="128K"
+            ></attack-ratio-dial>
             <label class="atlas-war-field">
               <span>Operation name</span>
               <input value="Northern Watch" />
@@ -194,6 +202,7 @@ export function mountAtlasUiLab(): boolean {
   const lab = new URLSearchParams(location.search).get("ui-lab");
   if (lab !== "1" && lab !== STONE_BUTTON_LAB) return false;
   document.body.classList.add("atlas-ui-lab-active");
+  document.body.classList.toggle("in-game", lab === "1");
   document.body.classList.toggle(
     "atlas-ui-lab-stone-active",
     lab === STONE_BUTTON_LAB,
