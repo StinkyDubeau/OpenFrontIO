@@ -86,10 +86,6 @@ export class MobileNavBar extends LitElement {
 
         <nav class="atlas-navigation-drawer__items" aria-label="Game menu">
           ${this._renderItem("page-play", "main.play", "Play", currentPage)}
-          ${this._renderItem("page-news", "main.news", "News", currentPage, {
-            attention: this._notifications.showNewsDot() ? "danger" : "none",
-            onClick: this._notifications.onNewsClick,
-          })}
           ${this._renderItem(
             "page-item-store",
             "main.store",
@@ -147,9 +143,10 @@ export class MobileNavBar extends LitElement {
             class="atlas-legal-trigger nav-menu-item"
             data-page="page-legal"
           >
-            <span>© OpenFront and Contributors</span>
+            <span>Licenses, credits &amp; attribution</span>
             <strong>Legal + source</strong>
           </button>
+          <small class="atlas-legal-credit">© OpenFront and Contributors</small>
         </footer>
       </div>
     `;

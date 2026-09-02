@@ -18,8 +18,8 @@
   "display": "standalone",
   "dir": "auto",
   "lang": "en",
-  "name": "Pressure Atlas",
-  "short_name": "Atlas",
+  "name": "IdleFront",
+  "short_name": "IdleFront",
   "start_url": "/",
   "id": "/"
 }

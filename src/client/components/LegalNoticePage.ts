@@ -27,7 +27,7 @@ export class LegalNoticePage extends LitElement {
         </div>
 
         <p class="atlas-legal-page__summary">
-          Pressure Atlas is an independent modification of OpenFront. It is not
+          IdleFront is an independent modification of OpenFront. It is not
           affiliated with, endorsed by, or an official product of OpenFront Inc.
         </p>
 
@@ -43,9 +43,9 @@ export class LegalNoticePage extends LitElement {
           <article>
             <h2>Licensed assets</h2>
             <p>
-              Open resource assets are covered by CC BY-SA 4.0 and the
-              attribution details in the project credits. Proprietary OpenFront
-              assets are excluded from this fork.
+              Assets are governed individually by LICENSE-ASSETS and the
+              attribution details in the project credits. Assets identified
+              there as proprietary are not relicensed by this fork.
             </p>
           </article>
         </div>
@@ -72,8 +72,6 @@ export class LegalNoticePage extends LitElement {
             rel="noopener noreferrer"
             >Credits</a
           >
-          <a href="/terms-of-service.html">Terms</a>
-          <a href="/privacy-policy.html">Privacy</a>
         </nav>
 
         <button
@@ -81,7 +79,7 @@ export class LegalNoticePage extends LitElement {
           class="atlas-legal-page__return nav-menu-item"
           data-page="page-play"
         >
-          Return to command
+          Return to IdleFront
         </button>
       </section>
     `;

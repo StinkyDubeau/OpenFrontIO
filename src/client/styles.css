@@ -89,9 +89,9 @@ html {
 body {
   height: 100%;
   overflow: hidden !important;
-  /* Safe area padding for notched devices */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Full-screen scenes own their safe-area inset. Padding the body would add
+     the Dynamic Island clearance a second time. */
+  padding: 0;
 }
 
 * {

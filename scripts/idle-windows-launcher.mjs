@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
 import path from "node:path";
 
 function requireString(config, name) {
@@ -29,6 +29,7 @@ async function main() {
   const workspace = path.resolve(requireString(config, "Workspace"));
   const authorityPort = requirePort(config, "AuthorityPort", 3000);
   const gatewayPort = requirePort(config, "GatewayPort", 3100);
+  const webPort = requirePort(config, "WebPort", 9000);
 
   if (component === "Authority") {
     process.env.GAME_ENV = "dev";
@@ -59,19 +60,32 @@ async function main() {
     host: "127.0.0.1",
     port: gatewayPort,
     origin: `http://127.0.0.1:${authorityPort}`,
+    webOrigin: `http://127.0.0.1:${webPort}`,
     staticDir: path.join(workspace, "resources", "idle"),
   });
   const close = () => server.close(() => (process.exitCode = 0));
   process.once("SIGINT", close);
   process.once("SIGTERM", close);
   process.stdout.write(
-    `Pressure Atlas preview gateway listening on 127.0.0.1:${gatewayPort}\n`,
+    `IdleFront preview gateway listening on 127.0.0.1:${gatewayPort}\n`,
   );
 }
 
-main().catch((error) => {
-  process.stderr.write(
-    `Pressure Atlas launcher failed: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
+main().catch(async (error) => {
+  const message = `IdleFront launcher failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`;
+  process.stderr.write(message);
+  try {
+    const configArgument = process.argv.slice(2)[1];
+    const config = JSON.parse(
+      await readFile(path.resolve(configArgument), "utf8"),
+    );
+    await appendFile(
+      path.join(requireString(config, "LogsPath"), "launcher-error.log"),
+      `${new Date().toISOString()} ${message}`,
+      "utf8",
+    );
+  } catch {
+    // The original startup failure remains the actionable error.
+  }
   process.exitCode = 1;
 });

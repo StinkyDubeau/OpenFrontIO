@@ -84,9 +84,9 @@ describe("NewsBox", () => {
       expect(new Set(ids).size).toBe(ids.length);
     });
 
-    it("contains a tournament entry", () => {
+    it("contains an onboarding entry", () => {
       const items = getVisibleNewsItems(allItems);
-      expect(items.some((i) => i.type === "tournament")).toBe(true);
+      expect(items.some((i) => i.type === "tutorial")).toBe(true);
     });
   });
 });

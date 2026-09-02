@@ -44,11 +44,21 @@ describe("Pressure Atlas OpenFront shell", () => {
 
   test("mounts the precision bezel beside, never around, the renderer host", () => {
     const document = source("index.html");
+    const persistentWorldStyles = source(
+      "src/client/styles/persistent-world.css",
+    );
+    const warRoomStyles = source("src/client/styles/war-room.css");
     const rendererHost = document.indexOf('<div id="app"></div>');
     const bezel = document.indexOf("<atlas-map-bezel></atlas-map-bezel>");
 
     expect(rendererHost).toBeGreaterThan(-1);
     expect(bezel).toBeGreaterThan(rendererHost);
+    expect(persistentWorldStyles).not.toMatch(
+      /body\[data-page="page-persistent-worlds"\][^{]*atlas-map-bezel/,
+    );
+    expect(warRoomStyles).toContain("atlas-map-bezel *::before");
+    expect(warRoomStyles).toContain("pointer-events: none !important");
+    expect(warRoomStyles).toContain("var(--war-mahogany-texture) top left");
   });
 
   test("consolidates repeated HTML mounts into reusable page and HUD decks", () => {
@@ -93,16 +103,22 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(mainLayout).not.toContain("overflow-y-auto");
   });
 
-  test("presents one headerless public play action", () => {
+  test("presents one headerless Play action that opens a separate Worlds scene", () => {
     const playPage = source("src/client/components/PlayPage.ts");
     const modeSelector = source("src/client/GameModeSelector.ts");
+    const worldStyles = source("src/client/styles/persistent-world.css");
 
     expect(playPage).not.toContain("<header");
     expect(playPage).not.toContain("hamburger-btn");
     expect(modeSelector.match(/class="atlas-quick-play /g)).toHaveLength(1);
     expect(modeSelector).not.toContain("atlas-public-lobbies");
     expect(modeSelector).not.toContain("atlas-game-actions");
-    expect(modeSelector).toContain("games?.ffa?.[0]");
+    expect(modeSelector).toContain('"/worlds"');
+    expect(modeSelector).toContain('"page-persistent-worlds"');
+    expect(worldStyles).toContain("persistent-world-page.hidden");
+    expect(worldStyles).toContain(
+      'body:not([data-page="page-persistent-worlds"]) persistent-world-page',
+    );
   });
 
   test("never offers Add to Home Screen inside the native shell", () => {
@@ -129,10 +145,26 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(mobileSurface).toContain('"hardwareBackPress"');
   });
 
+  test("applies the Dynamic Island inset once at the scene boundary", () => {
+    const document = source("index.html");
+    const baseStyles = source("src/client/styles.css");
+    const warRoomStyles = source("src/client/styles/war-room.css");
+
+    expect(document).toContain("--atlas-safe-top: max(");
+    expect(document).not.toContain("padding-top: max(env(safe-area-inset-top)");
+    expect(baseStyles).not.toMatch(
+      /body\s*\{[^}]*padding:\s*env\(safe-area-inset-top\)/s,
+    );
+    expect(warRoomStyles).toContain(
+      "calc(3.75rem + var(--atlas-safe-top, 0px))",
+    );
+  });
+
   test("keeps product styles away from renderer-owned selectors", () => {
     for (const stylesheet of [
       "src/client/styles/pressure-atlas.css",
       "src/client/styles/war-room.css",
+      "src/client/styles/persistent-world.css",
     ]) {
       const cssWithoutComments = source(stylesheet).replace(
         /\/\*[\s\S]*?\*\//g,
@@ -148,6 +180,8 @@ describe("Pressure Atlas OpenFront shell", () => {
     for (const asset of [
       "resources/images/ui/materials/mahogany@2x.webp",
       "resources/images/ui/materials/felt@2x.webp",
+      "resources/images/ui/materials/felt@4x.webp",
+      "resources/images/ui/materials/leather@4x.webp",
       "resources/images/ui/materials/parchment@2x.webp",
     ]) {
       expect(fs.statSync(path.join(repoRoot, asset)).size).toBeGreaterThan(512);
@@ -155,7 +189,12 @@ describe("Pressure Atlas OpenFront shell", () => {
 
     const warRoomStyles = source("src/client/styles/war-room.css");
     expect(warRoomStyles).toContain("--war-mahogany-texture");
-    expect(warRoomStyles).toContain("--war-felt-texture");
+    expect(warRoomStyles).toContain(
+      '--war-felt-texture: url("/resources/images/ui/materials/felt@4x.webp")',
+    );
+    expect(warRoomStyles).toContain(
+      '--war-leather-texture: url("/resources/images/ui/materials/leather@4x.webp")',
+    );
     expect(warRoomStyles).toContain("--war-parchment-texture");
   });
 
@@ -168,5 +207,193 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(uiRuntime).not.toMatch(
       /ClientGameRunner|createWebGLView|GameRenderer/,
     );
+  });
+
+  test("presents IdleFront as the product while retaining upstream attribution", () => {
+    const document = source("index.html");
+    const wordmark = source("src/client/components/ProductWordmark.ts");
+    const playPage = source("src/client/components/PlayPage.ts");
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+    const wizard = source(
+      "src/client/components/persistent-world/PersistentWorldCreationWizard.ts",
+    );
+    const legal = source("src/client/components/LegalNoticePage.ts");
+    const language = source("src/client/LangSelector.ts");
+
+    expect(document).toContain(
+      "<title>IdleFront — Persistent Strategy</title>",
+    );
+    expect(document).toContain('data-product="idlefront"');
+    expect(wordmark).toContain('aria-label="IdleFront"');
+    expect(wordmark).toContain("<span>Idle</span><span>Front</span>");
+    expect(playPage).not.toMatch(/Pressure Atlas|OpenFront/);
+    expect(worldPage).not.toMatch(/Pressure Atlas|OpenFront/);
+    expect(wizard).not.toMatch(/Pressure Atlas|OpenFront/);
+    expect(language).toContain('document.body.dataset.product === "idlefront"');
+    expect(legal).toContain(
+      "IdleFront is an independent modification of OpenFront",
+    );
+    expect(legal).toContain("© OpenFront and Contributors");
+  });
+
+  test("keeps inherited promotions out of the IdleFront customer journey", () => {
+    const navigation = source("src/client/components/MobileNavBar.ts");
+    const store = source("src/client/Store.ts");
+    const winModal = source("src/client/hud/layers/WinModal.ts");
+
+    expect(navigation).not.toContain('"page-news"');
+    expect(store).not.toContain(
+      '{ key: "merch", label: translateText("store.merch") }',
+    );
+    expect(winModal).not.toContain("<steam-wishlist");
+    expect(winModal).not.toContain("discord.com/invite/openfront");
+  });
+
+  test("builds tactile buttons from glaze, texture, edge depth, and press motion", () => {
+    const warRoomStyles = source("src/client/styles/war-room.css");
+    const worldStyles = source("src/client/styles/persistent-world.css");
+
+    expect(warRoomStyles).toContain(".atlas-quick-play::before");
+    expect(warRoomStyles).toContain("--war-gem-amethyst-face");
+    expect(warRoomStyles).toContain("--war-gem-quartz-face");
+    expect(warRoomStyles).toContain("--war-gem-ruby-face");
+    expect(warRoomStyles).toContain("var(--war-leather-texture)");
+    expect(warRoomStyles).toContain("background-blend-mode");
+    expect(warRoomStyles).toContain("background-position 210ms");
+    expect(warRoomStyles).toContain(
+      ".atlas-quick-play:active:not(:disabled)::before",
+    );
+    expect(warRoomStyles).toContain(
+      ".atlas-quick-play:active:not(:disabled) .atlas-quick-play__icon",
+    );
+    expect(worldStyles).toContain(".pw-button::before");
+    expect(worldStyles).toContain(
+      "--pw-gem-face: var(--war-gem-amethyst-face)",
+    );
+    expect(worldStyles).toContain("--pw-gem-face: var(--war-gem-quartz-face)");
+    expect(worldStyles).toContain("--pw-gem-face: var(--war-gem-ruby-face)");
+    expect(worldStyles).toContain("border-bottom-width: 3px");
+    expect(worldStyles).toContain("background-position 210ms");
+    expect(worldStyles).toContain(
+      ".pw-button:active:not(:disabled) .pw-button__medallion",
+    );
+  });
+
+  test("makes the world-setup breadcrumb directly navigable", () => {
+    const wizard = source(
+      "src/client/components/persistent-world/PersistentWorldCreationWizard.ts",
+    );
+
+    expect(wizard).toContain('class="pw-wizard__step"');
+    expect(wizard).toContain('aria-current=${index === this.step ? "step"');
+    expect(wizard).toContain("?disabled=${!this.canOpenStep(index)}");
+    expect(wizard).toContain("@click=${() => this.openStep(index)}");
+    expect(wizard).toContain("private hasValidSchedule()");
+  });
+
+  test("teaches the in-game quick-chat catalog with the same category/phrase layout", () => {
+    const lobbyChat = source(
+      "src/client/components/persistent-world/PersistentWorldComponents.ts",
+    );
+    const gameChat = source("src/client/hud/layers/ChatModal.ts");
+
+    expect(lobbyChat).toContain(
+      'import quickChatData from "resources/QuickChat.json"',
+    );
+    expect(gameChat).toContain(
+      'import quickChatData from "resources/QuickChat.json"',
+    );
+    expect(lobbyChat).toContain('${translateText("chat.category")}');
+    expect(lobbyChat).toContain('${translateText("chat.phrase")}');
+    expect(lobbyChat).toContain('translateText("chat.build")');
+    expect(lobbyChat).toContain('translateText("chat.send")');
+    expect(lobbyChat).toContain("private selectedPhraseKey");
+    expect(lobbyChat).toContain("Same phrases used in play");
+  });
+
+  test("uses a quiet header instrument instead of overlaying toast popups", () => {
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+    const worldComponents = source(
+      "src/client/components/persistent-world/PersistentWorldComponents.ts",
+    );
+    const worldStyles = source("src/client/styles/persistent-world.css");
+
+    expect(worldPage).toContain('class="pw-header-signal');
+    expect(worldPage).toContain('class="pw-header-signal__board"');
+    expect(worldPage).toContain('class="pw-header-signal__viewport"');
+    expect(worldPage).toContain('class="pw-header-signal__glyph');
+    expect(worldPage).not.toContain("statusLabel");
+    expect(worldPage).toContain("keyed(");
+    expect(worldPage).toContain('role=${statusTone === "error" ? "alert"');
+    expect(worldPage).toContain("@world-share-status=${this.shareStatus}");
+    expect(worldComponents).toContain('new CustomEvent("world-share-status"');
+    expect(worldComponents).not.toContain("copyState");
+    expect(worldPage).not.toContain('class="pw-toast"');
+    expect(worldStyles).toContain(".pw-header-signal__board::before");
+    expect(worldStyles).toContain("@keyframes pw-destination-board-roll");
+    expect(worldStyles).toContain("animation: pw-destination-board-roll");
+    expect(worldStyles).toContain("aspect-ratio: 7 / 1");
+    expect(worldStyles).not.toContain("pw-header-marquee");
+    expect(worldStyles).not.toContain(".pw-toast");
+  });
+
+  test("uses a game-board beacon in the header and keeps mobile panes vertical", () => {
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+    const worldStyles = source("src/client/styles/persistent-world.css");
+
+    expect(worldPage).toContain('<circle cx="12" cy="12" r="6.25">');
+    expect(worldPage).toContain(
+      '<path d="M12 2.75v3M12 18.25v3M2.75 12h3M18.25 12h3">',
+    );
+    expect(worldPage).not.toContain('<circle cx="8.25" cy="14.25"');
+    expect(worldPage).not.toContain("M7.25 4.75h9.5");
+    expect(worldStyles).toContain(".pw-intentional-scroll {");
+    expect(worldStyles).toContain("overflow-x: hidden;");
+    expect(worldStyles).toContain("overflow-y: auto;");
+    expect(worldStyles).toContain("touch-action: pan-y pinch-zoom;");
+    expect(worldStyles).not.toContain("overflow: auto;");
+  });
+
+  test("keeps lobby rosters fresh across devices and mobile foregrounding", () => {
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+
+    expect(worldPage).toContain("LOBBY_POLL_INTERVAL_MS = 3_000");
+    expect(worldPage).toContain(
+      'document.addEventListener("visibilitychange", this.handleVisibilityChange)',
+    );
+    expect(worldPage).toContain(
+      'window.addEventListener("focus", this.refreshVisibleLobby)',
+    );
+    expect(worldPage).toContain("quiet || this.snapshot !== null");
+    expect(worldPage).toContain("clearTimeout(this.pollTimer)");
+    expect(worldPage).not.toContain("setInterval(");
+  });
+
+  test("turns an active member's countdown into the world entry control", () => {
+    const worldPage = source(
+      "src/client/components/persistent-world/PersistentWorldPage.ts",
+    );
+    const worldComponents = source(
+      "src/client/components/persistent-world/PersistentWorldComponents.ts",
+    );
+
+    expect(worldComponents).toContain(
+      'world.phase === "active" && snapshot.viewer.isMember',
+    );
+    expect(worldComponents).toContain('class="pw-countdown pw-entry-control"');
+    expect(worldComponents).toContain("?disabled=${!snapshot.runtimeGameId}");
+    expect(worldComponents).toContain('new CustomEvent("world-enter-runtime"');
+    expect(worldPage).toContain(
+      "@world-enter-runtime=${this.enterRuntimeFromCard}",
+    );
+    expect(worldPage).toMatch(/you did not miss the\s+start/);
   });
 });

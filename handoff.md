@@ -78,6 +78,17 @@ controller tags and page IDs remain inside those light-DOM compositions.
 
 Use OpenFront as the starting point for a persistent, idle multiplayer online game. A player must be able to leave and return without losing the session, move between devices, use a simplified mobile experience, and sign in on the web for the full desktop experience.
 
+The user purchased `idlefront.io` on September 1, 2026. `idlefront.io` and
+`www.idlefront.io` are now the production product identities; the owner is
+provisioning a Debian 13 server and Cloudflare Tunnel.
+
+The latest released OpenFront ruleset is always the canonical laws of physics
+for IdleFront. Keep the fork capable of continuously integrating upstream map,
+renderer, AI, structure, rules, and balance updates. Persistent-world and app
+features must remain layered around that ruleset, and upstream promotion must
+pass explicit compatibility/regression gates rather than silently drifting or
+automatically merging to `main`.
+
 ## Repository context
 
 - Upstream: `openfrontio/OpenFrontIO`

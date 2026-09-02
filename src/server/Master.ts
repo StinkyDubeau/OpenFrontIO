@@ -19,6 +19,12 @@ import { ServerEnv } from "./ServerEnv";
 import { applyStaticAssetCacheControl } from "./StaticAssetCache";
 import { createTrustedProxyPredicate } from "./TrustedProxy";
 import { createIdleRouter, IdleService } from "./idle";
+import {
+  createPersistentWorldRouter,
+  PersistentWorldNotificationWorker,
+  PersistentWorldRepository,
+  PersistentWorldService,
+} from "./persistent";
 
 const playlist = new MapPlaylist();
 let lobbyService: MasterLobbyService;
@@ -29,6 +35,11 @@ const server = http.createServer(app);
 const log = logger.child({ comp: "m" });
 let idleService: IdleService | undefined;
 let idleRouter: ReturnType<typeof createIdleRouter> | undefined;
+let persistentWorldService: PersistentWorldService | undefined;
+let persistentWorldRouter:
+  ReturnType<typeof createPersistentWorldRouter> | undefined;
+let persistentWorldNotificationTimer: NodeJS.Timeout | undefined;
+let persistentWorldNotificationTickInFlight = false;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +76,24 @@ app.use(
   rateLimit({
     windowMs: 60_000,
     max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
+app.use(
+  "/api/worlds/session",
+  rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
+app.use(
+  "/api/worlds",
+  rateLimit({
+    windowMs: 60_000,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
   }),
@@ -128,8 +157,27 @@ app.use("/api/idle", (req, res, next) => {
   idleRouter(req, res, next);
 });
 
+// Durable invitation lobbies live on the master and remain separate from the
+// worker-owned ordinary OpenFront match lifecycle. Do not construct a normal
+// GameServer merely because an invitation reaches its scheduled start time.
+app.use("/api/worlds", (req, res, next) => {
+  if (!persistentWorldRouter) {
+    res.status(503).json({
+      error: {
+        code: "PERSISTENT_WORLDS_STARTING",
+        message: "Persistent-world service is starting",
+      },
+    });
+    return;
+  }
+  persistentWorldRouter(req, res, next);
+});
+
 app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
-  if (!req.path.startsWith("/api/idle")) {
+  if (
+    !req.path.startsWith("/api/idle") &&
+    !req.path.startsWith("/api/worlds")
+  ) {
     next(error);
     return;
   }
@@ -153,6 +201,55 @@ export async function startMaster() {
     adminToken: process.env.IDLE_ADMIN_TOKEN,
   });
   process.once("exit", () => idleService?.close());
+
+  const persistentWorldRepository = new PersistentWorldRepository({
+    dbPath: process.env.PERSISTENT_WORLD_DB_PATH,
+  });
+  persistentWorldService = new PersistentWorldService(
+    persistentWorldRepository,
+  );
+  persistentWorldService.activateDueWorlds();
+  persistentWorldService.startScheduler();
+  const persistentWorldNotificationWorker =
+    new PersistentWorldNotificationWorker(persistentWorldRepository, {
+      // In-app notices are delivered immediately by the same durable worker.
+      // Email jobs remain retryable until an operator-owned provider replaces
+      // this explicit unavailable sink; they are never marked delivered by a
+      // fake or console-only transport.
+      emailSink: {
+        async send() {
+          throw new Error("Persistent-world email delivery is not configured");
+        },
+      },
+    });
+  const runPersistentWorldNotifications = () => {
+    if (persistentWorldNotificationTickInFlight) return;
+    persistentWorldNotificationTickInFlight = true;
+    void persistentWorldNotificationWorker
+      .runDueBatch()
+      .catch((error) =>
+        log.error("Persistent-world notification worker failed", error),
+      )
+      .finally(() => {
+        persistentWorldNotificationTickInFlight = false;
+      });
+  };
+  runPersistentWorldNotifications();
+  persistentWorldNotificationTimer = setInterval(
+    runPersistentWorldNotifications,
+    5_000,
+  );
+  persistentWorldNotificationTimer.unref?.();
+  persistentWorldRouter = createPersistentWorldRouter(persistentWorldService, {
+    onInternalError: (error) =>
+      log.error("Persistent-world request failed", error),
+  });
+  process.once("exit", () => {
+    if (persistentWorldNotificationTimer) {
+      clearInterval(persistentWorldNotificationTimer);
+    }
+    persistentWorldService?.close();
+  });
   log.info(`Setting up ${ServerEnv.numWorkers()} workers...`);
 
   lobbyService = new MasterLobbyService(playlist, log);
@@ -211,7 +308,9 @@ export async function startMaster() {
 }
 
 app.get("/api/health", (_req, res) => {
-  const ready = lobbyService?.isHealthy() ?? false;
+  const ready =
+    (lobbyService?.isHealthy() ?? false) &&
+    persistentWorldService !== undefined;
   if (ready) {
     res.json({ status: "ok" });
   } else {

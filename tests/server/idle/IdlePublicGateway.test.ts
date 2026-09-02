@@ -8,7 +8,8 @@ interface GatewayModule {
   createPreviewGateway(options: {
     accessToken: string;
     origin: string;
-    staticDir: string;
+    staticDir?: string;
+    webOrigin?: string;
   }): http.Server;
 }
 
@@ -119,7 +120,7 @@ describe("idle public preview gateway", () => {
 
     const loginPage = await fetch(`${gatewayUrl}/__preview/login`);
     expect(loginPage.status).toBe(200);
-    expect(await loginPage.text()).toContain("Pressure Atlas");
+    expect(await loginPage.text()).toContain("IdleFront");
 
     const failedLogin = await fetch(`${gatewayUrl}/__preview/login`, {
       method: "POST",
@@ -153,7 +154,7 @@ describe("idle public preview gateway", () => {
       "frame-ancestors 'none'",
     );
     expect(game.headers.get("x-frame-options")).toBe("DENY");
-    expect(await game.text()).toContain("Pressure Atlas");
+    expect(await game.text()).toContain("IdleFront");
     expect(originRequests.some((request) => request.path === "/idle/")).toBe(
       false,
     );
@@ -247,5 +248,66 @@ describe("idle public preview gateway", () => {
 
     expect(status).toBe(400);
     expect(originRequests).toHaveLength(originCount);
+  });
+
+  it("can protect and proxy the current IdleFront web client", async () => {
+    const webRequests: Array<{ path: string; cookie?: string }> = [];
+    const webServer = http.createServer((req, res) => {
+      webRequests.push({
+        path: req.url ?? "/",
+        cookie:
+          typeof req.headers.cookie === "string"
+            ? req.headers.cookie
+            : undefined,
+      });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end("<title>Current IdleFront</title>");
+    });
+    const webUrl = await listen(webServer);
+    const moduleUrl = pathToFileURL(
+      resolve(process.cwd(), "scripts/idle-public-gateway.mjs"),
+    ).href;
+    const gatewayModule = (await import(moduleUrl)) as GatewayModule;
+    const webGateway = gatewayModule.createPreviewGateway({
+      accessToken: ACCESS_TOKEN,
+      origin: originUrl,
+      webOrigin: webUrl,
+    });
+    const webGatewayUrl = await listen(webGateway);
+
+    try {
+      const protectedResponse = await fetch(`${webGatewayUrl}/`, {
+        redirect: "manual",
+      });
+      expect(protectedResponse.status).toBe(302);
+      expect(protectedResponse.headers.get("location")).toBe(
+        "/__preview/login",
+      );
+
+      const login = await fetch(`${webGatewayUrl}/__preview/login`, {
+        method: "POST",
+        body: new URLSearchParams({ password: ACCESS_TOKEN }),
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        redirect: "manual",
+      });
+      expect(login.status).toBe(303);
+      expect(login.headers.get("location")).toBe("/");
+      const previewCookie = (login.headers.get("set-cookie") ?? "").split(
+        ";",
+        1,
+      )[0];
+
+      const currentClient = await fetch(`${webGatewayUrl}/?ui-lab=1`, {
+        headers: { cookie: `${previewCookie}; idlefront_session=player` },
+      });
+      expect(currentClient.status).toBe(200);
+      expect(await currentClient.text()).toContain("Current IdleFront");
+      expect(webRequests[webRequests.length - 1]).toEqual({
+        path: "/?ui-lab=1",
+        cookie: "idlefront_session=player",
+      });
+    } finally {
+      await Promise.all([close(webGateway), close(webServer)]);
+    }
   });
 });

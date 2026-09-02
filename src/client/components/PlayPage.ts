@@ -15,8 +15,8 @@ export class PlayPage extends LitElement {
         <rewards-modal class="absolute"></rewards-modal>
 
         <div class="atlas-title-stage">
-          <section class="atlas-launch-console" aria-label="Pressure Atlas">
-            <h1 class="sr-only">Pressure Atlas</h1>
+          <section class="atlas-launch-console" aria-label="IdleFront">
+            <h1 class="sr-only">IdleFront</h1>
             <div class="atlas-app-identity" aria-hidden="true">
               <product-wordmark compact></product-wordmark>
             </div>

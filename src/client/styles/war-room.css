@@ -38,8 +38,122 @@
   --war-spring: cubic-bezier(0.18, 0.86, 0.24, 1.08);
   --war-ease: cubic-bezier(0.2, 0.72, 0.2, 1);
   --war-mahogany-texture: url("/resources/images/ui/materials/mahogany@2x.webp");
-  --war-felt-texture: url("/resources/images/ui/materials/felt@2x.webp");
+  --war-felt-texture: url("/resources/images/ui/materials/felt@4x.webp");
+  --war-leather-texture: url("/resources/images/ui/materials/leather@4x.webp");
   --war-parchment-texture: url("/resources/images/ui/materials/parchment@2x.webp");
+  /* Each stone face is twice as tall as its control. Resting controls expose
+   * the upper, top-lit half; a press slides smoothly to the lower, up-lit
+   * half. This gives the lighting a physical inversion without animating an
+   * expensive filter or replacing the gradient mid-gesture. */
+  --war-gem-amethyst-face: linear-gradient(
+    180deg,
+    #f4eaff 0%,
+    #cbb4e8 8%,
+    #8867aa 23%,
+    #4c2d67 39%,
+    #21112f 49.75%,
+    #21112f 50.25%,
+    #4c2d67 62%,
+    #8867aa 77%,
+    #cbb4e8 92%,
+    #f4eaff 100%
+  );
+  --war-gem-amethyst-inclusions:
+    radial-gradient(
+      ellipse at 77% 78%,
+      rgb(217 177 255 / 0.2),
+      transparent 34%
+    ),
+    linear-gradient(
+      116deg,
+      transparent 0 31%,
+      rgb(244 225 255 / 0.13) 31.5%,
+      transparent 32.5% 67%,
+      rgb(23 8 38 / 0.18) 68%,
+      transparent 69%
+    );
+  --war-gem-quartz-face: linear-gradient(
+    180deg,
+    #fff 0%,
+    #f3eef4 9%,
+    #d7d0da 23%,
+    #aaa3ae 39%,
+    #6e6873 49.75%,
+    #6e6873 50.25%,
+    #aaa3ae 62%,
+    #d7d0da 77%,
+    #f3eef4 91%,
+    #fff 100%
+  );
+  --war-gem-quartz-inclusions:
+    radial-gradient(
+      ellipse at 22% 15%,
+      rgb(255 255 255 / 0.72),
+      transparent 30%
+    ),
+    linear-gradient(
+      128deg,
+      transparent 0 42%,
+      rgb(91 80 103 / 0.13) 42.6%,
+      rgb(255 255 255 / 0.2) 43.1%,
+      transparent 44% 73%,
+      rgb(126 107 139 / 0.1) 73.5%,
+      transparent 74.2%
+    );
+  --war-gem-ruby-face: linear-gradient(
+    180deg,
+    #ffd6db 0%,
+    #e77d8d 8%,
+    #b51c3b 23%,
+    #75091f 39%,
+    #3a0310 49.75%,
+    #3a0310 50.25%,
+    #75091f 62%,
+    #b51c3b 77%,
+    #e77d8d 92%,
+    #ffd6db 100%
+  );
+  --war-gem-ruby-inclusions:
+    radial-gradient(
+      circle at 74% 70%,
+      rgb(255 102 125 / 0.19),
+      transparent 28%
+    ),
+    linear-gradient(
+      104deg,
+      transparent 0 23%,
+      rgb(255 221 226 / 0.13) 23.5%,
+      transparent 24.2% 62%,
+      rgb(39 0 7 / 0.2) 63%,
+      transparent 64%
+    );
+  --war-gem-citrine-face: linear-gradient(
+    180deg,
+    #fff8cf 0%,
+    #f0d685 8%,
+    #c89532 23%,
+    #805011 39%,
+    #432604 49.75%,
+    #432604 50.25%,
+    #805011 62%,
+    #c89532 77%,
+    #f0d685 92%,
+    #fff8cf 100%
+  );
+  --war-gem-citrine-inclusions:
+    radial-gradient(
+      ellipse at 68% 72%,
+      rgb(255 232 145 / 0.22),
+      transparent 34%
+    ),
+    linear-gradient(
+      121deg,
+      transparent 0 34%,
+      rgb(255 250 209 / 0.15) 34.5%,
+      transparent 35.4% 71%,
+      rgb(92 48 1 / 0.16) 72%,
+      transparent 73%
+    );
   --war-brass-edge: linear-gradient(
     180deg,
     #fff4b7 0%,
@@ -212,44 +326,110 @@ atlas-surface {
 .atlas-war-button,
 .atlas-action-button,
 body.atlas-theme :where(.start-game-button, o-button button) {
+  --war-control-face: var(--war-gem-citrine-face);
+  --war-control-inclusions: var(--war-gem-citrine-inclusions);
+  --war-control-border: #63420d;
+  --war-control-lip: #4b2b07;
+  --war-control-ink: #281604;
+  --war-control-print-dark: rgb(48 25 1 / 0.28);
+  --war-control-print-light: rgb(255 248 203 / 0.68);
   position: relative;
+  isolation: isolate;
   min-height: 44px;
   overflow: hidden;
-  border: 1px solid #493009 !important;
+  border: 1px solid var(--war-control-border) !important;
+  border-bottom-width: 3px !important;
   border-radius: var(--war-radius-sm) !important;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.56) 0 3%, transparent 4%),
-    linear-gradient(180deg, #ffe899 0%, #dbaa4d 47%, #96631c 52%, #c99637 100%) !important;
+  background-image:
+    radial-gradient(
+      ellipse at 48% -5%,
+      rgb(255 255 255 / 0.46),
+      transparent 48%
+    ),
+    var(--war-control-face) !important;
+  background-position:
+    center top,
+    center top !important;
+  background-size:
+    100% 100%,
+    100% 200% !important;
   padding: 0.68rem 1rem;
-  color: #281604 !important;
+  color: var(--war-control-ink) !important;
   font-family: var(--war-font);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.045em;
-  text-shadow: 0 1px rgb(255 248 203 / 0.7);
+  text-shadow:
+    0 -1px var(--war-control-print-dark),
+    0 1px var(--war-control-print-light) !important;
   box-shadow:
-    var(--war-shadow-control),
-    0 0 0 1px rgb(255 228 132 / 0.24) !important;
+    inset 0 1px rgb(255 255 255 / 0.88),
+    inset 0 4px 5px rgb(255 255 255 / 0.12),
+    inset 0 -7px 10px rgb(0 0 0 / 0.27),
+    inset 0 -1px rgb(0 0 0 / 0.58),
+    0 2px 0 var(--war-control-lip),
+    0 6px 13px rgb(0 0 0 / 0.44),
+    0 0 0 1px rgb(255 255 255 / 0.12) !important;
   transform: translateZ(0);
   transition:
-    transform var(--war-motion-fast) ease,
-    filter var(--war-motion-fast) ease,
-    box-shadow var(--war-motion-fast) ease !important;
+    background-position 190ms var(--war-ease),
+    transform 130ms var(--war-ease),
+    filter 130ms ease,
+    box-shadow 160ms var(--war-ease) !important;
 }
 
 .atlas-war-button::before,
 .atlas-action-button::before,
 body.atlas-theme :where(.start-game-button, o-button button)::before {
   position: absolute;
-  inset: 1px 2px 54%;
-  border-radius: 5px 5px 42% 42%;
-  background: linear-gradient(
-    180deg,
-    rgb(255 255 255 / 0.36),
-    rgb(255 255 255 / 0.04)
-  );
+  z-index: 3;
+  inset: 1px 2px 40%;
+  border-bottom: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 5px 5px 46% 46%;
+  background:
+    radial-gradient(
+      ellipse at 52% -16%,
+      rgb(255 255 255 / 0.84),
+      transparent 49%
+    ),
+    linear-gradient(180deg, rgb(255 255 255 / 0.58), rgb(255 255 255 / 0.08));
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.72);
   content: "";
+  opacity: 0.88;
   pointer-events: none;
+  transform-origin: 50% 0;
+  transition:
+    opacity 130ms ease,
+    transform 190ms var(--war-ease);
+}
+
+.atlas-war-button::after,
+.atlas-action-button::after,
+body.atlas-theme :where(.start-game-button, o-button button)::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  background-image: var(--war-control-inclusions), var(--war-leather-texture);
+  background-position: center;
+  background-size:
+    auto,
+    auto,
+    184px 184px;
+  background-blend-mode: screen, soft-light, soft-light;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.13),
+    inset 0 -2px 3px rgb(255 255 255 / 0.05);
+  content: "";
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.atlas-war-button > *,
+.atlas-action-button > *,
+body.atlas-theme :where(.start-game-button, o-button button) > * {
+  position: relative;
+  z-index: 2;
 }
 
 .atlas-war-button:hover:not(:disabled),
@@ -264,32 +444,46 @@ body.atlas-theme
 .atlas-action-button:active:not(:disabled),
 body.atlas-theme
   :where(.start-game-button, o-button button):active:not(:disabled) {
-  filter: brightness(0.88);
+  background-position:
+    center bottom,
+    center bottom !important;
+  filter: brightness(0.9) saturate(1.04);
   box-shadow:
-    inset 0 3px 8px rgb(0 0 0 / 0.48),
+    inset 0 6px 12px rgb(0 0 0 / 0.46),
+    inset 0 -2px 4px rgb(255 255 255 / 0.13),
     0 1px 2px rgb(0 0 0 / 0.5) !important;
   transform: translateY(2px) scale(0.995) !important;
+}
+
+.atlas-war-button:active:not(:disabled)::before,
+.atlas-action-button:active:not(:disabled)::before,
+body.atlas-theme
+  :where(.start-game-button, o-button button):active:not(:disabled)::before {
+  opacity: 0.5;
+  transform: translateY(58%) scaleY(-0.76);
 }
 
 .atlas-war-button--secondary,
 body.atlas-theme o-button button[data-variant="secondary"],
 body.atlas-theme o-button button[data-variant="ghost"] {
-  border-color: #20272a !important;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.52) 0 3%, transparent 4%),
-    linear-gradient(180deg, #e6eaec, #929da2 48%, #4a5357 52%, #879195) !important;
-  color: #111719 !important;
-  text-shadow: 0 1px rgb(255 255 255 / 0.72) !important;
+  --war-control-face: var(--war-gem-quartz-face);
+  --war-control-inclusions: var(--war-gem-quartz-inclusions);
+  --war-control-border: #56505d;
+  --war-control-lip: #39343e;
+  --war-control-ink: #211d25;
+  --war-control-print-dark: rgb(31 26 35 / 0.24);
+  --war-control-print-light: rgb(255 255 255 / 0.72);
 }
 
 .atlas-war-button--danger,
 body.atlas-theme o-button button[data-variant="danger"] {
-  border-color: #55140e !important;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.35) 0 3%, transparent 4%),
-    linear-gradient(180deg, #ef9a83, #c34c3d 48%, #70231c 52%, #a5382e) !important;
-  color: #fff4e7 !important;
-  text-shadow: 0 -1px rgb(69 8 5 / 0.75) !important;
+  --war-control-face: var(--war-gem-ruby-face);
+  --war-control-inclusions: var(--war-gem-ruby-inclusions);
+  --war-control-border: #6b0a20;
+  --war-control-lip: #430511;
+  --war-control-ink: #fff3ee;
+  --war-control-print-dark: rgb(52 0 10 / 0.88);
+  --war-control-print-light: rgb(255 199 207 / 0.25);
 }
 
 .atlas-war-button:disabled,
@@ -942,11 +1136,13 @@ body.atlas-theme:not(.in-game) .atlas-main-scroll {
 }
 
 .atlas-action-button--primary {
-  border-color: #765014 !important;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.58) 0 3%, transparent 4%),
-    linear-gradient(180deg, #fff0ad 0%, #d9aa4e 47%, #92601c 52%, #c79338 100%) !important;
-  color: #281604 !important;
+  --war-control-face: var(--war-gem-amethyst-face);
+  --war-control-inclusions: var(--war-gem-amethyst-inclusions);
+  --war-control-border: #4c2863;
+  --war-control-lip: #281436;
+  --war-control-ink: #fff7ff;
+  --war-control-print-dark: rgb(24 5 34 / 0.9);
+  --war-control-print-light: rgb(227 200 255 / 0.25);
 }
 
 .atlas-lobby-card {
@@ -1545,6 +1741,29 @@ body.atlas-theme .modal-overlay > div {
 /* Match HUD: pristine executive instruments                                  */
 /* -------------------------------------------------------------------------- */
 
+body.atlas-theme.in-game {
+  --atlas-board-safe-top: max(
+    1px,
+    env(safe-area-inset-top),
+    var(--native-safe-top, 0px)
+  );
+  --atlas-board-safe-right: max(
+    1px,
+    env(safe-area-inset-right),
+    var(--native-safe-right, 0px)
+  );
+  --atlas-board-safe-bottom: max(
+    1px,
+    env(safe-area-inset-bottom),
+    var(--native-safe-bottom, 0px)
+  );
+  --atlas-board-safe-left: max(
+    1px,
+    env(safe-area-inset-left),
+    var(--native-safe-left, 0px)
+  );
+}
+
 atlas-map-bezel {
   position: fixed;
   inset: 0;
@@ -1557,16 +1776,106 @@ body.in-game atlas-map-bezel {
   display: block;
 }
 
+body.atlas-theme.in-game > atlas-map-bezel {
+  contain: layout paint;
+}
+
+atlas-map-bezel,
+atlas-map-bezel *,
+atlas-map-bezel *::before,
+atlas-map-bezel *::after {
+  pointer-events: none !important;
+}
+
 .atlas-map-bezel__edge {
   position: absolute;
-  inset: max(1px, env(safe-area-inset-top)) max(1px, env(safe-area-inset-right))
-    max(1px, env(safe-area-inset-bottom)) max(1px, env(safe-area-inset-left));
+  inset: var(--atlas-board-safe-top) var(--atlas-board-safe-right)
+    var(--atlas-board-safe-bottom) var(--atlas-board-safe-left);
+  overflow: hidden;
   border: 3px solid transparent;
   border-image: var(--war-brass-edge) 3;
   box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 0.8),
-    inset 0 0 8px rgb(0 0 0 / 0.64),
-    0 0 0 1px #f4d77d;
+    inset 0 0 0 1px rgb(255 237 174 / 0.5),
+    inset 0 0 0 3px rgb(31 14 7 / 0.88),
+    inset 0 0 11px rgb(0 0 0 / 0.72),
+    0 0 0 1px #f4d77d,
+    0 0 0 2px rgb(52 29 8 / 0.9);
+}
+
+.atlas-map-bezel__edge::before {
+  position: absolute;
+  inset: 0;
+  background:
+    var(--war-mahogany-texture) top left / 100% 7px no-repeat,
+    var(--war-mahogany-texture) bottom left / 100% 7px no-repeat,
+    var(--war-mahogany-texture) top left / 7px 100% no-repeat,
+    var(--war-mahogany-texture) top right / 7px 100% no-repeat;
+  box-shadow:
+    inset 0 7px 4px -5px rgb(255 225 148 / 0.2),
+    inset 0 -7px 4px -5px rgb(0 0 0 / 0.68),
+    inset 7px 0 4px -5px rgb(255 225 148 / 0.14),
+    inset -7px 0 4px -5px rgb(0 0 0 / 0.62);
+  content: "";
+}
+
+.atlas-map-bezel__edge::after {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgb(247 220 143 / 0.42);
+  background:
+    radial-gradient(
+        circle,
+        #f9dc83 0 18%,
+        #76501a 22% 38%,
+        #211308 42% 55%,
+        transparent 58%
+      )
+      top left / 12px 12px no-repeat,
+    radial-gradient(
+        circle,
+        #f9dc83 0 18%,
+        #76501a 22% 38%,
+        #211308 42% 55%,
+        transparent 58%
+      )
+      top right / 12px 12px no-repeat,
+    radial-gradient(
+        circle,
+        #f9dc83 0 18%,
+        #76501a 22% 38%,
+        #211308 42% 55%,
+        transparent 58%
+      )
+      bottom left / 12px 12px no-repeat,
+    radial-gradient(
+        circle,
+        #f9dc83 0 18%,
+        #76501a 22% 38%,
+        #211308 42% 55%,
+        transparent 58%
+      )
+      bottom right / 12px 12px no-repeat;
+  box-shadow:
+    0 0 0 1px rgb(19 10 5 / 0.88),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  content: "";
+}
+
+body.atlas-theme.in-game
+  > atlas-game-hud
+  :where(.atlas-hud-corner-stack, game-left-sidebar > aside) {
+  top: max(0.35rem, var(--atlas-board-safe-top));
+}
+
+body.atlas-theme.in-game > atlas-game-hud .atlas-hud-corner-stack {
+  right: max(0.35rem, var(--atlas-board-safe-right));
+}
+
+body.atlas-theme.in-game > atlas-game-hud game-left-sidebar > aside {
+  left: max(0.35rem, var(--atlas-board-safe-left));
+  max-height: calc(
+    100dvh - var(--atlas-board-safe-top) - var(--atlas-board-safe-bottom) - 5rem
+  );
 }
 
 body.atlas-theme.in-game .atlas-hud-dock {
@@ -1851,7 +2160,7 @@ body.atlas-ui-lab-active > :not(atlas-ui-lab) {
 }
 
 body.atlas-ui-lab-active {
-  overflow: auto !important;
+  overflow: hidden !important;
   background:
     radial-gradient(circle at 50% 0%, rgb(255 222 137 / 0.12), transparent 34%),
     var(--war-mahogany-texture), var(--war-mahogany-deep) !important;
@@ -1860,24 +2169,40 @@ body.atlas-ui-lab-active {
 atlas-ui-lab {
   display: block;
   width: 100%;
-  min-height: 100dvh;
-  overflow: auto;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .atlas-ui-lab {
-  width: min(1180px, calc(100% - 2rem));
+  box-sizing: border-box;
+  display: grid;
+  width: min(1280px, 100%);
+  height: 100dvh;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(0.6rem, 1.5vw, 0.95rem);
   margin: 0 auto;
-  padding: 2rem 0 5rem;
+  padding: max(0.7rem, env(safe-area-inset-top))
+    max(0.7rem, env(safe-area-inset-right))
+    max(0.7rem, env(safe-area-inset-bottom))
+    max(0.7rem, env(safe-area-inset-left));
+  overflow: hidden;
 }
 
 .atlas-ui-lab__header {
-  margin-bottom: 1.4rem;
-  border: 3px solid #a87526;
-  border-radius: var(--war-radius-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.12rem 1rem;
+  min-width: 0;
+  margin: 0;
+  border: 2px solid #a87526;
+  border-radius: 16px;
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 28%),
     var(--war-felt-texture), var(--war-felt-deep);
-  padding: clamp(1.4rem, 4vw, 3rem);
+  padding: clamp(0.7rem, 1.4vw, 1rem) clamp(0.85rem, 2vw, 1.35rem);
   color: #fff1bd;
   box-shadow: var(--war-shadow-raised);
 }
@@ -1885,30 +2210,67 @@ atlas-ui-lab {
 .atlas-ui-lab__header :where(p, span) {
   margin: 0;
   color: #c5b481;
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .atlas-ui-lab__header h1 {
-  margin: 0.6rem 0;
-  font-size: clamp(1.8rem, 5vw, 3.8rem);
-  line-height: 0.95;
+  overflow: hidden;
+  margin: 0.28rem 0 0;
+  font-size: clamp(1.25rem, 2.7vw, 2.2rem);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-ui-lab__header > span {
+  padding-bottom: 0.12rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.atlas-ui-lab__eyebrow {
+  grid-column: 1 / -1;
+}
+
+.atlas-ui-lab__workspace {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.35fr) minmax(21rem, 0.8fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: clamp(0.6rem, 1.3vw, 0.9rem);
+  overflow: hidden;
 }
 
 .atlas-ui-lab__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+  grid-row: 1 / span 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.45rem, 1vw, 0.7rem);
+  overflow: hidden;
+}
+
+.atlas-ui-lab__grid atlas-surface {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .atlas-ui-lab__sample {
   display: grid;
-  min-height: 152px;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
   align-content: end;
   gap: 0.34rem;
-  padding: 1rem;
+  padding: clamp(0.65rem, 1.4vw, 0.9rem);
 }
 
 .atlas-ui-lab__sample small {
@@ -1924,22 +2286,44 @@ atlas-ui-lab {
 
 .atlas-ui-lab__controls,
 .atlas-ui-lab__gauges {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
   align-items: center;
-  gap: 1rem;
-  margin-top: 1.25rem;
+  gap: clamp(0.5rem, 1vw, 0.75rem);
+  margin: 0;
   border: 2px solid #986521;
   border-radius: var(--war-radius-lg);
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 24%),
     var(--war-mahogany-texture), var(--war-mahogany-deep);
-  padding: 1.35rem;
+  padding: clamp(0.65rem, 1.3vw, 1rem);
   box-shadow: var(--war-shadow-raised);
 }
 
+.atlas-ui-lab__controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  overflow: hidden;
+}
+
+.atlas-ui-lab__controls .atlas-war-button {
+  width: 100%;
+}
+
+.atlas-ui-lab__gauges {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.atlas-ui-lab__gauges .atlas-gauge {
+  width: clamp(82px, 8vw, 108px);
+  border-width: 5px;
+}
+
 .atlas-ui-lab__controls .atlas-war-field {
-  min-width: min(100%, 220px);
+  width: 100%;
+  min-width: 0;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1963,7 +2347,10 @@ atlas-ui-lab {
 }
 
 .atlas-flourish--deploy::before {
-  inset: -25vmax;
+  top: var(--atlas-flourish-y, 50%);
+  left: var(--atlas-flourish-x, 50%);
+  width: 200vmax;
+  height: 200vmax;
   border: 3px solid #f6d779;
   border-radius: 50%;
   background: radial-gradient(
@@ -1976,9 +2363,9 @@ atlas-ui-lab {
 }
 
 .atlas-flourish--deploy::after {
-  top: 50%;
-  right: -15%;
-  left: -15%;
+  top: var(--atlas-flourish-y, 50%);
+  left: var(--atlas-flourish-x, 50%);
+  width: min(42rem, 94vw);
   height: 2px;
   background: linear-gradient(90deg, transparent, #fff4b2 26% 74%, transparent);
   box-shadow: 0 0 14px #d7a948;
@@ -1986,8 +2373,8 @@ atlas-ui-lab {
 }
 
 .atlas-flourish--deploy > i {
-  top: 50%;
-  left: 50%;
+  top: var(--atlas-flourish-y, 50%);
+  left: var(--atlas-flourish-x, 50%);
   width: 7rem;
   height: 7rem;
   border: 1px solid rgb(255 235 167 / 0.8);
@@ -2006,7 +2393,7 @@ atlas-ui-lab {
 @keyframes atlas-deploy-iris {
   0% {
     opacity: 0;
-    transform: scale(0.08);
+    transform: translate(-50%, -50%) scale(0.08);
   }
 
   32% {
@@ -2015,24 +2402,24 @@ atlas-ui-lab {
 
   100% {
     opacity: 0;
-    transform: scale(1.15);
+    transform: translate(-50%, -50%) scale(1.15);
   }
 }
 
 @keyframes atlas-deploy-line {
   0% {
     opacity: 0;
-    transform: scaleX(0) rotate(-3deg);
+    transform: translate(-50%, -50%) scaleX(0) rotate(-3deg);
   }
 
   44% {
     opacity: 0.9;
-    transform: scaleX(1) rotate(0);
+    transform: translate(-50%, -50%) scaleX(1) rotate(0);
   }
 
   100% {
     opacity: 0;
-    transform: scaleX(1) rotate(0);
+    transform: translate(-50%, -50%) scaleX(1) rotate(0);
   }
 }
 
@@ -2183,6 +2570,31 @@ body[data-ui-fidelity="static"] *::after {
   .atlas-ui-lab__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .atlas-ui-lab__workspace {
+    display: flex;
+    gap: 0.65rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .atlas-ui-lab__workspace::-webkit-scrollbar {
+    display: none;
+  }
+
+  .atlas-ui-lab__workspace > section {
+    flex: 0 0 100%;
+    height: 100%;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+
+  .atlas-ui-lab__controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 639px) {
@@ -2201,16 +2613,42 @@ body[data-ui-fidelity="static"] *::after {
   }
 
   .atlas-ui-lab__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .atlas-ui-lab__gauges {
-    justify-content: center;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .atlas-ui-lab__header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .atlas-ui-lab__header > span {
+    display: none;
+  }
+
+  .atlas-ui-lab__header h1 {
+    font-size: clamp(1.05rem, 5.5vw, 1.45rem);
+  }
+
+  .atlas-ui-lab__sample {
+    padding: 0.55rem;
+  }
+
+  .atlas-ui-lab__sample span {
+    display: none;
+  }
+
+  .atlas-ui-lab__gauges .atlas-gauge {
+    width: clamp(78px, 25vw, 104px);
   }
 
   .atlas-title-stage {
-    padding: calc(3.75rem + env(safe-area-inset-top)) 0.5rem
-      max(0.5rem, env(safe-area-inset-bottom));
+    padding: calc(3.75rem + var(--atlas-safe-top, 0px))
+      max(0.5rem, var(--atlas-safe-right, 0px))
+      max(0.5rem, var(--atlas-safe-bottom, 0px))
+      max(0.5rem, var(--atlas-safe-left, 0px));
   }
 
   .atlas-title-stage .atlas-launch-console {
@@ -2326,7 +2764,7 @@ body[data-ui-fidelity="static"] *::after {
 
 @media (max-height: 680px) and (max-width: 1023px) {
   .atlas-title-stage {
-    padding-top: calc(3.65rem + env(safe-area-inset-top));
+    padding-top: calc(3.65rem + var(--atlas-safe-top, 0px));
   }
 
   .atlas-title-stage .atlas-launch-console {
@@ -2506,6 +2944,7 @@ body[data-page="page-play"] > footer {
 
 .atlas-quick-play {
   position: relative;
+  isolation: isolate;
   display: grid;
   width: 100%;
   min-height: 4.4rem;
@@ -2513,33 +2952,99 @@ body[data-page="page-play"] > footer {
   align-items: center;
   gap: 0.75rem;
   overflow: hidden;
-  border: 1px solid #244b3b;
+  border: 1px solid #4a2860;
+  border-bottom-width: 3px;
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.54) 0 3%, transparent 4%),
-    linear-gradient(180deg, #bce0c8 0%, #68a67f 47%, #285b41 52%, #468060 100%);
+  background-image:
+    radial-gradient(
+      ellipse at 48% -5%,
+      rgb(255 255 255 / 0.5),
+      transparent 48%
+    ),
+    var(--war-gem-amethyst-face);
+  background-position:
+    center top,
+    center top;
+  background-size:
+    100% 100%,
+    100% 200%;
   padding: 0.68rem 0.85rem;
-  color: #0b2117;
+  color: #fff8ff;
+  cursor: pointer;
   text-align: left;
-  text-shadow: 0 1px rgb(255 255 255 / 0.55);
+  text-shadow:
+    0 -1px rgb(24 5 34 / 0.88),
+    0 1px rgb(231 205 255 / 0.24);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   box-shadow:
-    inset 0 1px rgb(255 255 255 / 0.7),
-    inset 0 -2px 4px rgb(0 0 0 / 0.24),
-    0 5px 12px rgb(0 0 0 / 0.42),
-    0 0 0 1px rgb(195 243 211 / 0.18);
+    inset 0 1px rgb(255 255 255 / 0.86),
+    inset 0 5px 6px rgb(255 255 255 / 0.12),
+    inset 0 -9px 12px rgb(12 2 19 / 0.32),
+    inset 0 -1px rgb(8 1 13 / 0.68),
+    0 2px 0 #281436,
+    0 7px 15px rgb(0 0 0 / 0.47),
+    0 0 0 1px rgb(224 193 255 / 0.18);
   transition:
-    transform 120ms ease,
-    filter 120ms ease,
-    box-shadow 120ms ease;
+    background-position 210ms var(--war-ease),
+    transform 130ms var(--war-ease),
+    filter 130ms ease,
+    box-shadow 170ms var(--war-ease);
 }
 
 .atlas-quick-play::before {
   position: absolute;
-  inset: 1px 2px 52%;
-  border-radius: 12px 12px 45% 45%;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.3), transparent);
+  z-index: 3;
+  inset: 1px 2px 39%;
+  border-bottom: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 12px 12px 44% 44%;
+  background:
+    radial-gradient(
+      ellipse at 54% -18%,
+      rgb(255 255 255 / 0.86),
+      transparent 48%
+    ),
+    linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.64),
+      rgb(255 255 255 / 0.18) 46%,
+      transparent
+    );
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.72),
+    0 1px rgb(22 4 33 / 0.18);
   content: "";
+  opacity: 0.88;
   pointer-events: none;
+  transform-origin: 50% 0;
+  transition:
+    opacity 120ms ease,
+    transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.atlas-quick-play::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--war-gem-amethyst-inclusions), var(--war-leather-texture);
+  background-position: center, center, center, center;
+  background-size:
+    auto,
+    auto,
+    210px 210px;
+  background-blend-mode: screen, soft-light, soft-light;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.15),
+    inset 0 -2px 3px rgb(184 239 201 / 0.07);
+  content: "";
+  opacity: 0.46;
+  pointer-events: none;
+}
+
+.atlas-quick-play > * {
+  position: relative;
+  z-index: 2;
 }
 
 .atlas-quick-play:hover:not(:disabled),
@@ -2548,12 +3053,36 @@ body[data-page="page-play"] > footer {
   transform: translateY(-1px);
 }
 
+.atlas-quick-play:focus-visible {
+  outline: 2px solid rgb(255 226 132 / 0.9);
+  outline-offset: 3px;
+}
+
+.atlas-quick-play:hover:not(:disabled)::before,
+.atlas-quick-play:focus-visible:not(:disabled)::before {
+  opacity: 1;
+  transform: translate3d(0, -1px, 0) scaleY(1.045);
+}
+
 .atlas-quick-play:active:not(:disabled) {
-  filter: brightness(0.9);
+  background-position:
+    center bottom,
+    center bottom;
+  filter: brightness(0.9) saturate(1.05);
   transform: translateY(2px) scale(0.995);
   box-shadow:
-    inset 0 4px 10px rgb(0 0 0 / 0.34),
+    inset 0 6px 13px rgb(0 0 0 / 0.44),
+    inset 0 1px rgb(0 0 0 / 0.42),
     0 1px 2px rgb(0 0 0 / 0.42);
+}
+
+.atlas-quick-play:active:not(:disabled)::before {
+  opacity: 0.52;
+  transform: translateY(58%) scaleY(-0.76);
+}
+
+.atlas-quick-play:active:not(:disabled) > * {
+  transform: translateY(1px);
 }
 
 .atlas-quick-play.is-disabled {
@@ -2566,15 +3095,42 @@ body[data-page="page-play"] > footer {
   width: 2.65rem;
   height: 2.65rem;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 0.35);
+  border: 1px solid rgb(237 214 255 / 0.34);
   border-radius: 10px;
-  background: rgb(7 37 26 / 0.78);
-  color: #f0f7e8;
+  background:
+    radial-gradient(
+      circle at 42% 28%,
+      rgb(255 255 255 / 0.22),
+      transparent 30%
+    ),
+    linear-gradient(180deg, rgb(60 31 83 / 0.96), rgb(21 9 32 / 0.98));
+  color: #fbf2ff;
   font-size: 1rem;
   text-shadow: 0 1px 2px #000;
   box-shadow:
-    inset 0 2px 4px rgb(0 0 0 / 0.42),
-    0 1px rgb(255 255 255 / 0.34);
+    inset 0 0 0 2px rgb(13 3 20 / 0.42),
+    inset 0 3px 6px rgb(0 0 0 / 0.52),
+    inset 0 1px rgb(255 255 255 / 0.16),
+    0 1px rgb(255 255 255 / 0.38),
+    0 3px 5px rgb(0 0 0 / 0.28);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.25, 1.25),
+    box-shadow 120ms ease;
+}
+
+.atlas-quick-play:hover:not(:disabled) .atlas-quick-play__icon,
+.atlas-quick-play:focus-visible:not(:disabled) .atlas-quick-play__icon {
+  transform: translateY(-1px) scale(1.025);
+  box-shadow:
+    inset 0 0 0 2px rgb(13 3 20 / 0.34),
+    inset 0 3px 6px rgb(0 0 0 / 0.48),
+    inset 0 1px rgb(255 255 255 / 0.24),
+    0 1px rgb(255 255 255 / 0.5),
+    0 4px 7px rgb(0 0 0 / 0.32);
+}
+
+.atlas-quick-play:active:not(:disabled) .atlas-quick-play__icon {
+  transform: translateY(1px) scale(0.96);
 }
 
 .atlas-quick-play__copy {
@@ -2586,17 +3142,30 @@ body[data-page="page-play"] > footer {
 .atlas-quick-play__copy strong {
   font-size: 1.08rem;
   letter-spacing: -0.015em;
+  text-shadow:
+    0 -1px rgb(19 4 29 / 0.92),
+    0 1px rgb(230 205 255 / 0.24);
 }
 
 .atlas-quick-play__copy small {
   font-size: 0.7rem;
   font-weight: 650;
   opacity: 0.68;
+  text-shadow:
+    0 -1px rgb(19 4 29 / 0.82),
+    0 1px rgb(230 205 255 / 0.2);
 }
 
 .atlas-quick-play__chevron {
   width: 1.2rem;
   height: 1.2rem;
+  filter: drop-shadow(0 1px rgb(255 255 255 / 0.3));
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.25, 1.25);
+}
+
+.atlas-quick-play:hover:not(:disabled) .atlas-quick-play__chevron,
+.atlas-quick-play:focus-visible:not(:disabled) .atlas-quick-play__chevron {
+  transform: translateX(2px);
 }
 
 .atlas-quick-play .atlas-loading-ring {

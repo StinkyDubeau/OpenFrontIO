@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>Pressure Atlas — Persistent Strategy</title>
+    <title>IdleFront — Persistent Strategy</title>
     <link rel="manifest" href="<%- manifestHref %>" />
     <link rel="icon" type="image/svg+xml" href="<%- faviconHref %>" />
 
@@ -18,40 +18,25 @@
         transition: opacity 0.5s ease-out;
       }
 
-      /* iOS safe area support */
-      body {
-        padding-top: max(env(safe-area-inset-top), var(--native-safe-top, 0px));
-        padding-right: max(
+      /* Resolve each native/browser inset once. Individual full-screen scenes
+         consume these variables; the body itself must remain edge-to-edge. */
+      :root {
+        --atlas-safe-top: max(
+          env(safe-area-inset-top),
+          var(--native-safe-top, 0px)
+        );
+        --atlas-safe-right: max(
           env(safe-area-inset-right),
           var(--native-safe-right, 0px)
         );
-        padding-bottom: max(
+        --atlas-safe-bottom: max(
           env(safe-area-inset-bottom),
           var(--native-safe-bottom, 0px)
         );
-        padding-left: max(
+        --atlas-safe-left: max(
           env(safe-area-inset-left),
           var(--native-safe-left, 0px)
         );
-      }
-
-      /* Prevent Playwire bottom rail from affecting flex layout,
-         and keep it below the bottom HUD (z-[200]) so it can't cover the control panel */
-      [id^="pw-oop-bottom_rail"] {
-        position: fixed !important;
-        z-index: 150 !important;
-      }
-
-      /* Google Funding Choices CCPA link override */
-      .fc-dns-link,
-      .fc-ccpa-root,
-      .fc-consent-root {
-        position: fixed !important;
-        z-index: 999999 !important;
-      }
-      .fc-dns-link {
-        bottom: 15px !important;
-        left: 15px !important;
       }
 
       /* Ensure full viewport height on iOS */
@@ -74,14 +59,15 @@
     <!-- SEO -->
     <meta
       name="description"
-      content="Pressure Atlas is a persistent multiplayer strategy game played on a living world map."
+      content="IdleFront is a persistent multiplayer strategy game played on a living world map."
     />
+    <meta name="application-name" content="IdleFront" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="Pressure Atlas" />
+    <meta property="og:title" content="IdleFront" />
     <meta
       property="og:description"
-      content="Enter a persistent strategic world where territory moves and pressure remains."
+      content="Return to a persistent strategic world where every decision remains."
     />
     <meta property="og:image" content="<%- gameplayScreenshotUrl %>" />
     <meta property="og:type" content="game" />
@@ -104,66 +90,17 @@
       );
     </script>
 
-    <!-- CrazyGames SDK -->
-    <script
-      src="https://sdk.crazygames.com/crazygames-sdk-v3.js"
-      async
-    ></script>
-
     <!-- Cloudflare Turnstile -->
     <script
       src="https://challenges.cloudflare.com/turnstile/v0/api.js"
       async
       defer
     ></script>
-
-    <script data-cfasync="false">
-      window.ramp = window.ramp || {};
-      window.ramp.que = window.ramp.que || [];
-      window.ramp.passiveMode = true;
-    </script>
-
-    <script>
-      window.googletag = window.googletag || { cmd: [] };
-      googletag.cmd.push(function () {
-        googletag.pubads().set("page_url", "http://openfront.io ");
-      });
-    </script>
-
-    <!-- Analytics -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=AW-16702609763"
-    ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-
-      gtag("js", new Date());
-      gtag("config", "AW-16702609763");
-    </script>
-    <!-- Google tag (gtag.js) -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-WQGQQ8RDN4"
-    ></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
-      }
-      gtag("js", new Date());
-
-      gtag("config", "G-WQGQQ8RDN4");
-    </script>
   </head>
 
   <body
     class="atlas-theme atlas-shell h-full select-none font-sans min-h-screen transition-opacity duration-300 ease-in-out flex flex-row overflow-hidden"
-    data-product="pressure-atlas"
+    data-product="idlefront"
   >
     <div id="hex-grid" class="fixed inset-0 -z-50 pointer-events-none">
       <div
@@ -234,19 +171,6 @@
       }, 3000);
     </script>
 
-    <!-- Analytics -->
-    <script
-      defer
-      src="https://static.cloudflareinsights.com/beacon.min.js"
-      data-cf-beacon='{"token": "03d93e6fefb349c28ee69b408fa25a13"}'
-    ></script>
     <script type="module" src="/src/client/Main.ts"></script>
-    <footer>
-      <script
-        data-cfasync="false"
-        async
-        src="//cdn.intergient.com/1025558/75940/ramp.js"
-      ></script>
-    </footer>
   </body>
 </html>

@@ -194,12 +194,16 @@ export class UiFlourishController {
     if (!control) return;
 
     const interactive = control.closest<HTMLElement>(
-      ".atlas-quick-play, .atlas-lobby-card, .nav-menu-item[data-page], #hamburger-btn, #desktop-menu-button",
+      ".atlas-quick-play, .atlas-lobby-card, .pw-entry-control, .nav-menu-item[data-page], #hamburger-btn, #desktop-menu-button",
     );
     if (!interactive) return;
 
-    if (interactive.matches(".atlas-quick-play, .atlas-lobby-card")) {
-      this.play("deploy");
+    if (
+      interactive.matches(
+        ".atlas-quick-play, .atlas-lobby-card, .pw-entry-control",
+      )
+    ) {
+      this.play("deploy", this.activationOrigin(event, interactive));
     } else if (interactive.matches("#hamburger-btn, #desktop-menu-button")) {
       this.play("drawer");
     } else if (interactive.dataset.page !== "page-play") {
@@ -207,12 +211,37 @@ export class UiFlourishController {
     }
   };
 
-  private play(kind: "deploy" | "drawer" | "page"): void {
+  private activationOrigin(
+    event: MouseEvent,
+    interactive: HTMLElement,
+  ): { x: number; y: number } {
+    // Pointer/touch-generated click events carry the activation coordinates.
+    // Keyboard and assistive-tech activations have detail === 0, so originate
+    // the flourish from the control itself instead of the viewport centre.
+    if (event.detail !== 0) {
+      return { x: event.clientX, y: event.clientY };
+    }
+
+    const bounds = interactive.getBoundingClientRect();
+    return {
+      x: bounds.left + bounds.width / 2,
+      y: bounds.top + bounds.height / 2,
+    };
+  }
+
+  private play(
+    kind: "deploy" | "drawer" | "page",
+    origin?: { x: number; y: number },
+  ): void {
     if (this.cleanupTimer !== null) clearTimeout(this.cleanupTimer);
     this.flourish?.remove();
     const flourish = document.createElement("div");
     flourish.className = `atlas-flourish atlas-flourish--${kind}`;
     flourish.setAttribute("aria-hidden", "true");
+    if (origin) {
+      flourish.style.setProperty("--atlas-flourish-x", `${origin.x}px`);
+      flourish.style.setProperty("--atlas-flourish-y", `${origin.y}px`);
+    }
     flourish.append(
       document.createElement("i"),
       document.createElement("i"),

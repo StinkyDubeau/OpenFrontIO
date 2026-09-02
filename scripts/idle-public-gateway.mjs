@@ -49,6 +49,17 @@ function parseCookies(header) {
   return result;
 }
 
+function forwardedCookieHeader(header) {
+  return String(header ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => {
+      const separator = part.indexOf("=");
+      return separator > 0 && part.slice(0, separator).trim() !== COOKIE_NAME;
+    })
+    .join("; ");
+}
+
 function isApiPath(pathname) {
   return pathname.startsWith("/api/");
 }
@@ -117,7 +128,7 @@ function loginDocument(errorMessage = "") {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <title>Pressure Atlas preview</title>
+    <title>IdleFront preview</title>
     <style>
       :root { color-scheme: dark; font-family: ui-rounded, system-ui, sans-serif; background: #081621; color: #f7f4e8; }
       * { box-sizing: border-box; }
@@ -134,7 +145,7 @@ function loginDocument(errorMessage = "") {
   </head>
   <body>
     <main>
-      <h1>Pressure Atlas</h1>
+      <h1>IdleFront</h1>
       <p>This development world is private. Enter the preview password once on this device.</p>
       ${error}
       <form method="post" action="${LOGIN_PATH}">
@@ -188,12 +199,40 @@ function proxyHeaders(req, origin) {
     result[name] = value;
   }
   result.host = origin.host;
+  const forwardedCookies = forwardedCookieHeader(req.headers.cookie);
+  if (forwardedCookies) result.cookie = forwardedCookies;
   result["x-forwarded-host"] = req.headers.host ?? "";
   const connectingIp = String(req.headers["cf-connecting-ip"] ?? "").trim();
   result["x-forwarded-for"] = isIP(connectingIp)
     ? connectingIp
     : (req.socket.remoteAddress ?? "127.0.0.1");
   return result;
+}
+
+function proxyResponseHeaders(source) {
+  const headers = {};
+  for (const [name, value] of Object.entries(source)) {
+    if (
+      value === undefined ||
+      HOP_BY_HOP_HEADERS.has(name.toLowerCase()) ||
+      name.toLowerCase() === "x-powered-by"
+    ) {
+      continue;
+    }
+    headers[name] = value;
+  }
+  return headers;
+}
+
+function requireLoopbackOrigin(value, label) {
+  const origin = new URL(value);
+  if (
+    origin.protocol !== "http:" ||
+    !["127.0.0.1", "localhost"].includes(origin.hostname)
+  ) {
+    throw new Error(`${label} must be a loopback HTTP URL`);
+  }
+  return origin;
 }
 
 const IDLE_CONTENT_TYPES = {
@@ -208,17 +247,17 @@ export function createPreviewGateway(options = {}) {
   if (accessToken.length < 24) {
     throw new Error("IDLE_PREVIEW_ACCESS_TOKEN must be at least 24 characters");
   }
-  const origin = new URL(
+  const origin = requireLoopbackOrigin(
     options.origin ??
       process.env.IDLE_PREVIEW_ORIGIN ??
       "http://127.0.0.1:3000",
+    "Idle preview origin",
   );
-  if (
-    origin.protocol !== "http:" ||
-    !["127.0.0.1", "localhost"].includes(origin.hostname)
-  ) {
-    throw new Error("Idle preview origin must be a loopback HTTP URL");
-  }
+  const webOriginValue =
+    options.webOrigin ?? process.env.IDLE_PREVIEW_WEB_ORIGIN ?? "";
+  const webOrigin = webOriginValue
+    ? requireLoopbackOrigin(webOriginValue, "Idle preview web origin")
+    : undefined;
   const staticDir = path.resolve(
     options.staticDir ??
       process.env.IDLE_PREVIEW_STATIC_DIR ??
@@ -295,17 +334,7 @@ export function createPreviewGateway(options = {}) {
         headers,
       },
       (upstreamResponse) => {
-        const headers = {};
-        for (const [name, value] of Object.entries(upstreamResponse.headers)) {
-          if (
-            value === undefined ||
-            HOP_BY_HOP_HEADERS.has(name.toLowerCase()) ||
-            name.toLowerCase() === "x-powered-by"
-          ) {
-            continue;
-          }
-          headers[name] = value;
-        }
+        const headers = proxyResponseHeaders(upstreamResponse.headers);
         Object.assign(headers, securityHeaders());
         res.writeHead(upstreamResponse.statusCode ?? 502, headers);
         upstreamResponse.pipe(res);
@@ -332,6 +361,98 @@ export function createPreviewGateway(options = {}) {
     else upstream.end(body);
   }
 
+  function proxyWeb(req, res, requestUrl) {
+    const target = new URL(webOrigin.href);
+    target.pathname = requestUrl.pathname;
+    target.search = requestUrl.search;
+    target.hash = "";
+    const upstream = http.request(
+      target,
+      {
+        method: req.method,
+        headers: proxyHeaders(req, webOrigin),
+      },
+      (upstreamResponse) => {
+        const headers = proxyResponseHeaders(upstreamResponse.headers);
+        Object.assign(headers, securityHeaders());
+        res.writeHead(upstreamResponse.statusCode ?? 502, headers);
+        upstreamResponse.pipe(res);
+      },
+    );
+    upstream.on("error", () => {
+      if (!res.headersSent) {
+        send(res, 502, "The IdleFront client is restarting", {
+          "content-type": "text/plain; charset=utf-8",
+        });
+      } else {
+        res.destroy();
+      }
+    });
+    req.pipe(upstream);
+  }
+
+  function rejectUpgrade(socket, status, message) {
+    const payload = Buffer.from(message, "utf8");
+    socket.end(
+      `HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${payload.length}\r\n\r\n${message}`,
+    );
+  }
+
+  function proxyWebUpgrade(req, socket, head) {
+    if (!webOrigin || !authenticated(req)) {
+      rejectUpgrade(socket, "401 Unauthorized", "Preview login is required");
+      return;
+    }
+    let requestUrl;
+    try {
+      const rawTarget = req.url ?? "/";
+      if (!rawTarget.startsWith("/") || rawTarget.startsWith("//")) {
+        throw new Error("Invalid request target");
+      }
+      requestUrl = new URL(rawTarget, "http://preview.invalid");
+    } catch {
+      rejectUpgrade(socket, "400 Bad Request", "Invalid request target");
+      return;
+    }
+    const target = new URL(webOrigin.href);
+    target.pathname = requestUrl.pathname;
+    target.search = requestUrl.search;
+    const headers = proxyHeaders(req, webOrigin);
+    headers.connection = "Upgrade";
+    headers.upgrade = req.headers.upgrade ?? "websocket";
+    const upstream = http.request(target, {
+      method: req.method,
+      headers,
+    });
+    upstream.on("upgrade", (response, upstreamSocket, upstreamHead) => {
+      const statusLine = `HTTP/${response.httpVersion} ${response.statusCode} ${response.statusMessage}`;
+      const headerLines = [];
+      for (const [name, value] of Object.entries(response.headers)) {
+        if (value === undefined) continue;
+        for (const item of Array.isArray(value) ? value : [value]) {
+          headerLines.push(`${name}: ${item}`);
+        }
+      }
+      socket.write(`${statusLine}\r\n${headerLines.join("\r\n")}\r\n\r\n`);
+      if (upstreamHead.length) socket.write(upstreamHead);
+      if (head.length) upstreamSocket.write(head);
+      upstreamSocket.pipe(socket);
+      socket.pipe(upstreamSocket);
+    });
+    upstream.on("response", (response) => {
+      response.resume();
+      rejectUpgrade(socket, "502 Bad Gateway", "WebSocket upgrade failed");
+    });
+    upstream.on("error", () => {
+      rejectUpgrade(
+        socket,
+        "502 Bad Gateway",
+        "The IdleFront client is restarting",
+      );
+    });
+    upstream.end();
+  }
+
   async function serveIdleFile(req, res, fileName) {
     try {
       const payload = await readFile(path.join(staticDir, fileName));
@@ -355,7 +476,7 @@ export function createPreviewGateway(options = {}) {
     }
   }
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     const method = req.method ?? "GET";
     const rawTarget = req.url ?? "/";
     let requestUrl;
@@ -410,7 +531,7 @@ export function createPreviewGateway(options = {}) {
         res.writeHead(303, {
           ...securityHeaders(),
           "cache-control": "no-store",
-          location: "/idle/",
+          location: webOrigin ? "/" : "/idle/",
           "set-cookie": `${COOKIE_NAME}=${expectedCookie}; Path=/; Max-Age=604800; HttpOnly; Secure; SameSite=Strict`,
         });
         res.end();
@@ -426,6 +547,34 @@ export function createPreviewGateway(options = {}) {
       send(res, 404, "Not found", {
         "content-type": "text/plain; charset=utf-8",
       });
+      return;
+    }
+
+    if (webOrigin) {
+      if (!authenticated(req)) {
+        if (isApiPath(pathname)) {
+          send(
+            res,
+            401,
+            JSON.stringify({
+              error: {
+                code: "PREVIEW_LOGIN_REQUIRED",
+                message: "Preview login is required",
+              },
+            }),
+            { "content-type": "application/json; charset=utf-8" },
+          );
+        } else {
+          res.writeHead(302, {
+            ...securityHeaders(),
+            "cache-control": "no-store",
+            location: LOGIN_PATH,
+          });
+          res.end();
+        }
+        return;
+      }
+      proxyWeb(req, res, requestUrl);
       return;
     }
 
@@ -497,6 +646,8 @@ export function createPreviewGateway(options = {}) {
     }
     await proxy(req, res, requestUrl);
   });
+  if (webOrigin) server.on("upgrade", proxyWebUpgrade);
+  return server;
 }
 
 export async function startPreviewGateway(options = {}) {

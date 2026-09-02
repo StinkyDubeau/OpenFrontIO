@@ -3,7 +3,7 @@ import { customElement, state } from "lit/decorators.js";
 import { assetUrl } from "../core/AssetUrls";
 import "./LanguageModal";
 import { LanguageModal } from "./LanguageModal";
-import { formatDebugTranslation } from "./Utils";
+import { formatDebugTranslation, productizeTranslation } from "./Utils";
 
 import en from "../../resources/lang/en.json";
 import metadata from "../../resources/lang/metadata.json";
@@ -252,6 +252,7 @@ export class LangSelector extends LitElement {
     ];
 
     document.title =
+      document.body.dataset.product === "idlefront" ||
       document.body.dataset.product === "pressure-atlas"
         ? this.translateText("pressure_atlas.page_title")
         : (this.translateText("main.title") ?? document.title);
@@ -320,7 +321,7 @@ export class LangSelector extends LitElement {
       text = text.replace(`{${param}}`, String(value));
     }
 
-    return text;
+    return productizeTranslation(key, text);
   }
 
   private async openModal() {

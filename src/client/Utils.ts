@@ -441,6 +441,21 @@ export function formatDebugTranslation(
 
 const EMPTY_TRANSLATION_PARAMS: Record<string, string | number> = {};
 
+/**
+ * Keep inherited translations useful without presenting the upstream product
+ * as the name of this game. Copyright attribution is intentionally exempt and
+ * remains available from the Legal & Source screen.
+ */
+export function productizeTranslation(key: string, text: string): string {
+  if (key === "main.copyright") return text;
+  if (key === "account_modal.delete_account_failed") {
+    return text.includes("support@openfront.io")
+      ? "Delete failed. Please try again later."
+      : text;
+  }
+  return text.replace(/OpenFront(?:\.io)?(?:™)?/gi, "IdleFront");
+}
+
 function getCachedLangSelector(): LangSelector | null {
   const self = translateText as any;
   const cached = self.langSelector as LangSelector | null | undefined;
@@ -491,7 +506,7 @@ export const translateText = (
     resolvedParams === EMPTY_TRANSLATION_PARAMS &&
     message.indexOf("{") === -1
   ) {
-    return message;
+    return productizeTranslation(key, message);
   }
 
   try {
@@ -507,10 +522,13 @@ export const translateText = (
       self.formatterCache.set(cacheKey, formatter);
     }
 
-    return formatter.format(resolvedParams) as string;
+    return productizeTranslation(
+      key,
+      formatter.format(resolvedParams) as string,
+    );
   } catch (e) {
     console.warn("ICU format error", e);
-    return message;
+    return productizeTranslation(key, message);
   }
 };
 

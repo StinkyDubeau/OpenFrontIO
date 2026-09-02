@@ -24,12 +24,7 @@ import {
 import { translateText } from "./Utils";
 
 type StoreTab =
-  | "cosmetics"
-  | "effects"
-  | "merch"
-  | "packs"
-  | "subscriptions"
-  | "tribes";
+  "cosmetics" | "effects" | "merch" | "packs" | "subscriptions" | "tribes";
 
 const COSMETICS_SUB_TABS = ["patterns", "flags", "crowns"] as const;
 type CosmeticsSubTab = (typeof COSMETICS_SUB_TABS)[number];
@@ -65,7 +60,6 @@ export class StoreModal extends BaseModal {
         { key: "cosmetics", label: translateText("store.cosmetics") },
         { key: "effects", label: translateText("store.effects") },
         { key: "tribes", label: translateText("store.tribes") },
-        { key: "merch", label: translateText("store.merch") },
       ],
     };
   }
@@ -124,12 +118,14 @@ export class StoreModal extends BaseModal {
       onBack: () => this.close(),
       ariaLabel: translateText("common.back"),
       rightContent: html`<div class="flex items-center gap-4">
-        ${currency
-          ? html`<currency-display
-              .hard=${currency.hard}
-              .soft=${currency.soft}
-            ></currency-display>`
-          : ""}
+        ${
+          currency
+            ? html`<currency-display
+                .hard=${currency.hard}
+                .soft=${currency.soft}
+              ></currency-display>`
+            : ""
+        }
         <not-logged-in-warning></not-logged-in-warning>
       </div>`,
     });
@@ -257,11 +253,13 @@ export class StoreModal extends BaseModal {
         data-cosmetic-key=${group[0].key}
         class=${cardClass}
         .resolved=${group[0]}
-        .variants=${group.length > 1 ||
-        group[0].type === "pattern" ||
-        group[0].type === "skin"
-          ? group
-          : []}
+        .variants=${
+          group.length > 1 ||
+          group[0].type === "pattern" ||
+          group[0].type === "skin"
+            ? group
+            : []
+        }
         .activeVariantKey=${active.key}
         .actionContent=${action}
         state=${focused ? "focused" : "idle"}
@@ -296,19 +294,23 @@ export class StoreModal extends BaseModal {
       .priceSoft=${priceSoft ?? null}
       .rarity=${priced?.rarity ?? "common"}
       .itemName=${cosmeticSelectionLabel(resolved)}
-      .dollarLabelKey=${resolved.type === "subscription" && userHasSubscription
-        ? "store.switch_button"
-        : ""}
-      .priceSuffix=${resolved.type === "subscription"
-        ? translateText("store.price_per_month")
-        : ""}
+      .dollarLabelKey=${
+        resolved.type === "subscription" && userHasSubscription
+          ? "store.switch_button"
+          : ""
+      }
+      .priceSuffix=${
+        resolved.type === "subscription"
+          ? translateText("store.price_per_month")
+          : ""
+      }
       .onPurchaseDollar=${product ? () => purchase("dollar") : undefined}
-      .onPurchaseHard=${priceHard !== undefined
-        ? () => purchase("hard")
-        : undefined}
-      .onPurchaseSoft=${priceSoft !== undefined
-        ? () => purchase("soft")
-        : undefined}
+      .onPurchaseHard=${
+        priceHard !== undefined ? () => purchase("hard") : undefined
+      }
+      .onPurchaseSoft=${
+        priceSoft !== undefined ? () => purchase("soft") : undefined
+      }
     ></purchase-button>`;
   }
 
@@ -361,9 +363,11 @@ export class StoreModal extends BaseModal {
         ${COSMETICS_SUB_TABS.map((tab) => {
           const active = this.cosmeticsSubTab === tab;
           return html`<button
-            class="-mb-px whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${active
-              ? "border-malibu-blue text-aquarius"
-              : "border-transparent text-white/40 hover:text-white/70"}"
+            class="-mb-px whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${
+              active
+                ? "border-malibu-blue text-aquarius"
+                : "border-transparent text-white/40 hover:text-white/70"
+            }"
             @click=${() => this.setCosmeticsSubTab(tab)}
           >
             ${translateText(`store.${tab}`)}

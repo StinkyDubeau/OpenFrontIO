@@ -2,7 +2,7 @@ import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 /**
- * Pressure Atlas' code-native product mark.
+ * IdleFront's code-native product mark.
  *
  * The component deliberately renders into the light DOM so the shared product
  * skin can size and colour it wherever it is placed (desktop navigation,
@@ -27,7 +27,7 @@ export class ProductWordmark extends LitElement {
 
   render() {
     return html`
-      <span class="atlas-wordmark" role="img" aria-label="Pressure Atlas">
+      <span class="atlas-wordmark" role="img" aria-label="IdleFront">
         <span class="atlas-wordmark__mark" aria-hidden="true">
           <svg
             class="atlas-wordmark__glyph"
@@ -54,7 +54,7 @@ export class ProductWordmark extends LitElement {
         </span>
         <span class="atlas-wordmark__type">
           <span class="atlas-wordmark__name">
-            <span>Pressure</span><span>Atlas</span>
+            <span>Idle</span><span>Front</span>
           </span>
           <span
             class="atlas-wordmark__descriptor"

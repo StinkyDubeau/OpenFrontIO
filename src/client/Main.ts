@@ -91,6 +91,7 @@ import "./components/MainLayout";
 import "./components/MobileNavBar";
 import "./components/PlayPage";
 import "./components/RankedModal";
+import "./components/StoneButton";
 import "./components/baseComponents/Button";
 import "./components/baseComponents/Modal";
 import "./styles.css";
@@ -99,6 +100,7 @@ import "./styles/core/variables.css";
 import "./styles/layout/container.css";
 import "./styles/layout/header.css";
 import "./styles/modal/chat.css";
+import "./styles/persistent-world.css";
 import "./styles/pressure-atlas.css";
 import "./styles/war-room.css";
 import { initWarRoomUI } from "./ui/WarRoomUI";
@@ -774,6 +776,31 @@ class Client {
         console.log(`joining replay ${replayGameId}`);
         return;
       }
+    }
+
+    // Durable invitation lobbies are an application surface, not an ordinary
+    // OpenFront match. Route them before interpreting any game path and leave
+    // the existing /game flow completely untouched.
+    if (
+      /^\/worlds(?:\/new)?\/?$/.test(window.location.pathname) ||
+      /^\/world\/[A-Za-z0-9_-]+\/?$/.test(window.location.pathname)
+    ) {
+      window.showPage?.("page-persistent-worlds");
+      const page = document.querySelector("persistent-world-page") as {
+        open?: () => void;
+      } | null;
+      page?.open?.();
+      return;
+    }
+
+    // A browser Back gesture from the Worlds scene returns to the launch
+    // scene just like its in-app back button. Other inline pages retain their
+    // existing modal routing behavior.
+    if (
+      window.location.pathname === "/" &&
+      window.currentPageId === "page-persistent-worlds"
+    ) {
+      window.showPage?.("page-play");
     }
 
     const pathMatch = window.location.pathname.match(

@@ -17,7 +17,7 @@ export class Footer extends LitElement {
           >
           <span aria-hidden="true">·</span>
           <span data-i18n="pressure_atlas.footer_build"
-            >Pressure Atlas working build</span
+            >IdleFront working build</span
           >
         </div>
 
@@ -26,19 +26,9 @@ export class Footer extends LitElement {
           aria-label="Project links"
           data-i18n-aria-label="pressure_atlas.footer_links_label"
         >
-          <a href="/terms-of-service.html" data-i18n="main.terms_of_service"
-            >Terms of Service</a
-          >
-          <a href="/privacy-policy.html" data-i18n="main.privacy_policy"
-            >Privacy Policy</a
-          >
-          <a
-            href="https://openfront.wiki/Main_Page"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-i18n="main.wiki"
-            >Wiki</a
-          >
+          <button class="nav-menu-item" data-page="page-legal">
+            Legal &amp; source
+          </button>
           <a
             href="https://github.com/StinkyDubeau/OpenFrontIO"
             target="_blank"
