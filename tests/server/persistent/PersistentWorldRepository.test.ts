@@ -1043,6 +1043,79 @@ describe("PersistentWorldRepository", () => {
     expect(repository.markFinished("world_first").phase).toBe("finished");
   });
 
+  it("archives completed runtimes and failed starts out of live world lists", () => {
+    const host = account("identity_archive_host");
+    const startsAt = now + 1_000;
+    for (const id of ["world_completed", "world_failed_start"]) {
+      repository.createWorld({
+        id,
+        name: id,
+        targetDuration: "1h",
+        access: "public",
+        mode: "ffa",
+        maxHumans: 4,
+        startsAt,
+        host,
+      });
+    }
+    repository.createWorld({
+      id: "world_future",
+      name: "world_future",
+      targetDuration: "1h",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 4,
+      startsAt: startsAt + 2 * persistentWorldDurationMs("1h"),
+      host,
+    });
+    repository.reserveRuntime(
+      "world_completed",
+      "request_completed_runtime",
+      "Ar12Ch34",
+      RUNTIME_GAME_CONFIG,
+      startsAt,
+      startsAt + persistentWorldDurationMs("1h"),
+    );
+    repository.markRuntimeReady(
+      "world_completed",
+      "request_completed_runtime",
+      "Ar12Ch34",
+      startsAt,
+    );
+
+    now = startsAt;
+    repository.markActive("world_completed");
+    repository.markActive("world_failed_start");
+
+    now = startsAt + 4 * 60_000;
+    expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toEqual({
+      finished: [],
+      cancelled: [],
+    });
+
+    now = startsAt + 5 * 60_000;
+    expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toMatchObject({
+      finished: [],
+      cancelled: [{ id: "world_failed_start", phase: "cancelled" }],
+    });
+
+    now = startsAt + persistentWorldDurationMs("1h");
+    expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toMatchObject({
+      finished: [{ id: "world_completed", phase: "finished" }],
+      cancelled: [],
+    });
+    expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toEqual({
+      finished: [],
+      cancelled: [],
+    });
+    expect(repository.listPublicWorlds().map((world) => world.id)).toEqual([
+      "world_future",
+    ]);
+    expect(
+      repository.listWorldsForIdentity(host.id).map((world) => world.id),
+    ).toEqual(["world_future"]);
+  });
+
   it("lists public and personal worlds and persists inferred reminder choices", () => {
     const hostSession = repository.createGuestIdentity({ displayName: "Host" });
     const guestSession = repository.createGuestIdentity({

@@ -25,11 +25,13 @@ import {
 import {
   PersistentWorldRepository,
   PersistentWorldRepositoryError,
+  type PersistentWorldArchiveSweep,
 } from "./PersistentWorldRepository";
 
 const MIN_START_DELAY_MS = 60_000;
 const MAX_INVITATION_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
 const PRESENCE_TTL_MS = 45_000;
+const RUNTIME_START_GRACE_MS = 5 * 60_000;
 
 const lobbyQuickChatKeys = new Set(
   Object.entries(quickChatData).flatMap(([category, phrases]) =>
@@ -312,10 +314,20 @@ export class PersistentWorldService {
     return activated;
   }
 
+  archiveStaleWorlds(): PersistentWorldArchiveSweep {
+    return this.repository.archiveStaleWorlds(
+      this.now(),
+      RUNTIME_START_GRACE_MS,
+    );
+  }
+
   startScheduler(intervalMs: number = 1000): void {
     if (this.scheduler) return;
+    this.archiveStaleWorlds();
+    this.activateDueWorlds();
     this.queueReconcile();
     this.scheduler = setInterval(() => {
+      this.archiveStaleWorlds();
       this.activateDueWorlds();
       this.queueReconcile();
     }, intervalMs);

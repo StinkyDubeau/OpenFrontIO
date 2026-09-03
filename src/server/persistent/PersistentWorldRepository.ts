@@ -162,6 +162,13 @@ export interface PersistentWorldRuntimePlayerStatus {
   updatedAt: number;
 }
 
+export interface PersistentWorldArchiveSweep {
+  /** Worlds whose game runtime became ready and subsequently reached its end. */
+  finished: PersistentWorld[];
+  /** Invitations or runtimes that never became playable within the grace period. */
+  cancelled: PersistentWorld[];
+}
+
 export class PersistentWorldRepositoryError extends Error {
   constructor(
     readonly code: PersistentWorldRepositoryErrorCode,
@@ -1815,6 +1822,7 @@ export class PersistentWorldRepository {
          JOIN persistent_world_rsvps member ON member.world_id = w.id
          JOIN persistent_world_identities host ON host.id = w.host_identity_id
          WHERE member.identity_id = ?
+           AND w.phase IN ('scheduled', 'active')
          ORDER BY CASE w.phase
                     WHEN 'active' THEN 0
                     WHEN 'scheduled' THEN 1
@@ -1825,6 +1833,93 @@ export class PersistentWorldRepository {
       )
       .all(identityId) as SqlRow[];
     return rows.map((row) => this.worldFromRow(row));
+  }
+
+  /**
+   * Moves stale rows out of the live lobby indexes while preserving their
+   * roster, chat, runtime journal, and terminal timestamp as an archive.
+   * A ready runtime is a completed game at its configured end; a world that
+   * never reached ready is a failed start once its grace period elapses.
+   */
+  archiveStaleWorlds(
+    atValue: number = this.validNow(),
+    startupGraceMsValue: number = 5 * 60_000,
+  ): PersistentWorldArchiveSweep {
+    const at = PersistentWorldTimestampSchema.parse(atValue);
+    const startupGraceMs = Math.trunc(startupGraceMsValue);
+    if (!Number.isSafeInteger(startupGraceMs) || startupGraceMs < 0) {
+      throw new PersistentWorldRepositoryError(
+        "INVALID_ARGUMENT",
+        "Runtime startup grace must be a non-negative safe integer",
+      );
+    }
+
+    return this.transaction(() => {
+      const rows = this.db
+        .prepare(
+          `SELECT
+             world.id, world.phase, world.starts_at, world.target_duration,
+             EXISTS(
+               SELECT 1
+               FROM persistent_world_runtimes runtime
+               WHERE runtime.world_id = world.id AND runtime.state = 'ready'
+             ) AS runtime_ready
+           FROM persistent_worlds world
+           WHERE world.phase IN ('scheduled', 'active')
+           ORDER BY world.starts_at, world.id`,
+        )
+        .all() as SqlRow[];
+
+      const finishedIds: string[] = [];
+      const cancelledIds: string[] = [];
+      const finish = this.db.prepare(
+        `UPDATE persistent_worlds
+         SET phase = 'finished', finished_at = ?, updated_at = ?
+         WHERE id = ? AND phase = 'active'`,
+      );
+      const cancel = this.db.prepare(
+        `UPDATE persistent_worlds
+         SET phase = 'cancelled', cancelled_at = ?, updated_at = ?
+         WHERE id = ? AND phase IN ('scheduled', 'active')`,
+      );
+      const suppressNotifications = this.db.prepare(
+        `UPDATE persistent_world_notification_jobs
+         SET state = 'suppressed', suppressed_at = ?,
+             claim_token_hash = NULL, lease_expires_at = NULL,
+             last_error = NULL, updated_at = ?
+         WHERE world_id = ? AND state IN ('pending', 'claimed')`,
+      );
+
+      for (const row of rows) {
+        const worldId = String(row.id);
+        const phase = String(row.phase);
+        const startsAt = numberValue(row.starts_at);
+        const duration = persistentWorldDurationMs(
+          PersistentWorldSchema.shape.targetDuration.parse(row.target_duration),
+        );
+        const runtimeReady = numberValue(row.runtime_ready) === 1;
+        const reachedConfiguredEnd = startsAt + duration <= at;
+        const missedRuntimeGrace = startsAt + startupGraceMs <= at;
+
+        let changed = false;
+        if (phase === "active" && runtimeReady && reachedConfiguredEnd) {
+          changed = numberValue(finish.run(at, at, worldId).changes) === 1;
+          if (changed) finishedIds.push(worldId);
+        } else if (
+          (!runtimeReady && phase === "active" && missedRuntimeGrace) ||
+          (phase === "scheduled" && reachedConfiguredEnd)
+        ) {
+          changed = numberValue(cancel.run(at, at, worldId).changes) === 1;
+          if (changed) cancelledIds.push(worldId);
+        }
+        if (changed) suppressNotifications.run(at, at, worldId);
+      }
+
+      return {
+        finished: finishedIds.map((id) => this.getWorld(id)!),
+        cancelled: cancelledIds.map((id) => this.getWorld(id)!),
+      };
+    });
   }
 
   private worldRow(worldId: string): SqlRow | undefined {

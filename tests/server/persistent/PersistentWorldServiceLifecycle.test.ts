@@ -316,6 +316,31 @@ describe("PersistentWorldService lifecycle", () => {
     });
   });
 
+  it("archives a world that never provisions and hides it from the active hub", () => {
+    const host = guest("Sleeping Host");
+    const created = createWorld(host.bearerToken, {
+      targetDuration: "1h",
+      startsAt: now + MINUTE,
+    });
+    const worldId = created.snapshot.world.id;
+
+    now += MINUTE;
+    service.activateDueWorlds();
+    now += 5 * MINUTE;
+
+    expect(service.archiveStaleWorlds()).toMatchObject({
+      finished: [],
+      cancelled: [{ id: worldId, phase: "cancelled" }],
+    });
+    expect(service.listPublic().map((card) => card.world.id)).not.toContain(
+      worldId,
+    );
+    expect(service.listMine(host.bearerToken)).toEqual([]);
+    expect(service.getSnapshot(worldId, host.bearerToken).world.phase).toBe(
+      "cancelled",
+    );
+  });
+
   it("separates public discovery from a player's public and private worlds", () => {
     const host = guest("Host");
     const player = guest("Player");
