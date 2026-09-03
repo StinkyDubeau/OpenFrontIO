@@ -1,6 +1,9 @@
+import { getPaletteSize } from "../../gl/utils/ColorUtils";
 import type { PlayerState, PlayerStatic } from "../../types";
 
-const RELATION_SIZE = 1024;
+// Owner IDs occupy 12 bits in the canonical tile codec. Keep diplomacy at the
+// same ceiling so large worlds do not silently treat high-ID allies as neutral.
+const RELATION_SIZE = getPaletteSize();
 const RELATION_NEUTRAL = 0;
 const RELATION_FRIENDLY = 1;
 const RELATION_EMBARGO = 2;

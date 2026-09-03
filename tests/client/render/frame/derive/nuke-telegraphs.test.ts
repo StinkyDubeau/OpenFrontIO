@@ -158,6 +158,28 @@ describe("extractNukeTelegraphs", () => {
     expect(t.relation).toBe(TELEGRAPH_FRIENDLY);
   });
 
+  it("preserves diplomacy for owner IDs above the former 1024-player ceiling", () => {
+    const localID = 2001;
+    const allyID = 2107;
+    const rel = buildRelationMatrix(
+      new Map([
+        [localID, ps({ smallID: localID, allies: [allyID] })],
+        [allyID, ps({ smallID: allyID })],
+      ]),
+    );
+    const [t] = extractNukeTelegraphs(
+      units(nuke({ ownerID: allyID })),
+      MAP_W,
+      localID,
+      rel.matrix,
+      rel.size,
+    );
+
+    expect(rel.size).toBe(4096);
+    expect(rel.matrix[localID * rel.size + allyID]).toBe(1);
+    expect(t.relation).toBe(TELEGRAPH_FRIENDLY);
+  });
+
   it("marks everyone else's nukes as enemy", () => {
     const rel = buildRelationMatrix(
       new Map([

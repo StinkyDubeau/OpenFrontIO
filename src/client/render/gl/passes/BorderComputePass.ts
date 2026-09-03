@@ -15,6 +15,7 @@
 import type { RenderSettings } from "../RenderSettings";
 import borderComputeFragSrc from "../shaders/border-compute/border-compute.frag.glsl?raw";
 import fullscreenNoUvVertSrc from "../shaders/shared/fullscreen-no-uv.vert.glsl?raw";
+import { getPaletteSize } from "../utils/ColorUtils";
 import {
   createFullscreenQuad,
   createProgram,
@@ -24,8 +25,8 @@ import {
 import { TILE_DEFINES } from "../utils/TileCodec";
 import { BorderScatterPass } from "./BorderScatterPass";
 
-/** Max player smallID supported by the relationship texture. */
-const RELATION_TEX_SIZE = 1024;
+/** Full 12-bit owner-ID range used by the tile codec and player palette. */
+const RELATION_TEX_SIZE = getPaletteSize();
 
 // ---------------------------------------------------------------------------
 // BorderComputePass
