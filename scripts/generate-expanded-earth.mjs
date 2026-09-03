@@ -30,6 +30,8 @@ const outputName = "expandedgiantworld";
 const sourceDir = join(repo, "resources", "maps", sourceName);
 const outputDir = join(repo, "resources", "maps", outputName);
 const pagesDir = join(outputDir, "pages");
+const mapsRegistryPath = join(repo, "src", "core", "game", "Maps.gen.ts");
+const englishPath = join(repo, "resources", "lang", "en.json");
 
 const sourceManifest = JSON.parse(
   readFileSync(join(sourceDir, "manifest.json"), "utf8"),
@@ -138,6 +140,72 @@ copyFileSync(
   join(sourceDir, "thumbnail.webp"),
   join(outputDir, "thumbnail.webp"),
 );
+writeFileSync(
+  join(outputDir, "NOTICE.md"),
+  `# Expanded Earth asset notice
+
+Expanded Earth is a modified, ${scale}-times linear enlargement of OpenFront's
+\`giantworldmap\` terrain, thumbnail, nation coordinates, and spawn metadata.
+The transformation is reproducible with
+\`scripts/generate-expanded-earth.mjs\`; the generated manifest records a SHA-256
+digest for every terrain page.
+
+The source map and this adaptation are licensed under the repository's
+\`LICENSE-ASSETS\` terms (Creative Commons Attribution-ShareAlike 4.0). Copyright
+and contributor attribution remain with OpenFront and its contributors. This
+modified map is distributed on the same CC BY-SA 4.0 terms.
+`,
+);
+
+function updateMapRegistry() {
+  let registry = readFileSync(mapsRegistryPath, "utf8");
+  const enumEntry =
+    '  ExpandedGiantWorld = "Expanded Earth", // scripts/generate-expanded-earth.mjs';
+  if (!registry.includes(enumEntry)) {
+    const anchor =
+      '  GiantWorldMap = "Giant World Map", // map-generator/assets/maps/giantworldmap/info.json';
+    if (!registry.includes(anchor)) {
+      throw new Error("Could not locate GiantWorldMap in Maps.gen.ts");
+    }
+    registry = registry.replace(anchor, `${anchor}\n${enumEntry}`);
+  }
+
+  const mapEntry = `  {
+    id: "ExpandedGiantWorld",
+    type: GameMapType.ExpandedGiantWorld,
+    translationKey: "map.expandedgiantworld",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },`;
+  if (!registry.includes('id: "ExpandedGiantWorld"')) {
+    const anchor = `  {
+    id: "GiantWorldMap",
+    type: GameMapType.GiantWorldMap,
+    translationKey: "map.giantworldmap",
+    categories: ["world"],
+    multiplayerFrequency: 10,
+  },`;
+    if (!registry.includes(anchor)) {
+      throw new Error("Could not locate GiantWorldMap registry entry");
+    }
+    registry = registry.replace(anchor, `${anchor}\n${mapEntry}`);
+  }
+  writeFileSync(mapsRegistryPath, registry);
+}
+
+function updateEnglishName() {
+  const english = JSON.parse(readFileSync(englishPath, "utf8"));
+  english.map = Object.fromEntries(
+    Object.entries({
+      ...english.map,
+      expandedgiantworld: "Expanded Earth",
+    }).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  writeFileSync(englishPath, `${JSON.stringify(english, null, 2)}\n`);
+}
+
+updateMapRegistry();
+updateEnglishName();
 
 console.log(
   `Expanded Earth: ${width}x${height}, ${pagesWide}x${pagesHigh} pages, scale ${scale}x`,
