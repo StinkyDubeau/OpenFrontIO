@@ -1,5 +1,26 @@
 # Idle Multiplayer OpenFront Fork — Handoff
 
+## September 3 seamless-world implementation
+
+The massive-board experiment now lives on `experimental/seamless-world`,
+branched from `main` without importing the discarded atlas prototype. It adds
+one seamless 8,216 × 3,896 Expanded Earth game, backed by an arbitrary paged
+map architecture designed to scale beyond this exact 9 × 4 asset layout.
+Persistent worlds select 2,000 bots and all 107 default nations while keeping
+the current OpenFront ruleset intact.
+
+Implementation details, commit boundaries, performance evidence, licensing,
+and the remaining hardware-rendering gate are recorded in
+[`docs/seamless-expanded-earth.md`](docs/seamless-expanded-earth.md). The key
+constraint is intentional: paging is invisible to gameplay and never creates
+sectors or separate matches. The first demo uses a compatibility bridge into
+OpenFront's current GPU renderer; a bounded page-resident GPU renderer remains
+future work before worlds can grow substantially beyond this demo.
+
+Live local services at this handoff are the Vite client on port 9000, master
+and worker services on ports 3000 and 3001, and Expo Metro on port 8081. The
+LAN host is `192.168.2.118`.
+
 ## Pinned prompt for the next planning phase
 
 Re-read this exact user prompt immediately before entering planning mode for
