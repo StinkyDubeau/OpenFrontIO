@@ -163,11 +163,15 @@ function createGlStub() {
     // WebGLFrameBuilder syncs
     addPlayers: (players: unknown[]) => bump("addPlayers", players.length),
     updatePalette: noop("updatePalette"),
+    updateEffectPalette: noop("updateEffectPalette"),
+    refreshNames: noop("refreshNames"),
     setPlayerSkin: noop("setPlayerSkin"),
     setPlayerSpawn: noop("setPlayerSpawn"),
     setLocalPlayerID: noop("setLocalPlayerID"),
     setLocalRailColor: noop("setLocalRailColor"),
     updateSpawnOverlay: noop("updateSpawnOverlay"),
+    updateSmallPlayerGlow: noop("updateSmallPlayerGlow"),
+    markLayerTilesDestroyed: noop("markLayerTilesDestroyed"),
     initSkinAtlas: noop("initSkinAtlas"),
     applyTerrainDelta: (refs: number[]) =>
       bump("applyTerrainDelta", refs.length),
@@ -178,6 +182,7 @@ function createGlStub() {
       changedTilesSeen += changed.length;
     },
     uploadLiveTrailDelta: noop("uploadLiveTrailDelta"),
+    updateSpiralRibbons: noop("updateSpiralRibbons"),
     applyFullTiles: noop("applyFullTiles"),
     applyDelta: noop("applyDelta"),
     uploadRailroadState: noop("uploadRailroadState"),

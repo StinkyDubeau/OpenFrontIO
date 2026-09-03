@@ -29,6 +29,11 @@ export class PagedGameMap implements GameMap {
   private readonly pages: GameMapTilePage[];
   private readonly pagesWide: number;
   private readonly pagesHigh: number;
+  /** Tiny coordinate tables avoid page-grid division in every hot tile read. */
+  private readonly pageColumnByX: Uint32Array;
+  private readonly localXByX: Uint32Array;
+  private readonly pageRowBaseByY: Uint32Array;
+  private readonly localYByY: Uint32Array;
   private falloutTiles = 0;
 
   constructor(
@@ -50,6 +55,20 @@ export class PagedGameMap implements GameMap {
 
     this.pagesWide = Math.ceil(width_ / pageSize_);
     this.pagesHigh = Math.ceil(height_ / pageSize_);
+    this.pageColumnByX = new Uint32Array(width_);
+    this.localXByX = new Uint32Array(width_);
+    for (let x = 0; x < width_; x++) {
+      const pageX = Math.floor(x / pageSize_);
+      this.pageColumnByX[x] = pageX;
+      this.localXByX[x] = x - pageX * pageSize_;
+    }
+    this.pageRowBaseByY = new Uint32Array(height_);
+    this.localYByY = new Uint32Array(height_);
+    for (let y = 0; y < height_; y++) {
+      const pageY = Math.floor(y / pageSize_);
+      this.pageRowBaseByY[y] = pageY * this.pagesWide;
+      this.localYByY[y] = y - pageY * pageSize_;
+    }
     const expectedCount = this.pagesWide * this.pagesHigh;
     if (terrainPages.length !== expectedCount) {
       throw new Error(
@@ -229,19 +248,20 @@ export class PagedGameMap implements GameMap {
   private location(ref: TileRef): { page: GameMapTilePage; offset: number } {
     if (!this.isValidRef(ref)) throw new Error(`Invalid tile ref ${ref}`);
     const x = ref % this.width_;
-    const y = Math.floor(ref / this.width_);
-    const pageX = Math.floor(x / this.pageSize_);
-    const pageY = Math.floor(y / this.pageSize_);
-    const page = this.pages[pageY * this.pagesWide + pageX];
+    const y = (ref - x) / this.width_;
+    const page = this.pages[this.pageRowBaseByY[y] + this.pageColumnByX[x]];
     return {
       page,
-      offset: (y - page.originY) * page.width + (x - page.originX),
+      offset: this.localYByY[y] * page.width + this.localXByX[x],
     };
   }
 
   terrainByte(ref: TileRef): number {
-    const { page, offset } = this.location(ref);
-    return page.terrain[offset];
+    if (!this.isValidRef(ref)) throw new Error(`Invalid tile ref ${ref}`);
+    const x = ref % this.width_;
+    const y = (ref - x) / this.width_;
+    const page = this.pages[this.pageRowBaseByY[y] + this.pageColumnByX[x]];
+    return page.terrain[this.localYByY[y] * page.width + this.localXByX[x]];
   }
 
   private setTerrainByte(ref: TileRef, value: number): void {
@@ -250,8 +270,11 @@ export class PagedGameMap implements GameMap {
   }
 
   tileState(ref: TileRef): number {
-    const { page, offset } = this.location(ref);
-    return page.state[offset];
+    if (!this.isValidRef(ref)) throw new Error(`Invalid tile ref ${ref}`);
+    const x = ref % this.width_;
+    const y = (ref - x) / this.width_;
+    const page = this.pages[this.pageRowBaseByY[y] + this.pageColumnByX[x]];
+    return page.state[this.localYByY[y] * page.width + this.localXByX[x]];
   }
 
   private setTileState(ref: TileRef, value: number): void {
@@ -264,9 +287,11 @@ export class PagedGameMap implements GameMap {
   }
 
   isImpassable(ref: TileRef): boolean {
+    const terrain = this.terrainByte(ref);
     return (
-      this.isLand(ref) &&
-      this.magnitude(ref) === PagedGameMap.IMPASSABLE_MAGNITUDE
+      Boolean(terrain & (1 << PagedGameMap.IS_LAND_BIT)) &&
+      (terrain & PagedGameMap.MAGNITUDE_MASK) ===
+        PagedGameMap.IMPASSABLE_MAGNITUDE
     );
   }
 
@@ -340,10 +365,9 @@ export class PagedGameMap implements GameMap {
         `Player ID ${playerId} exceeds maximum value ${PagedGameMap.PLAYER_ID_MASK}`,
       );
     }
-    this.setTileState(
-      ref,
-      (this.tileState(ref) & ~PagedGameMap.PLAYER_ID_MASK) | playerId,
-    );
+    const { page, offset } = this.location(ref);
+    page.state[offset] =
+      (page.state[offset] & ~PagedGameMap.PLAYER_ID_MASK) | playerId;
   }
 
   hasFallout(ref: TileRef): boolean {
@@ -351,14 +375,14 @@ export class PagedGameMap implements GameMap {
   }
 
   setFallout(ref: TileRef, value: boolean): void {
-    const existing = this.hasFallout(ref);
-    if (existing === value) return;
-    this.setTileState(
-      ref,
-      value
-        ? this.tileState(ref) | (1 << PagedGameMap.FALLOUT_BIT)
-        : this.tileState(ref) & ~(1 << PagedGameMap.FALLOUT_BIT),
+    const { page, offset } = this.location(ref);
+    const existing = Boolean(
+      page.state[offset] & (1 << PagedGameMap.FALLOUT_BIT),
     );
+    if (existing === value) return;
+    page.state[offset] = value
+      ? page.state[offset] | (1 << PagedGameMap.FALLOUT_BIT)
+      : page.state[offset] & ~(1 << PagedGameMap.FALLOUT_BIT);
     this.falloutTiles += value ? 1 : -1;
   }
 
@@ -367,12 +391,10 @@ export class PagedGameMap implements GameMap {
   }
 
   setDefenseBonus(ref: TileRef, value: boolean): void {
-    this.setTileState(
-      ref,
-      value
-        ? this.tileState(ref) | (1 << PagedGameMap.DEFENSE_BONUS_BIT)
-        : this.tileState(ref) & ~(1 << PagedGameMap.DEFENSE_BONUS_BIT),
-    );
+    const { page, offset } = this.location(ref);
+    page.state[offset] = value
+      ? page.state[offset] | (1 << PagedGameMap.DEFENSE_BONUS_BIT)
+      : page.state[offset] & ~(1 << PagedGameMap.DEFENSE_BONUS_BIT);
   }
 
   isOnEdgeOfMap(ref: TileRef): boolean {
@@ -419,14 +441,16 @@ export class PagedGameMap implements GameMap {
     ref: TileRef,
     callback: (neighbor: TileRef) => void,
   ): void {
-    const x = this.x(ref);
-    const y = this.y(ref);
+    const x = ref % this.width_;
+    const y = (ref - x) / this.width_;
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         if (dx === 0 && dy === 0) continue;
         const nx = x + dx;
         const ny = y + dy;
-        if (this.isValidCoord(nx, ny)) callback(ny * this.width_ + nx);
+        if (nx >= 0 && nx < this.width_ && ny >= 0 && ny < this.height_) {
+          callback(ny * this.width_ + nx);
+        }
       }
     }
   }
@@ -436,7 +460,11 @@ export class PagedGameMap implements GameMap {
   }
 
   isShore(ref: TileRef): boolean {
-    return this.isLand(ref) && this.isShoreline(ref);
+    const terrain = this.terrainByte(ref);
+    return (
+      Boolean(terrain & (1 << PagedGameMap.IS_LAND_BIT)) &&
+      Boolean(terrain & (1 << PagedGameMap.SHORELINE_BIT))
+    );
   }
 
   cost(ref: TileRef): number {
@@ -444,8 +472,9 @@ export class PagedGameMap implements GameMap {
   }
 
   terrainType(ref: TileRef): TerrainType {
-    if (!this.isLand(ref)) return TerrainType.Ocean;
-    const magnitude = this.magnitude(ref);
+    const terrain = this.terrainByte(ref);
+    if (!(terrain & (1 << PagedGameMap.IS_LAND_BIT))) return TerrainType.Ocean;
+    const magnitude = terrain & PagedGameMap.MAGNITUDE_MASK;
     if (magnitude >= PagedGameMap.IMPASSABLE_MAGNITUDE)
       return TerrainType.Impassable;
     if (magnitude < 10) return TerrainType.Plains;
@@ -524,17 +553,21 @@ export class PagedGameMap implements GameMap {
   updateTile(ref: TileRef, packed: number): boolean {
     const state = packed & 0xffff;
     const terrain = (packed >>> 16) & 0xff;
-    const existingFallout = this.hasFallout(ref);
-    this.setTileState(ref, state);
-    const newFallout = this.hasFallout(ref);
+    const { page, offset } = this.location(ref);
+    const existingState = page.state[offset];
+    const existingFallout = Boolean(
+      existingState & (1 << PagedGameMap.FALLOUT_BIT),
+    );
+    page.state[offset] = state;
+    const newFallout = Boolean(state & (1 << PagedGameMap.FALLOUT_BIT));
     if (existingFallout !== newFallout)
       this.falloutTiles += newFallout ? 1 : -1;
 
-    const previousTerrain = this.terrainByte(ref);
+    const previousTerrain = page.terrain[offset];
     if (previousTerrain === terrain) return false;
     const wasLand = Boolean(previousTerrain & (1 << PagedGameMap.IS_LAND_BIT));
     const isLand = Boolean(terrain & (1 << PagedGameMap.IS_LAND_BIT));
-    this.setTerrainByte(ref, terrain);
+    page.terrain[offset] = terrain;
     if (wasLand !== isLand) this.landTiles_ += isLand ? 1 : -1;
     return true;
   }

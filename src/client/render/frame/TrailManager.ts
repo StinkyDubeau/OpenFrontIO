@@ -44,6 +44,8 @@ export class TrailManager {
 
   private _dirtyRowMin = Infinity;
   private _dirtyRowMax = -1;
+  /** Exact changed texels for sparse GPU scatter uploads. */
+  private readonly _dirtyTiles: number[] = [];
 
   constructor(mapW: number, mapH: number) {
     this.mapW = mapW;
@@ -62,9 +64,14 @@ export class TrailManager {
     return this._dirtyRowMax;
   }
 
+  get dirtyTiles(): readonly number[] {
+    return this._dirtyTiles;
+  }
+
   clearDirtyRows(): void {
     this._dirtyRowMin = Infinity;
     this._dirtyRowMax = -1;
+    this._dirtyTiles.length = 0;
   }
 
   reset(): void {
@@ -73,6 +80,7 @@ export class TrailManager {
     this.trailCounts.fill(0);
     this._dirtyRowMin = Infinity;
     this._dirtyRowMax = -1;
+    this._dirtyTiles.length = 0;
   }
 
   /**
@@ -129,7 +137,9 @@ export class TrailManager {
   }
 
   private stamp(ref: number, value: number): void {
+    if (this.trailState[ref] === value) return;
     this.trailState[ref] = value;
+    this._dirtyTiles.push(ref);
     const row = (ref / this.mapW) | 0;
     if (row < this._dirtyRowMin) this._dirtyRowMin = row;
     if (row > this._dirtyRowMax) this._dirtyRowMax = row;

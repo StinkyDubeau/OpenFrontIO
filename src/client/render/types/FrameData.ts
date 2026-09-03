@@ -43,15 +43,12 @@ export interface FrameData {
    */
   readonly changedTiles: readonly number[] | null;
   readonly railroadDirty: boolean;
+  /** Exact changed railroad texels for sparse GPU uploads. */
+  readonly railroadDirtyTiles: readonly number[];
   readonly revealedRailTiles: number[];
 
-  /**
-   * Trail dirty row range for partial GPU upload.
-   * - `dirtyRowMin > dirtyRowMax` → no trail changes (skip upload)
-   * - Otherwise → upload rows [min, max] from trailState
-   */
-  readonly trailDirtyRowMin: number;
-  readonly trailDirtyRowMax: number;
+  /** Exact changed trail texels for sparse GPU uploads. */
+  readonly trailDirtyTiles: readonly number[];
 
   /**
    * Live spiral nukeTrail ribbons (helix polylines from SpiralTrails) —

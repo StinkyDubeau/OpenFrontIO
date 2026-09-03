@@ -129,6 +129,9 @@ export class RailroadCache {
   /** True if railroadState changed this tick. */
   railroadDirty = false;
 
+  /** Exact changed texels for sparse GPU uploads. */
+  readonly dirtyTiles: number[] = [];
+
   /** Tile refs revealed by animation this tick (for dust FX). */
   readonly revealedRailTiles: number[] = [];
 
@@ -164,6 +167,7 @@ export class RailroadCache {
   /** Clear the dirty flag after the consumer has uploaded the state. */
   clearDirty(): void {
     this.railroadDirty = false;
+    this.dirtyTiles.length = 0;
   }
 
   /** Get raw tile refs for the given railroad IDs (for ghost manager overlap resolution). */
@@ -193,6 +197,7 @@ export class RailroadCache {
     this.tileRefCount.clear();
     this.railroadState.fill(0);
     this.railroadDirty = false;
+    this.dirtyTiles.length = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -215,8 +220,7 @@ export class RailroadCache {
     }
 
     if (complete) {
-      for (const rt of tiles) this.railroadState[rt.ref] = rt.type + 1;
-      this.railroadDirty = true;
+      for (const rt of tiles) this.setTile(rt.ref, rt.type + 1);
     }
   }
 
@@ -229,14 +233,13 @@ export class RailroadCache {
       const count = (this.tileRefCount.get(rt.ref) ?? 1) - 1;
       if (count <= 0) {
         this.tileRefCount.delete(rt.ref);
-        this.railroadState[rt.ref] = 0;
+        this.setTile(rt.ref, 0);
       } else {
         this.tileRefCount.set(rt.ref, count);
       }
     }
 
     this.anims.delete(id);
-    this.railroadDirty = true;
   }
 
   private tickAnimations(): void {
@@ -246,28 +249,33 @@ export class RailroadCache {
       if (anim.tailIndex - anim.headIndex <= 2 * RAIL_INCREMENT) {
         for (let i = anim.headIndex; i < anim.tailIndex; i++) {
           const t = anim.tiles[i]!;
-          this.railroadState[t.ref] = t.type + 1;
+          this.setTile(t.ref, t.type + 1);
           this.revealedRailTiles.push(t.ref);
         }
         anim.headIndex = anim.tailIndex;
         anim.complete = true;
-        this.railroadDirty = true;
       } else {
         for (let i = anim.headIndex; i < anim.headIndex + RAIL_INCREMENT; i++) {
           const t = anim.tiles[i]!;
-          this.railroadState[t.ref] = t.type + 1;
+          this.setTile(t.ref, t.type + 1);
           this.revealedRailTiles.push(t.ref);
         }
         for (let i = anim.tailIndex - RAIL_INCREMENT; i < anim.tailIndex; i++) {
           const t = anim.tiles[i]!;
-          this.railroadState[t.ref] = t.type + 1;
+          this.setTile(t.ref, t.type + 1);
           this.revealedRailTiles.push(t.ref);
         }
         anim.headIndex += RAIL_INCREMENT;
         anim.tailIndex -= RAIL_INCREMENT;
         if (anim.headIndex >= anim.tailIndex) anim.complete = true;
-        this.railroadDirty = true;
       }
     }
+  }
+
+  private setTile(ref: number, value: number): void {
+    if (this.railroadState[ref] === value) return;
+    this.railroadState[ref] = value;
+    this.dirtyTiles.push(ref);
+    this.railroadDirty = true;
   }
 }

@@ -26,12 +26,17 @@ async function createGameWorker(): Promise<Worker> {
 }
 
 export class WorkerClient {
+  private static readonly MAIN_THREAD_SLICE_MS = 8;
   private worker: Worker | null = null;
   private isInitialized = false;
   private messageHandlers: Map<string, (message: WorkerMessage) => void>;
   private gameUpdateCallback?: (
     update: GameUpdateViewData | ErrorUpdate,
   ) => void;
+  private pendingGameUpdates: GameUpdateViewData[] = [];
+  private pendingGameUpdateHead = 0;
+  private updateDrainTimer: ReturnType<typeof setTimeout> | null = null;
+  private drainingUpdates = false;
 
   constructor(
     private gameStartInfo: GameStartInfo,
@@ -45,16 +50,10 @@ export class WorkerClient {
 
     switch (message.type) {
       case "game_update":
-        if (this.gameUpdateCallback && message.gameUpdate) {
-          this.gameUpdateCallback(message.gameUpdate);
-        }
+        if (message.gameUpdate) this.enqueueGameUpdates([message.gameUpdate]);
         break;
       case "game_update_batch":
-        if (this.gameUpdateCallback && message.gameUpdates) {
-          for (const gu of message.gameUpdates) {
-            this.gameUpdateCallback(gu);
-          }
-        }
+        if (message.gameUpdates) this.enqueueGameUpdates(message.gameUpdates);
         break;
       case "game_error":
         if (this.gameUpdateCallback && message.error) {
@@ -72,6 +71,57 @@ export class WorkerClient {
         break;
     }
   }
+
+  /**
+   * Keep worker catch-up from turning into one long main-thread task. The
+   * first update drains immediately for normal-play latency; additional work
+   * yields after an eight-millisecond budget so input and rendering get a
+   * chance between deterministic ticks. Updates are never dropped or
+   * reordered.
+   */
+  private enqueueGameUpdates(updates: readonly GameUpdateViewData[]): void {
+    this.pendingGameUpdates.push(...updates);
+    if (!this.gameUpdateCallback || this.drainingUpdates) return;
+    if (this.updateDrainTimer !== null) return;
+    this.drainGameUpdates();
+  }
+
+  private drainGameUpdates = (): void => {
+    this.updateDrainTimer = null;
+    if (!this.gameUpdateCallback || this.drainingUpdates) return;
+    this.drainingUpdates = true;
+    const startedAt = performance.now();
+    let processed = 0;
+    try {
+      while (this.pendingGameUpdateHead < this.pendingGameUpdates.length) {
+        const update = this.pendingGameUpdates[this.pendingGameUpdateHead++];
+        this.gameUpdateCallback(update);
+        processed++;
+        if (
+          processed > 0 &&
+          performance.now() - startedAt >= WorkerClient.MAIN_THREAD_SLICE_MS
+        ) {
+          break;
+        }
+      }
+    } finally {
+      this.drainingUpdates = false;
+    }
+
+    if (this.pendingGameUpdateHead >= this.pendingGameUpdates.length) {
+      this.pendingGameUpdates.length = 0;
+      this.pendingGameUpdateHead = 0;
+      return;
+    }
+    // Compact occasionally without paying Array.shift() for every tick.
+    if (this.pendingGameUpdateHead >= 1_024) {
+      this.pendingGameUpdates = this.pendingGameUpdates.slice(
+        this.pendingGameUpdateHead,
+      );
+      this.pendingGameUpdateHead = 0;
+    }
+    this.updateDrainTimer = setTimeout(this.drainGameUpdates, 0);
+  };
 
   async initialize(): Promise<void> {
     const worker = await createGameWorker();
@@ -110,6 +160,9 @@ export class WorkerClient {
       throw new Error("Failed to initialize pathfinder");
     }
     this.gameUpdateCallback = gameUpdate;
+    if (this.pendingGameUpdateHead < this.pendingGameUpdates.length) {
+      this.drainGameUpdates();
+    }
   }
 
   sendTurn(turn: Turn) {
@@ -338,6 +391,12 @@ export class WorkerClient {
   }
 
   cleanup() {
+    if (this.updateDrainTimer !== null) {
+      clearTimeout(this.updateDrainTimer);
+      this.updateDrainTimer = null;
+    }
+    this.pendingGameUpdates.length = 0;
+    this.pendingGameUpdateHead = 0;
     this.worker?.terminate();
     this.messageHandlers.clear();
     this.gameUpdateCallback = undefined;

@@ -263,28 +263,8 @@ export class GPURenderer {
 
     this.camera = new Camera(mapW, mapH);
 
-    // --- Terrain (static) ---
-    // Bake once and let the array go — nothing below retains map-sized
-    // terrain bytes; re-bakes call terrainSource again.
+    // --- Terrain bytes (shared by terrain, railroad and map-layer passes) ---
     const terrainBytes = terrainSource();
-    this.terrainPass = new TerrainPass(
-      gl,
-      terrainSource,
-      terrainBytes,
-      mapW,
-      mapH,
-      {
-        oceanColor: hexToRgb(this.settings.terrain.oceanColor) ?? undefined,
-        sandColor: hexToRgb(this.settings.terrain.sandColor) ?? undefined,
-        plainsColor: hexToRgb(this.settings.terrain.plainsColor) ?? undefined,
-        highlandColor:
-          hexToRgb(this.settings.terrain.highlandColor) ?? undefined,
-        mountainColor:
-          hexToRgb(this.settings.terrain.mountainColor) ?? undefined,
-      },
-    );
-
-    // --- Terrain bytes R8UI texture (shared by map-layer passes) ---
     this.terrainBytesTex = createTexture2D(gl, {
       width: mapW,
       height: mapH,
@@ -293,6 +273,13 @@ export class GPURenderer {
       type: gl.UNSIGNED_BYTE,
       data: terrainBytes,
       filter: gl.NEAREST,
+    });
+    this.terrainPass = new TerrainPass(gl, this.terrainBytesTex, mapW, mapH, {
+      oceanColor: hexToRgb(this.settings.terrain.oceanColor) ?? undefined,
+      sandColor: hexToRgb(this.settings.terrain.sandColor) ?? undefined,
+      plainsColor: hexToRgb(this.settings.terrain.plainsColor) ?? undefined,
+      highlandColor: hexToRgb(this.settings.terrain.highlandColor) ?? undefined,
+      mountainColor: hexToRgb(this.settings.terrain.mountainColor) ?? undefined,
     });
 
     // --- Shared palette texture (RGBA32F, 4096×2) ---
@@ -545,7 +532,7 @@ export class GPURenderer {
       mapH,
       this.res.tileTex,
       this.paletteTex,
-      terrainBytes,
+      this.terrainBytesTex,
       this.settings,
     );
 
@@ -703,10 +690,9 @@ export class GPURenderer {
 
   uploadLiveTrailDelta(
     trailState: Uint16Array,
-    dirtyRowMin: number,
-    dirtyRowMax: number,
+    dirtyTiles: readonly number[],
   ): void {
-    this.trailPass.applyLiveDelta(trailState, dirtyRowMin, dirtyRowMax);
+    this.trailPass.applyLiveDelta(trailState, dirtyTiles);
   }
 
   /** Adopt this tick's spiral nukeTrail ribbons (live refs from SpiralTrails). */
@@ -871,8 +857,8 @@ export class GPURenderer {
     );
   }
 
-  uploadRailroadState(data: Uint8Array): void {
-    this.railroadPass.uploadRailroadState(data);
+  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void {
+    this.railroadPass.uploadRailroadState(data, dirtyTiles);
   }
 
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {
@@ -949,14 +935,12 @@ export class GPURenderer {
   /**
    * Update terrain texels for tiles whose terrain byte changed (e.g. water
    * nukes converting land → water). `terrainBytes[i]` is the new byte for
-   * `refs[i]`. Forwards to both TerrainPass (RGBA color) and RailroadPass
-   * (R8UI water-detection for bridges).
+   * `refs[i]`. Terrain, railroads and custom map layers all sample this one
+   * shared byte texture.
    */
   applyTerrainDelta(refs: readonly number[], terrainBytes: Uint8Array): void {
     if (refs.length === 0) return;
-    this.terrainPass.applyTerrainDelta(refs, terrainBytes);
-    this.railroadPass.applyTerrainDelta(refs, terrainBytes);
-    // Update the shared R8UI terrain-bytes texture used by map-layer passes.
+    // One shared R8UI texture feeds terrain, railroad and map-layer passes.
     if (!this.terrainBytesTex) return;
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.terrainBytesTex);
@@ -996,9 +980,7 @@ export class GPURenderer {
   }
 
   /**
-   * Rebuild the terrain texture from the current `settings.terrain` colors.
-   * Terrain is baked into a GPU texture rather than read per-frame, so a
-   * settings change needs this explicit rebuild.
+   * Update terrain colour uniforms. The map texture itself stays untouched.
    */
   rebuildTerrain(): void {
     this.terrainPass.setTerrainColors({
@@ -1259,6 +1241,7 @@ export class GPURenderer {
       this.heatManager.activate();
     }
     this.trailPass.flushTexture();
+    this.railroadPass.flushTexture();
     this.heatManager.updateHeat();
   }
 

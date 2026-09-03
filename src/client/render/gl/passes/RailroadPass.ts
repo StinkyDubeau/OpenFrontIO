@@ -28,6 +28,7 @@ import {
   shaderSrc,
 } from "../utils/GlUtils";
 import { TILE_DEFINES } from "../utils/TileCodec";
+import { TileScatterPass } from "./TileScatterPass";
 
 // ---------------------------------------------------------------------------
 // Rail orientation (0-5) → texture value (1-6, 0=none)
@@ -115,6 +116,8 @@ export class RailroadPass {
    */
   private liveRailroadRef: Uint8Array | null = null;
   private railroadDirty = false;
+  private railroadFullUploadPending = false;
+  private railroadScatter: TileScatterPass;
 
   /**
    * Current ghost overlay content, sparse: tile ref → texel value (1-6 =
@@ -129,22 +132,20 @@ export class RailroadPass {
 
   private localPlayerID = 0;
   private localRailColor: [number, number, number] = [0.75, 0.75, 0.75];
-  /** Scratch buffer for per-tile terrain byte uploads (avoids allocations). */
-  private terrainDeltaScratch = new Uint8Array(1);
-
   constructor(
     private gl: WebGL2RenderingContext,
     mapW: number,
     mapH: number,
     tileTex: WebGLTexture,
     paletteTex: WebGLTexture,
-    terrainBytes: Uint8Array,
+    terrainTex: WebGLTexture,
     settings: RenderSettings,
   ) {
     this.mapW = mapW;
     this.mapH = mapH;
     this.tileTex = tileTex;
     this.paletteTex = paletteTex;
+    this.terrainTex = terrainTex;
     this.settings = settings;
 
     this.program = createProgram(
@@ -188,17 +189,6 @@ export class RailroadPass {
     gl.uniform1i(gl.getUniformLocation(this.program, "uGhostRailTex"), 4);
     gl.uniform1f(this.uGhostOwnerID, 0);
 
-    // R8UI terrain texture (static, uploaded once for bridge detection)
-    this.terrainTex = createTexture2D(gl, {
-      width: mapW,
-      height: mapH,
-      internalFormat: gl.R8UI,
-      format: gl.RED_INTEGER,
-      type: gl.UNSIGNED_BYTE,
-      data: terrainBytes,
-      filter: gl.NEAREST,
-    });
-
     // R8UI railroad texture (null data = zero-initialized per the WebGL spec)
     this.railroadTex = createTexture2D(gl, {
       width: mapW,
@@ -209,6 +199,12 @@ export class RailroadPass {
       data: null,
       filter: gl.NEAREST,
     });
+    this.railroadScatter = new TileScatterPass(
+      gl,
+      mapW,
+      mapH,
+      this.railroadTex,
+    );
 
     // R8UI ghost railroad texture (same format, ghost paths only)
     this.ghostRailTex = createTexture2D(gl, {
@@ -224,32 +220,33 @@ export class RailroadPass {
     this.vao = createMapQuad(gl, mapW, mapH);
   }
 
-  uploadRailroadState(railroadState: Uint8Array): void {
+  uploadRailroadState(
+    railroadState: Uint8Array,
+    dirtyTiles: readonly number[],
+  ): void {
     this.liveRailroadRef = railroadState;
-    this.railroadDirty = true;
+    const fullUpload = dirtyTiles.length === railroadState.length;
+    if (fullUpload) {
+      this.railroadScatter.clear();
+      this.railroadFullUploadPending = true;
+    } else if (!this.railroadFullUploadPending) {
+      for (const ref of dirtyTiles) {
+        const x = ref % this.mapW;
+        const y = (ref - x) / this.mapW;
+        this.railroadScatter.push(x, y, railroadState[ref]);
+      }
+    }
+    this.railroadDirty =
+      this.railroadDirty || fullUpload || dirtyTiles.length > 0;
   }
 
-  setLocalPlayer(smallID: number): void {
-    this.localPlayerID = smallID;
-  }
-
-  /** Rail color for the local player (0–1 RGB). */
-  setLocalRailColor(r: number, g: number, b: number): void {
-    this.localRailColor = [r, g, b];
-  }
-
-  /**
-   * Sub-upload terrain bytes for tiles that changed (water-nuke conversions).
-   * Keeps the R8UI water-detection texture in sync with the simulation.
-   * `bytes[i]` is the new terrain byte for `refs[i]` (parallel arrays).
-   */
-  applyTerrainDelta(refs: readonly number[], bytes: Uint8Array): void {
-    if (refs.length === 0) return;
+  /** Flush exact railroad texel changes once per frame, independent of zoom. */
+  flushTexture(): void {
+    if (!this.railroadDirty || this.liveRailroadRef === null) return;
     const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, this.terrainTex);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    // Full-map fast path: single texSubImage2D instead of per-tile uploads.
-    if (refs.length === this.mapW * this.mapH) {
+    if (this.railroadFullUploadPending) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.railroadTex);
       gl.texSubImage2D(
         gl.TEXTURE_2D,
         0,
@@ -259,27 +256,23 @@ export class RailroadPass {
         this.mapH,
         gl.RED_INTEGER,
         gl.UNSIGNED_BYTE,
-        bytes,
+        this.liveRailroadRef,
       );
-      return;
+      this.railroadFullUploadPending = false;
+      this.railroadScatter.clear();
+    } else if (this.railroadScatter.count > 0) {
+      this.railroadScatter.flush();
     }
-    for (let i = 0; i < refs.length; i++) {
-      const ref = refs[i];
-      const x = ref % this.mapW;
-      const y = (ref - x) / this.mapW;
-      this.terrainDeltaScratch[0] = bytes[i];
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        x,
-        y,
-        1,
-        1,
-        gl.RED_INTEGER,
-        gl.UNSIGNED_BYTE,
-        this.terrainDeltaScratch,
-      );
-    }
+    this.railroadDirty = false;
+  }
+
+  setLocalPlayer(smallID: number): void {
+    this.localPlayerID = smallID;
+  }
+
+  /** Rail color for the local player (0–1 RGB). */
+  setLocalRailColor(r: number, g: number, b: number): void {
+    this.localRailColor = [r, g, b];
   }
 
   updateGhostPreview(data: GhostPreviewData | null): void {
@@ -343,23 +336,7 @@ export class RailroadPass {
         : Math.min(1, Math.max(0, (zoom - fadeStart) / fadeRange));
     if (fade <= 0) return;
 
-    // Flush railroad state → GPU
-    if (this.railroadDirty && this.liveRailroadRef !== null) {
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, this.railroadTex);
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        0,
-        0,
-        this.mapW,
-        this.mapH,
-        gl.RED_INTEGER,
-        gl.UNSIGNED_BYTE,
-        this.liveRailroadRef,
-      );
-      this.railroadDirty = false;
-    }
+    this.flushTexture();
 
     gl.useProgram(this.program);
     gl.uniformMatrix3fv(this.uCamera, false, cameraMatrix);
@@ -463,7 +440,8 @@ export class RailroadPass {
     gl.deleteProgram(this.program);
     gl.deleteTexture(this.railroadTex);
     gl.deleteTexture(this.ghostRailTex);
-    gl.deleteTexture(this.terrainTex);
+    this.railroadScatter.dispose();
+    // The renderer owns the shared terrain texture.
     // Don't delete tileTex or paletteTex — shared with other passes
   }
 }

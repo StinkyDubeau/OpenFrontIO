@@ -27,11 +27,10 @@ export interface FrameUploadTarget {
   ): void;
   uploadLiveTrailDelta(
     trailState: Uint16Array,
-    dirtyRowMin: number,
-    dirtyRowMax: number,
+    dirtyTiles: readonly number[],
   ): void;
   updateSpiralRibbons(ribbons: readonly SpiralRibbon[]): void;
-  uploadRailroadState(data: Uint8Array): void;
+  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void;
   applyRailroadDust(tileRefs: number[]): void;
   updateUnits(units: ReadonlyMap<number, UnitState>, gameTick: number): void;
   updateStructures(units: ReadonlyMap<number, UnitState>): void;
@@ -67,13 +66,9 @@ export function uploadFrameData(
     if (frame.changedTiles.length > 0) {
       view.uploadLiveDelta(frame.tileState, frame.changedTiles);
     }
-    // Trail dirty rows come from TrailManager, independent of tile deltas
-    if (frame.trailDirtyRowMax >= 0) {
-      view.uploadLiveTrailDelta(
-        frame.trailState,
-        frame.trailDirtyRowMin,
-        frame.trailDirtyRowMax,
-      );
+    // Trail dirty texels come from TrailManager, independent of tile deltas.
+    if (frame.trailDirtyTiles.length > 0) {
+      view.uploadLiveTrailDelta(frame.trailState, frame.trailDirtyTiles);
     }
   } else {
     view.uploadTileAndTrailState(frame.tileState, frame.trailState);
@@ -84,7 +79,7 @@ export function uploadFrameData(
 
   // --- Railroads ---
   if (frame.railroadDirty) {
-    view.uploadRailroadState(frame.railroadState);
+    view.uploadRailroadState(frame.railroadState, frame.railroadDirtyTiles);
     if (frame.revealedRailTiles.length > 0) {
       view.applyRailroadDust(frame.revealedRailTiles);
     }

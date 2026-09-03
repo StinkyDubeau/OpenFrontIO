@@ -83,31 +83,43 @@ export interface TerrainColorOverrides {
   mountainColor?: readonly [number, number, number];
 }
 
+export interface ResolvedTerrainColors {
+  ocean: readonly [number, number, number];
+  sand: readonly [number, number, number];
+  plains: readonly [number, number, number];
+  highland: readonly [number, number, number];
+  mountain: readonly [number, number, number];
+}
+
+/** Resolve the five configurable terrain colours shared by CPU tests and GLSL. */
+export function resolveTerrainColors(
+  colors?: TerrainColorOverrides,
+): ResolvedTerrainColors {
+  return {
+    ocean: colors?.oceanColor ?? DEEP_WATER_BASE,
+    sand: colors?.sandColor ?? [204, 203, 158],
+    plains: colors?.plainsColor ?? [190, 220, 138],
+    highland: colors?.highlandColor ?? [200, 183, 138],
+    mountain: colors?.mountainColor ?? [230, 230, 230],
+  };
+}
+
 export function encodeTerrainTile(
   tb: number,
   out: Uint8Array,
   offset: number,
   colors?: TerrainColorOverrides,
 ): void {
-  const oceanColor = colors?.oceanColor;
-  const sandColor = colors?.sandColor;
-  const plainsColor = colors?.plainsColor;
-  const highlandColor = colors?.highlandColor;
-  const mountainColor = colors?.mountainColor;
-
   const isLand = (tb & 0x80) !== 0;
   const isShoreline = (tb & 0x40) !== 0;
   const magnitude = tb & 0x1f;
 
   let r: number, g: number, b: number;
 
+  const resolved = resolveTerrainColors(colors);
   const terrainColors = {
-    ocean: oceanColor ?? DEEP_WATER_BASE,
+    ...resolved,
     shoreWater: [100, 143, 255],
-    sand: sandColor ?? [204, 203, 158],
-    plains: plainsColor ?? [190, 220, 138],
-    highland: highlandColor ?? [200, 183, 138],
-    mountain: mountainColor ?? [230, 230, 230],
     peak: [60, 60, 60],
   };
 
@@ -145,7 +157,7 @@ export function encodeTerrainTile(
     }
   } else if (isShoreline) {
     // Shoreline water — computed dynamically by blending 70% ocean color and 30% white
-    const base = oceanColor ?? DEEP_WATER_BASE;
+    const base = terrainColors.ocean;
     r = Math.round(0.7 * base[0] + 76.5);
     g = Math.round(0.7 * base[1] + 76.5);
     b = Math.round(0.7 * base[2] + 76.5);

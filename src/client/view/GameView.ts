@@ -211,9 +211,9 @@ export class GameView implements GameMap {
       },
       changedTiles: null,
       railroadDirty: false,
+      railroadDirtyTiles: [],
       revealedRailTiles: this.railroadCache.revealedRailTiles,
-      trailDirtyRowMin: 0,
-      trailDirtyRowMax: -1,
+      trailDirtyTiles: [],
       // Derived data — populated each tick by populateFrame(). Empty defaults
       // here so the type is satisfied before the first update().
       playerStatus: new Map(),
@@ -596,8 +596,8 @@ export class GameView implements GameMap {
     f.tick = gu.tick;
     f.inSpawnPhase = this.startTick === null;
     f.railroadDirty = this.railroadCache.railroadDirty;
-    f.trailDirtyRowMin = this.trailManager.dirtyRowMin;
-    f.trailDirtyRowMax = this.trailManager.dirtyRowMax;
+    f.railroadDirtyTiles = this.railroadCache.dirtyTiles;
+    f.trailDirtyTiles = this.trailManager.dirtyTiles;
 
     f.playerStatus = computePlayerStatus(this._playerStates, this._unitStates, {
       localPlayerSmallID: this._myPlayer?.smallID() ?? 0,

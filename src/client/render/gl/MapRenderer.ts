@@ -151,10 +151,9 @@ export class MapRenderer {
   }
   uploadLiveTrailDelta(
     trailState: Uint16Array,
-    dirtyRowMin: number,
-    dirtyRowMax: number,
+    dirtyTiles: readonly number[],
   ): void {
-    this.renderer?.uploadLiveTrailDelta(trailState, dirtyRowMin, dirtyRowMax);
+    this.renderer?.uploadLiveTrailDelta(trailState, dirtyTiles);
   }
   /** Upload full tile + trail state without resetting bloom (for live play). */
   uploadTileAndTrailState(
@@ -189,8 +188,8 @@ export class MapRenderer {
   setPlayerSpawn(smallID: number, x: number, y: number): void {
     this.renderer?.setPlayerSpawn(smallID, x, y);
   }
-  uploadRailroadState(data: Uint8Array): void {
-    this.renderer?.uploadRailroadState(data);
+  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void {
+    this.renderer?.uploadRailroadState(data, dirtyTiles);
   }
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {
     this.renderer?.updateUnits(units, gameTick);
