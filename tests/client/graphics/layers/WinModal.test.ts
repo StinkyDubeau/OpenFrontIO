@@ -5,6 +5,7 @@ import {
   type ResolvedCosmetic,
 } from "../../../../src/client/Cosmetics";
 import type { PurchaseButton } from "../../../../src/client/components/PurchaseButton";
+import { beginMassiveWorldTacticalSession } from "../../../../src/client/experimental/massive-world/MassiveWorldSession";
 import "../../../../src/client/hud/layers/WinModal";
 import type { WinModal } from "../../../../src/client/hud/layers/WinModal";
 import { RankedType } from "../../../../src/core/game/Game";
@@ -49,6 +50,7 @@ describe("WinModal Requeue", () => {
 
   beforeEach(() => {
     mockLocationHref = "";
+    sessionStorage.clear();
     // Mock window.location.href using Object.defineProperty
     const locationMock = {
       get href() {
@@ -108,6 +110,24 @@ describe("WinModal Requeue", () => {
       handleExit();
 
       expect(window.location.href).toBe("/");
+    });
+
+    it("reloads the atlas after an active massive-world encounter", () => {
+      beginMassiveWorldTacticalSession({
+        duration: "1d",
+        sectorIndex: 413,
+        sectorName: "Alder Reach",
+        gameID: "TACTICAL-ONE",
+        enteredAt: 1_725_000_000_000,
+      });
+      const modal = document.createElement("win-modal") as WinModal;
+      modal.game = {
+        gameID: () => "TACTICAL-ONE",
+      } as never;
+
+      (modal as unknown as { _handleExit: () => void })._handleExit();
+
+      expect(mockLocationHref).toBe("/experimental/massive-world?duration=1d");
     });
   });
 

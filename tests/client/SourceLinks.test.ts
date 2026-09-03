@@ -13,9 +13,11 @@ describe("deployed corresponding-source links", () => {
   });
 
   test("uses the public source repository in static development previews", () => {
-    expect(correspondingSourceUrl()).toBe(sourceRepositoryUrl);
+    expect(correspondingSourceUrl()).toBe(
+      `${sourceRepositoryUrl}/tree/experimental/massive-world-demo`,
+    );
     expect(sourceFileUrl("LICENSE")).toBe(
-      `${sourceRepositoryUrl}/blob/main/LICENSE`,
+      `${sourceRepositoryUrl}/blob/experimental/massive-world-demo/LICENSE`,
     );
   });
 

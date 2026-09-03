@@ -13,6 +13,27 @@ Planning guardrail: this is a live, incremental pacing-tuning phase, not a
 gameplay rewrite. Defense posts, factories, road networks, and their current
 mechanics and balance are explicitly out of scope for mutation.
 
+## Overnight massive-world experiment
+
+The isolated `experimental/massive-world-demo` branch contains a playable
+long-shot prototype at `/experimental/massive-world?duration=1d`. It presents
+a GPU-rendered 64 × 32 strategic atlas whose 2,048 sectors address a
+4.096-billion-tile logical world, while loading only an 8 KiB summary texture
+and one ordinary OpenFront tactical sector at a time. The 1-hour, 1-day, and
+1-week presets independently persist and scale command regeneration,
+background fronts, and the transition from river/border travel to limited
+ocean crossings.
+
+This experiment does **not** replace the canonical OpenFront simulation. The
+atlas layer is an aggregated local interaction model; entering a sector uses
+the normal single-player `join-lobby` path and stock maps/rules. A victory is
+recorded exactly once against the selected reachable sector and returns to the
+same persisted atlas; a loss or early exit leaves its frontier unchanged. The
+tactical terrain remains a stock scenario rather than a geographic projection
+of that macro cell. Architecture limits, performance evidence, and the
+server/checkpoint work required before multiplayer promotion are recorded in
+[`docs/experimental-massive-world.md`](docs/experimental-massive-world.md).
+
 ## Current direction — supersedes the standalone territory prototype
 
 The user explicitly corrected the project direction on August 26, 2026:

@@ -1,12 +1,6 @@
 import { Platform } from "react-native";
 
-const LAN_GAME_URL = "http://192.168.2.118:9000/";
-
-function normalizeGameUrl(value: string | undefined): string {
-  const configured = value?.trim();
-  const candidate = configured?.length ? configured : LAN_GAME_URL;
-  return candidate.endsWith("/") ? candidate : `${candidate}/`;
-}
+import { normalizeGameUrl } from "./normalizeGameUrl";
 
 export const GAME_URL = normalizeGameUrl(process.env.EXPO_PUBLIC_GAME_URL);
 

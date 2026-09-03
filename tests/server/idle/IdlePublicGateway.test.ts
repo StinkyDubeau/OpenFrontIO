@@ -116,7 +116,9 @@ describe("idle public preview gateway", () => {
       redirect: "manual",
     });
     expect(protectedResponse.status).toBe(302);
-    expect(protectedResponse.headers.get("location")).toBe("/__preview/login");
+    expect(protectedResponse.headers.get("location")).toBe(
+      "/__preview/login?return=%2Fidle%2F",
+    );
 
     const loginPage = await fetch(`${gatewayUrl}/__preview/login`);
     expect(loginPage.status).toBe(200);
@@ -281,17 +283,31 @@ describe("idle public preview gateway", () => {
       });
       expect(protectedResponse.status).toBe(302);
       expect(protectedResponse.headers.get("location")).toBe(
-        "/__preview/login",
+        "/__preview/login?return=%2F",
       );
 
-      const login = await fetch(`${webGatewayUrl}/__preview/login`, {
+      const directDemoPath = "/experimental/massive-world?duration=1d";
+      const directDemo = await fetch(`${webGatewayUrl}${directDemoPath}`, {
+        redirect: "manual",
+      });
+      const directLoginPath =
+        "/__preview/login?return=%2Fexperimental%2Fmassive-world%3Fduration%3D1d";
+      expect(directDemo.status).toBe(302);
+      expect(directDemo.headers.get("location")).toBe(directLoginPath);
+
+      const directLoginPage = await fetch(`${webGatewayUrl}${directLoginPath}`);
+      expect(await directLoginPage.text()).toContain(
+        `action="${directLoginPath}"`,
+      );
+
+      const login = await fetch(`${webGatewayUrl}${directLoginPath}`, {
         method: "POST",
         body: new URLSearchParams({ password: ACCESS_TOKEN }),
         headers: { "content-type": "application/x-www-form-urlencoded" },
         redirect: "manual",
       });
       expect(login.status).toBe(303);
-      expect(login.headers.get("location")).toBe("/");
+      expect(login.headers.get("location")).toBe(directDemoPath);
       const previewCookie = (login.headers.get("set-cookie") ?? "").split(
         ";",
         1,
@@ -306,6 +322,18 @@ describe("idle public preview gateway", () => {
         path: "/?ui-lab=1",
         cookie: "idlefront_session=player",
       });
+
+      const unsafeLogin = await fetch(
+        `${webGatewayUrl}/__preview/login?return=${encodeURIComponent("https://example.com/")}`,
+        {
+          method: "POST",
+          body: new URLSearchParams({ password: ACCESS_TOKEN }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          redirect: "manual",
+        },
+      );
+      expect(unsafeLogin.status).toBe(303);
+      expect(unsafeLogin.headers.get("location")).toBe("/");
     } finally {
       await Promise.all([close(webGateway), close(webServer)]);
     }

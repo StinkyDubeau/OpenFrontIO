@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import "../experimental/massive-world/MassiveWorldPage";
 import "./LegalNoticePage";
 import "./persistent-world/PersistentWorldPage";
 
@@ -84,6 +85,10 @@ export class AtlasPageDeck extends LitElement {
         id="page-persistent-worlds"
         class=${pageClass}
       ></persistent-world-page>
+      <massive-world-page
+        id="page-massive-world"
+        class=${pageClass}
+      ></massive-world-page>
     `;
   }
 }

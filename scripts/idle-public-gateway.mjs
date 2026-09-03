@@ -119,7 +119,35 @@ function send(res, status, body, headers = {}) {
   res.end(payload);
 }
 
-function loginDocument(errorMessage = "") {
+function safeReturnPath(value, fallback) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > 2048 ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  ) {
+    return fallback;
+  }
+  try {
+    const parsed = new URL(value, "http://preview.invalid");
+    if (
+      parsed.origin !== "http://preview.invalid" ||
+      parsed.pathname === LOGIN_PATH
+    ) {
+      return fallback;
+    }
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return fallback;
+  }
+}
+
+function loginPath(returnPath) {
+  return `${LOGIN_PATH}?return=${encodeURIComponent(returnPath)}`;
+}
+
+function loginDocument(errorMessage = "", returnPath = "/idle/") {
   const error = errorMessage
     ? `<p class="error" role="alert">${errorMessage}</p>`
     : "";
@@ -148,7 +176,7 @@ function loginDocument(errorMessage = "") {
       <h1>IdleFront</h1>
       <p>This development world is private. Enter the preview password once on this device.</p>
       ${error}
-      <form method="post" action="${LOGIN_PATH}">
+      <form method="post" action="${loginPath(returnPath)}">
         <label>Preview password<input name="password" type="password" autocomplete="current-password" required autofocus></label>
         <button type="submit">Enter the world</button>
       </form>
@@ -265,6 +293,7 @@ export function createPreviewGateway(options = {}) {
   );
   const expectedCookie = cookieValue(accessToken);
   const failedLogins = new Map();
+  const defaultReturnPath = webOrigin ? "/" : "/idle/";
 
   function authenticated(req) {
     const supplied = parseCookies(req.headers.cookie).get(COOKIE_NAME) ?? "";
@@ -497,7 +526,11 @@ export function createPreviewGateway(options = {}) {
     const pathname = requestUrl.pathname;
 
     if (pathname === LOGIN_PATH && method === "GET") {
-      send(res, 200, loginDocument(), {
+      const returnPath = safeReturnPath(
+        requestUrl.searchParams.get("return"),
+        defaultReturnPath,
+      );
+      send(res, 200, loginDocument("", returnPath), {
         "content-security-policy":
           "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
         "content-type": "text/html; charset=utf-8",
@@ -506,13 +539,22 @@ export function createPreviewGateway(options = {}) {
     }
 
     if (pathname === LOGIN_PATH && method === "POST") {
+      const returnPath = safeReturnPath(
+        requestUrl.searchParams.get("return"),
+        defaultReturnPath,
+      );
       if (loginBlocked(req)) {
-        send(res, 429, loginDocument("Too many attempts. Try again later."), {
-          "content-security-policy":
-            "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-          "content-type": "text/html; charset=utf-8",
-          "retry-after": "900",
-        });
+        send(
+          res,
+          429,
+          loginDocument("Too many attempts. Try again later.", returnPath),
+          {
+            "content-security-policy":
+              "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+            "content-type": "text/html; charset=utf-8",
+            "retry-after": "900",
+          },
+        );
         return;
       }
       try {
@@ -520,18 +562,23 @@ export function createPreviewGateway(options = {}) {
         const submitted = new URLSearchParams(body).get("password") ?? "";
         if (!equalSecret(submitted, accessToken)) {
           recordLoginFailure(req);
-          send(res, 401, loginDocument("That password did not match."), {
-            "content-security-policy":
-              "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-            "content-type": "text/html; charset=utf-8",
-          });
+          send(
+            res,
+            401,
+            loginDocument("That password did not match.", returnPath),
+            {
+              "content-security-policy":
+                "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+              "content-type": "text/html; charset=utf-8",
+            },
+          );
           return;
         }
         failedLogins.delete(clientKey(req));
         res.writeHead(303, {
           ...securityHeaders(),
           "cache-control": "no-store",
-          location: webOrigin ? "/" : "/idle/",
+          location: returnPath,
           "set-cookie": `${COOKIE_NAME}=${expectedCookie}; Path=/; Max-Age=604800; HttpOnly; Secure; SameSite=Strict`,
         });
         res.end();
@@ -565,10 +612,14 @@ export function createPreviewGateway(options = {}) {
             { "content-type": "application/json; charset=utf-8" },
           );
         } else {
+          const returnPath = safeReturnPath(
+            `${requestUrl.pathname}${requestUrl.search}`,
+            defaultReturnPath,
+          );
           res.writeHead(302, {
             ...securityHeaders(),
             "cache-control": "no-store",
-            location: LOGIN_PATH,
+            location: loginPath(returnPath),
           });
           res.end();
         }
@@ -612,10 +663,14 @@ export function createPreviewGateway(options = {}) {
           { "content-type": "application/json; charset=utf-8" },
         );
       } else {
+        const returnPath = safeReturnPath(
+          `${requestUrl.pathname}${requestUrl.search}`,
+          defaultReturnPath,
+        );
         res.writeHead(302, {
           ...securityHeaders(),
           "cache-control": "no-store",
-          location: LOGIN_PATH,
+          location: loginPath(returnPath),
         });
         res.end();
       }

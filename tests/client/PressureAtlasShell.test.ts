@@ -279,7 +279,7 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(playPage).toContain("correspondingSourceUrl()");
   });
 
-  test("keeps unfinished product prose in a centralized copywriter handoff", () => {
+  test("keeps reviewed and unfinished prose in the centralized copywriter handoff", () => {
     const copy = source("src/client/copy/PlaceholderCopy.ts");
     const handoff = source("docs/COPYWRITING.md");
     const playPage = source("src/client/components/PlayPage.ts");
@@ -290,9 +290,10 @@ describe("Pressure Atlas OpenFront shell", () => {
       "src/client/components/persistent-world/PersistentWorldCreationWizard.ts",
     );
 
-    expect(copy).toContain('subtitle: "Game subtitle"');
-    expect(copy).toContain('heading: "Page header"');
-    expect(copy).toContain('stepInstructions: "Step instructions"');
+    expect(copy).toContain('subtitle: "online world domination"');
+    expect(copy).toContain('heading: "welcome to idlefront"');
+    expect(copy).toContain('"who can join the game"');
+    expect(copy).toContain('pendingHeading: "Status header"');
     expect(playPage).toContain("placeholderCopy.landing.identityLabel");
     expect(worldPage).toContain("placeholderCopy.worlds.heading");
     expect(wizard).toContain("placeholderCopy.wizard.stepInstructions");
@@ -310,6 +311,56 @@ describe("Pressure Atlas OpenFront shell", () => {
     );
     expect(winModal).not.toContain("<steam-wishlist");
     expect(winModal).not.toContain("discord.com/invite/openfront");
+  });
+
+  test("gives the experimental atlas the complete game viewport", () => {
+    const styles = source(
+      "src/client/experimental/massive-world/massive-world.css",
+    );
+
+    expect(styles).toContain(
+      'body[data-page="page-massive-world"] desktop-nav-bar',
+    );
+    expect(styles).toContain(
+      'body[data-page="page-massive-world"] #page-massive-world',
+    );
+    expect(styles).toContain("position: fixed !important");
+    expect(styles).toContain("height: 100dvh");
+    expect(styles).toContain("overflow: hidden !important");
+    expect(styles).toContain("@media (hover: hover)");
+    expect(styles).not.toContain("@media (hover: none)");
+  });
+
+  test("returns browser Back from an experimental tactical sector to its atlas", () => {
+    const main = source("src/client/Main.ts");
+
+    expect(main).toContain("MASSIVE_WORLD_RETURN_ROUTE_KEY");
+    expect(main).toContain("massiveWorldReturnRoute()");
+    expect(main).toContain("window.location.href = returnUrl");
+    expect(main).toContain(
+      "previous tactical sector cannot retain subscriptions",
+    );
+  });
+
+  test("links a stock tactical result back to the selected atlas sector", () => {
+    const main = source("src/client/Main.ts");
+    const clientRunner = source("src/client/ClientGameRunner.ts");
+    const atlas = source(
+      "src/client/experimental/massive-world/MassiveWorldPage.ts",
+    );
+    const winModal = source("src/client/hud/layers/WinModal.ts");
+    const rightSidebar = source("src/client/hud/layers/GameRightSidebar.ts");
+    const settings = source("src/client/hud/layers/SettingsModal.ts");
+
+    expect(clientRunner).toContain("this.lobby.onGameOutcome?.(");
+    expect(clientRunner).toContain("classifyLocalGameOutcome(");
+    expect(main).toContain("recordMassiveWorldTacticalResult(");
+    expect(atlas).toContain("this.model.applyTacticalOutcome({");
+    expect(atlas).toContain("secured by tactical victory");
+    expect(winModal).toContain("massiveWorldReturnRoute(");
+    expect(winModal).toContain("window.location.href = atlasReturn");
+    expect(rightSidebar).toContain("massiveWorldReturnRoute(");
+    expect(settings).toContain("massiveWorldReturnRoute()");
   });
 
   test("builds tactile buttons from glaze, texture, edge depth, and press motion", () => {

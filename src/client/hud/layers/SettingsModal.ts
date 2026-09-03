@@ -7,6 +7,9 @@ import { EventBus } from "../../../core/EventBus";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { Controller } from "../../Controller";
 import {
+  massiveWorldReturnRoute,
+} from "../../experimental/massive-world/MassiveWorldSession";
+import {
   AlternateViewEvent,
   ToggleRenderDebugGuiEvent,
 } from "../../InputHandler";
@@ -186,6 +189,11 @@ export class SettingsModal extends LitElement implements Controller {
   }
 
   private onExitButtonClick() {
+    const atlasReturn = massiveWorldReturnRoute();
+    if (atlasReturn) {
+      window.location.href = atlasReturn;
+      return;
+    }
     // redirect to the home page
     window.location.href = "/";
   }

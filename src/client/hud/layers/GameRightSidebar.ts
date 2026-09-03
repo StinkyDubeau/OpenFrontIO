@@ -8,6 +8,9 @@ import { ClientEnv } from "../../ClientEnv";
 import "../../components/DoomsdayClockPanel";
 import { Controller } from "../../Controller";
 import { crazyGamesSDK } from "../../CrazyGamesSDK";
+import {
+  massiveWorldReturnRoute,
+} from "../../experimental/massive-world/MassiveWorldSession";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
 import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
@@ -272,6 +275,11 @@ export class GameRightSidebar extends LitElement implements Controller {
     }
     await crazyGamesSDK.requestMidgameAd();
     await crazyGamesSDK.gameplayStop();
+    const atlasReturn = massiveWorldReturnRoute(this.game.gameID());
+    if (atlasReturn) {
+      window.location.href = atlasReturn;
+      return;
+    }
     // redirect to the home page
     window.location.href = "/";
   }

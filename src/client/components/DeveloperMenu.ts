@@ -200,6 +200,16 @@ export class IdleFrontDeveloperMenu extends LitElement {
               >
               <b aria-hidden="true">›</b>
             </a>
+            <a
+              class="atlas-war-button atlas-war-button--secondary"
+              href="/experimental/massive-world?duration=1d"
+            >
+              <span
+                ><strong>Massive world experiment</strong
+                ><small>Local macro/tactical prototype</small></span
+              >
+              <b aria-hidden="true">›</b>
+            </a>
           </nav>
 
           <div class="atlas-dev-menu__actions">

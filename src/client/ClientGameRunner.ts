@@ -36,6 +36,7 @@ import {
 } from "../core/game/UserSettings";
 import { WorkerClient } from "../core/worker/WorkerClient";
 import { getPersistentID } from "./Auth";
+import { classifyLocalGameOutcome, type LocalGameOutcome } from "./GameOutcome";
 import { showInGameAlert } from "./InGameModal";
 import {
   AutoUpgradeEvent,
@@ -101,6 +102,9 @@ export interface LobbyConfig {
   gameStartInfo?: GameStartInfo;
   // GameRecord exists when replaying an archived game.
   gameRecord?: GameRecord;
+  // Optional product-layer bridge. The runner reports canonical outcomes but
+  // remains unaware of any strategic campaign or persistence implementation.
+  onGameOutcome?: (outcome: LocalGameOutcome) => void;
 }
 
 export interface JoinLobbyResult {
@@ -750,6 +754,7 @@ export class ClientGameRunner {
   private lastTickReceiveTime: number = 0;
   private currentTickDelay: number | undefined = undefined;
   private catchupControlAbort: AbortController | null = null;
+  private massiveWorldEliminationRecorded = false;
 
   constructor(
     private lobby: LobbyConfig,
@@ -881,6 +886,30 @@ export class ClientGameRunner {
         this.eventBus.emit(new SendHashEvent(hu.tick, hu.hash));
       });
       this.gameView.update(gu);
+
+      // Record the canonical simulation result before HUD or renderer work can
+      // throw. Ordinary games omit the optional product-layer callback.
+      const winUpdate = gu.updates[GameUpdateType.Win][0];
+      const localPlayer = this.gameView.myPlayer();
+      if (winUpdate !== undefined) {
+        this.lobby.onGameOutcome?.(
+          classifyLocalGameOutcome(
+            winUpdate.winner,
+            this.clientID,
+            localPlayer?.team() ?? undefined,
+          ),
+        );
+        void this.saveGame(winUpdate);
+      } else if (
+        !this.massiveWorldEliminationRecorded &&
+        localPlayer?.hasSpawned() &&
+        !this.gameView.inSpawnPhase() &&
+        !localPlayer.isAlive()
+      ) {
+        this.massiveWorldEliminationRecorded = true;
+        this.lobby.onGameOutcome?.("defeat");
+      }
+
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
 
@@ -891,10 +920,6 @@ export class ClientGameRunner {
 
       // Reset tick delay for next measurement
       this.currentTickDelay = undefined;
-
-      if (gu.updates[GameUpdateType.Win].length > 0) {
-        this.saveGame(gu.updates[GameUpdateType.Win][0]);
-      }
     });
 
     const onconnect = () => {

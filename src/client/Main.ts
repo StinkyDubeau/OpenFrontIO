@@ -71,6 +71,12 @@ import { isReplayShellHost } from "./VersionedReplay";
 import "./components/BannedModal";
 import "./components/MarketingConsentToast";
 import {
+  MASSIVE_WORLD_ACTIVE_SECTOR_KEY,
+  MASSIVE_WORLD_RETURN_ROUTE_KEY,
+  massiveWorldReturnRoute,
+  recordMassiveWorldTacticalResult,
+} from "./experimental/massive-world/MassiveWorldSession";
+import {
   installDoubleTapZoomBlocker,
   installSafariPinchZoomBlocker,
 } from "./utilities/DisableSafariPinchZoom";
@@ -174,7 +180,8 @@ export interface JoinLobbyEvent {
     | "host"
     | "matchmaking"
     | "singleplayer"
-    | "persistent-world";
+    | "persistent-world"
+    | "massive-world";
   publicLobbyInfo?: GameInfo | PublicGameInfo;
 }
 
@@ -548,9 +555,14 @@ class Client {
     };
 
     const leaveGame = () => {
+      let returnUrl = "/";
+      const experimentalReturn = massiveWorldReturnRoute();
+      if (experimentalReturn) returnUrl = experimentalReturn;
       crazyGamesSDK.gameplayStop().then(() => {
-        // redirect to the home page
-        window.location.href = "/";
+        // A full reload is intentional for atlas returns: the current client
+        // shares one EventBus across game controllers, and a reload guarantees
+        // the previous tactical sector cannot retain subscriptions.
+        window.location.href = returnUrl;
       });
     };
 
@@ -761,9 +773,18 @@ class Client {
       }
     }
 
-    // Durable invitation lobbies are an application surface, not an ordinary
-    // OpenFront match. Route them before interpreting any game path and leave
-    // the existing /game flow completely untouched.
+    // Experimental and durable-world surfaces are application routes, not
+    // ordinary OpenFront matches. Resolve them before interpreting game paths
+    // and leave the existing /game flow completely untouched.
+    if (/^\/experimental\/massive-world\/?$/.test(window.location.pathname)) {
+      window.showPage?.("page-massive-world");
+      const page = document.querySelector("massive-world-page") as {
+        open?: () => void;
+      } | null;
+      page?.open?.();
+      return;
+    }
+
     if (
       /^\/worlds(?:\/new)?\/?$/.test(window.location.pathname) ||
       /^\/world\/[A-Za-z0-9_-]+\/?$/.test(window.location.pathname)
@@ -781,7 +802,8 @@ class Client {
     // existing modal routing behavior.
     if (
       window.location.pathname === "/" &&
-      window.currentPageId === "page-persistent-worlds"
+      (window.currentPageId === "page-persistent-worlds" ||
+        window.currentPageId === "page-massive-world")
     ) {
       window.showPage?.("page-play");
     }
@@ -857,6 +879,14 @@ class Client {
   private async handleJoinLobby(event: CustomEvent<JoinLobbyEvent>) {
     const lobby = event.detail;
     this.mostRecentJoinEvent = event.timeStamp;
+    if (lobby.source !== "massive-world") {
+      try {
+        sessionStorage.removeItem(MASSIVE_WORLD_RETURN_ROUTE_KEY);
+        sessionStorage.removeItem(MASSIVE_WORLD_ACTIVE_SECTOR_KEY);
+      } catch {
+        // Storage can be disabled in private embedded contexts.
+      }
+    }
     // Persistent-world membership already owns a server-screened, frozen
     // display name. Do not let the unrelated home-screen username field turn
     // its Play control into a silent no-op; the worker replaces the join
@@ -908,6 +938,10 @@ class Client {
           ? toWireGameStartInfo(lobby.gameRecord.info)
           : undefined),
       gameRecord: lobby.gameRecord,
+      onGameOutcome:
+        lobby.source === "massive-world"
+          ? (outcome) => recordMassiveWorldTacticalResult(lobby.gameID, outcome)
+          : undefined,
     });
 
     if (this.mostRecentJoinEvent !== event.timeStamp) {
@@ -1058,13 +1092,36 @@ class Client {
     this.lobbyHandle = null;
     this.currentUrl = null;
 
+    let experimentalReturn: string | null = null;
     try {
-      history.replaceState(null, "", "/");
+      experimentalReturn = sessionStorage.getItem(
+        MASSIVE_WORLD_RETURN_ROUTE_KEY,
+      );
+      sessionStorage.removeItem(MASSIVE_WORLD_RETURN_ROUTE_KEY);
+    } catch {
+      // Storage can be disabled in private embedded contexts.
+    }
+    const returnUrl = /^\/experimental\/massive-world(?:[/?#]|$)/.test(
+      experimentalReturn ?? "",
+    )
+      ? experimentalReturn!
+      : "/";
+
+    try {
+      history.replaceState(null, "", returnUrl);
     } catch (e) {
       console.warn("Failed to restore URL on leave:", e);
     }
 
     document.body.classList.remove("in-game");
+
+    if (returnUrl !== "/") {
+      window.showPage?.("page-massive-world");
+      const page = document.querySelector("massive-world-page") as {
+        open?: () => void;
+      } | null;
+      page?.open?.();
+    }
 
     if (this.joinModal.isOpen()) {
       this.joinModal.close();

@@ -34,6 +34,9 @@ describe("secret developer menu", () => {
     expect(
       menu!.querySelector('a[href="/?ui-lab=stone-buttons"]'),
     ).not.toBeNull();
+    expect(
+      menu!.querySelector('a[href="/experimental/massive-world?duration=1d"]'),
+    ).not.toBeNull();
   });
 
   it("expires an incomplete tap sequence and keeps the menu singleton", () => {

@@ -19,6 +19,9 @@ import {
   resolveCosmetics,
 } from "../../Cosmetics";
 import { crazyGamesSDK } from "../../CrazyGamesSDK";
+import {
+  massiveWorldReturnRoute,
+} from "../../experimental/massive-world/MassiveWorldSession";
 import { SendWinnerEvent } from "../../Transport";
 import { GameView } from "../../view";
 
@@ -226,6 +229,15 @@ export class WinModal extends LitElement implements Controller {
 
   private _handleExit() {
     this.hide();
+    const atlasReturn = this.game
+      ? massiveWorldReturnRoute(this.game.gameID())
+      : null;
+    if (atlasReturn) {
+      // A full navigation deliberately tears down the shared per-game EventBus
+      // subscriptions before another tactical sector starts.
+      window.location.href = atlasReturn;
+      return;
+    }
     window.location.href = "/";
   }
 
