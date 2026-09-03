@@ -26,6 +26,7 @@ const allMapKeys = Object.keys(GameMapType) as GameMapName[];
 // Maps excluded from the frequency requirement (not part of regular playlists).
 const FREQUENCY_EXEMPTIONS: Set<GameMapName> = new Set([
   "GiantWorldMap",
+  "ExpandedGiantWorld",
   "Oceania",
   "BaikalNukeWars",
   "Tourney1",
@@ -286,11 +287,10 @@ describe("Map consistency", () => {
     }
   });
 
-  test("Every GameMapType has resources/maps/ with thumbnail.webp, bin files, and manifest.json", () => {
+  test("Every GameMapType has complete contiguous or paged resources", () => {
     const errors: string[] = [];
-    const requiredFiles = [
+    const commonRequiredFiles = [
       "manifest.json",
-      "map.bin",
       "map4x.bin",
       "map16x.bin",
       "thumbnail.webp",
@@ -306,10 +306,48 @@ describe("Map consistency", () => {
       }
 
       const files = fs.readdirSync(dir);
-      for (const req of requiredFiles) {
+      for (const req of commonRequiredFiles) {
         if (!files.includes(req)) {
           errors.push(`${key}: missing "${req}" in resources/maps/${folder}/`);
         }
+      }
+      if (!files.includes("manifest.json")) continue;
+
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(dir, "manifest.json"), "utf8"),
+      ) as {
+        map?: {
+          format?: string;
+          pages?: Array<{ path?: string; byte_length?: number }>;
+        };
+      };
+      if (manifest.map?.format === "paged-v1") {
+        const pages = manifest.map.pages;
+        if (!Array.isArray(pages) || pages.length === 0) {
+          errors.push(`${key}: paged-v1 manifest has no terrain pages`);
+          continue;
+        }
+        for (const [index, page] of pages.entries()) {
+          if (typeof page.path !== "string" || page.path.length === 0) {
+            errors.push(`${key}: page ${index} has no path`);
+            continue;
+          }
+          const pagePath = path.join(dir, page.path);
+          if (!fs.existsSync(pagePath)) {
+            errors.push(`${key}: missing page "${page.path}"`);
+            continue;
+          }
+          if (
+            typeof page.byte_length === "number" &&
+            fs.statSync(pagePath).size !== page.byte_length
+          ) {
+            errors.push(
+              `${key}: page "${page.path}" does not match byte_length`,
+            );
+          }
+        }
+      } else if (!files.includes("map.bin")) {
+        errors.push(`${key}: missing "map.bin" in resources/maps/${folder}/`);
       }
     }
     if (errors.length > 0) {
@@ -512,8 +550,7 @@ describe("Map consistency", () => {
       const info = readInfoJson(key);
       if (info === null) continue;
       const layers = info.layers as
-        | Array<{ id: string; placement: string }>
-        | undefined;
+        Array<{ id: string; placement: string }> | undefined;
       if (!layers || !Array.isArray(layers)) continue;
 
       const folder = toFolderName(key);

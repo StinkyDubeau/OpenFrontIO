@@ -30,8 +30,21 @@ const outputName = "expandedgiantworld";
 const sourceDir = join(repo, "resources", "maps", sourceName);
 const outputDir = join(repo, "resources", "maps", outputName);
 const pagesDir = join(outputDir, "pages");
-const mapsRegistryPath = join(repo, "src", "core", "game", "Maps.gen.ts");
 const englishPath = join(repo, "resources", "lang", "en.json");
+const sourceGeneratorDir = join(
+  repo,
+  "map-generator",
+  "assets",
+  "maps",
+  sourceName,
+);
+const outputGeneratorDir = join(
+  repo,
+  "map-generator",
+  "assets",
+  "maps",
+  outputName,
+);
 
 const sourceManifest = JSON.parse(
   readFileSync(join(sourceDir, "manifest.json"), "utf8"),
@@ -157,40 +170,27 @@ modified map is distributed on the same CC BY-SA 4.0 terms.
 `,
 );
 
-function updateMapRegistry() {
-  let registry = readFileSync(mapsRegistryPath, "utf8");
-  const enumEntry =
-    '  ExpandedGiantWorld = "Expanded Earth", // scripts/generate-expanded-earth.mjs';
-  if (!registry.includes(enumEntry)) {
-    const anchor =
-      '  GiantWorldMap = "Giant World Map", // map-generator/assets/maps/giantworldmap/info.json';
-    if (!registry.includes(anchor)) {
-      throw new Error("Could not locate GiantWorldMap in Maps.gen.ts");
-    }
-    registry = registry.replace(anchor, `${anchor}\n${enumEntry}`);
-  }
-
-  const mapEntry = `  {
-    id: "ExpandedGiantWorld",
-    type: GameMapType.ExpandedGiantWorld,
-    translationKey: "map.expandedgiantworld",
-    categories: ["world"],
-    multiplayerFrequency: 0,
-  },`;
-  if (!registry.includes('id: "ExpandedGiantWorld"')) {
-    const anchor = `  {
-    id: "GiantWorldMap",
-    type: GameMapType.GiantWorldMap,
-    translationKey: "map.giantworldmap",
-    categories: ["world"],
-    multiplayerFrequency: 10,
-  },`;
-    if (!registry.includes(anchor)) {
-      throw new Error("Could not locate GiantWorldMap registry entry");
-    }
-    registry = registry.replace(anchor, `${anchor}\n${mapEntry}`);
-  }
-  writeFileSync(mapsRegistryPath, registry);
+function updateGeneratorSource() {
+  mkdirSync(outputGeneratorDir, { recursive: true });
+  copyFileSync(
+    join(sourceGeneratorDir, "image.png"),
+    join(outputGeneratorDir, "image.png"),
+  );
+  writeFileSync(
+    join(outputGeneratorDir, "info.json"),
+    `${JSON.stringify(
+      {
+        id: "ExpandedGiantWorld",
+        name: "Expanded Earth",
+        translation_key: "map.expandedgiantworld",
+        categories: ["world"],
+        multiplayer_frequency: 0,
+        nations: manifest.nations,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function updateEnglishName() {
@@ -204,7 +204,7 @@ function updateEnglishName() {
   writeFileSync(englishPath, `${JSON.stringify(english, null, 2)}\n`);
 }
 
-updateMapRegistry();
+updateGeneratorSource();
 updateEnglishName();
 
 console.log(
