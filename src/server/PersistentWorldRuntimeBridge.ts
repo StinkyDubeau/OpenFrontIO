@@ -1,5 +1,11 @@
 import { createHash } from "crypto";
-import { GameMode, GameType } from "../core/game/Game";
+import {
+  Difficulty,
+  GameMapSize,
+  GameMapType,
+  GameMode,
+  GameType,
+} from "../core/game/Game";
 import {
   persistentWorldDurationMs,
   type PersistentWorld,
@@ -199,6 +205,14 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
     );
     return GameConfigSchema.parse({
       ...upstream,
+      // The seamless-world branch changes only the physical board and its
+      // population. Every economy, AI, structure and combat rule continues
+      // to come from the current OpenFront configuration.
+      gameMap: GameMapType.ExpandedGiantWorld,
+      gameMapSize: GameMapSize.Normal,
+      bots: 2000,
+      nations: "default",
+      difficulty: Difficulty.Medium,
       gameType: GameType.Private,
       gameMode: world.mode === "ffa" ? GameMode.FFA : GameMode.Team,
       maxPlayers: world.maxHumans,

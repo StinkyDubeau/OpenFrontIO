@@ -346,7 +346,9 @@ export const GameConfigSchema = z.object({
     .min(1)
     .max(400)
     .or(z.enum(["default", "disabled"])),
-  bots: z.number().int().min(0).max(400),
+  // Seamless worlds retain independent stock bots. The packed owner ID has
+  // 12 bits, so runtime configuration must keep the complete roster < 4096.
+  bots: z.number().int().min(0).max(2000),
   infiniteGold: z.boolean(),
   infiniteTroops: z.boolean(),
   instantBuild: z.boolean(),
