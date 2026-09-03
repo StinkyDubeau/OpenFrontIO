@@ -147,6 +147,8 @@ describe("Pressure Atlas OpenFront shell", () => {
 
   test("keeps the native game surface full-screen and free of global controls", () => {
     const mobileSurface = source("apps/mobile/src/GameSurface.tsx");
+    const nativeBridge = source("apps/mobile/src/config/game.ts");
+    const document = source("index.html");
 
     expect(mobileSurface).toContain("<WebView");
     expect(mobileSurface).toContain("flex: 1");
@@ -155,6 +157,13 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(mobileSurface).not.toContain("deckVisible");
     expect(mobileSurface).toContain("allowsBackForwardNavigationGestures");
     expect(mobileSurface).toContain('"hardwareBackPress"');
+    expect(mobileSurface).toContain("scalesPageToFit={false}");
+    expect(mobileSurface).toContain("setBuiltInZoomControls={false}");
+    expect(mobileSurface).toContain("setDisplayZoomControls={false}");
+    expect(mobileSurface).toContain("textZoom={100}");
+    expect(nativeBridge).toContain("maximum-scale=1");
+    expect(document).toContain("maximum-scale=1");
+    expect(document).toContain("font-size: max(16px, 1em) !important;");
   });
 
   test("applies the Dynamic Island inset once at the scene boundary", () => {

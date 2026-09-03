@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { placeholderCopy } from "../copy/PlaceholderCopy";
+import { recordDeveloperMenuLogoTap } from "./DeveloperMenu";
 
 /**
  * IdleFront's code-native product mark.
@@ -26,9 +27,18 @@ export class ProductWordmark extends LitElement {
     return this;
   }
 
+  private onLogoTap = (): void => {
+    recordDeveloperMenuLogoTap();
+  };
+
   render() {
     return html`
-      <span class="atlas-wordmark" role="img" aria-label="IdleFront">
+      <span
+        class="atlas-wordmark atlas-wordmark--dev-trigger"
+        role="button"
+        aria-label="IdleFront"
+        @click=${this.onLogoTap}
+      >
         <span class="atlas-wordmark__mark" aria-hidden="true">
           <svg
             class="atlas-wordmark__glyph"

@@ -175,11 +175,15 @@ export function GameSurface() {
         originWhitelist={["http://*", "https://*"]}
         overScrollMode="never"
         pullToRefreshEnabled={false}
+        scalesPageToFit={false}
+        setBuiltInZoomControls={false}
+        setDisplayZoomControls={false}
         setSupportMultipleWindows={false}
         sharedCookiesEnabled
         source={{ uri: GAME_URL }}
         startInLoadingState={false}
         style={styles.webView}
+        textZoom={100}
         thirdPartyCookiesEnabled
       />
 

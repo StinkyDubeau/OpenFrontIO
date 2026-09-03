@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <title>IdleFront — Persistent Strategy</title>
     <link rel="manifest" href="<%- manifestHref %>" />
@@ -53,6 +53,21 @@
       html,
       body {
         touch-action: manipulation;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      /* iOS magnifies the whole page when a focused form control computes to
+         less than 16px. That page zoom conflicts with the map's own camera
+         gestures and can strand the native shell at an enlarged scale. Keep
+         compact labels compact, but never render an editable control below
+         WebKit's focus-zoom threshold. */
+      @supports (-webkit-touch-callout: none) {
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+        select,
+        textarea,
+        [contenteditable="true"] {
+          font-size: max(16px, 1em) !important;
+        }
       }
     </style>
 

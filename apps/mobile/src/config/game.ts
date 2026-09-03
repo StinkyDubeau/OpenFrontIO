@@ -12,6 +12,22 @@ export const GAME_URL = normalizeGameUrl(process.env.EXPO_PUBLIC_GAME_URL);
 
 export const NATIVE_BRIDGE_BOOTSTRAP = `
   (function () {
+    var lockViewport = function () {
+      if (!document.head) return;
+      var viewport = document.querySelector('meta[name="viewport"]');
+      if (!viewport) {
+        viewport = document.createElement("meta");
+        viewport.setAttribute("name", "viewport");
+        document.head.appendChild(viewport);
+      }
+      viewport.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      );
+    };
+    lockViewport();
+    document.addEventListener("DOMContentLoaded", lockViewport, { once: true });
+
     var detail = {
       platform: ${JSON.stringify(Platform.OS)},
       shellVersion: "0.1.0",

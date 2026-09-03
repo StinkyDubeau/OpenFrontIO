@@ -1190,7 +1190,6 @@ const hideCrazyGamesElements = () => {
 // Initialize the client when the DOM is loaded
 const bootstrap = () => {
   initWarRoomUI();
-  if (mountAtlasUiLab()) return;
 
   // Prevent Safari's page-level pinch-zoom, which ignores `user-scalable=no`
   // on iOS and can softlock the HUD. See issue #2330.
@@ -1199,6 +1198,10 @@ const bootstrap = () => {
   // Same for double-tap "smart zoom", which `touch-action: manipulation`
   // alone does not reliably stop on iOS. See issue #4609.
   installDoubleTapZoomBlocker();
+
+  // The labs are full application surfaces too. Install viewport protection
+  // before their early return so repeated specimen taps cannot page-zoom.
+  if (mountAtlasUiLab()) return;
 
   initLayout();
   new Client().initialize();
