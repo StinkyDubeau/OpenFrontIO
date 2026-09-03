@@ -387,10 +387,10 @@ idlefront-developer-menu {
   background:
     radial-gradient(circle at 50% 20%, rgb(43 102 75 / 0.26), transparent 42%),
     rgb(1 8 7 / 0.82);
-  padding: max(0.85rem, env(safe-area-inset-top))
-    max(0.85rem, env(safe-area-inset-right))
-    max(0.85rem, env(safe-area-inset-bottom))
-    max(0.85rem, env(safe-area-inset-left));
+  padding: max(0.85rem, env(safe-area-inset-top), var(--native-safe-top, 0px))
+    max(0.85rem, env(safe-area-inset-right), var(--native-safe-right, 0px))
+    max(0.85rem, env(safe-area-inset-bottom), var(--native-safe-bottom, 0px))
+    max(0.85rem, env(safe-area-inset-left), var(--native-safe-left, 0px));
   backdrop-filter: blur(13px) saturate(0.82);
   -webkit-backdrop-filter: blur(13px) saturate(0.82);
   animation: atlas-dev-backdrop-in 180ms ease both;

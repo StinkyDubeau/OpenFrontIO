@@ -268,9 +268,22 @@ export class PerformanceOverlay extends LitElement implements Controller {
   }
 
   static styles = css`
+    :host {
+      --performance-safe-top: max(
+        0px,
+        env(safe-area-inset-top),
+        var(--native-safe-top, 0px)
+      );
+      --performance-safe-bottom: max(
+        0px,
+        env(safe-area-inset-bottom),
+        var(--native-safe-bottom, 0px)
+      );
+    }
+
     .performance-overlay {
       position: fixed;
-      top: var(--top, 20px);
+      top: max(var(--top, 20px), calc(var(--performance-safe-top) + 8px));
       left: var(--left, 50%);
       transform: var(--transform, translateX(-50%));
       background: rgba(0, 0, 0, 0.8);
@@ -286,13 +299,19 @@ export class PerformanceOverlay extends LitElement implements Controller {
       box-sizing: border-box;
       width: var(--overlay-width, min(460px, calc(100vw - 16px)));
       max-width: calc(100vw - 16px);
-      max-height: calc(100vh - 16px);
+      max-height: calc(
+        100dvh - var(--performance-safe-top) - var(--performance-safe-bottom) -
+          16px
+      );
       overflow: hidden;
     }
 
     .overlay-scroll {
       overflow: auto;
-      max-height: calc(100vh - 56px);
+      max-height: calc(
+        100dvh - var(--performance-safe-top) - var(--performance-safe-bottom) -
+          56px
+      );
     }
 
     .performance-overlay.dragging {
@@ -435,6 +454,30 @@ export class PerformanceOverlay extends LitElement implements Controller {
       line-height: 1;
       user-select: none;
       pointer-events: auto;
+    }
+
+    @media (pointer: coarse) {
+      .performance-overlay {
+        padding-top: 44px;
+      }
+
+      .drag-handle {
+        height: 44px;
+      }
+
+      .close-button {
+        top: 6px;
+        right: 6px;
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+      }
+
+      .reset-button,
+      .copy-json-button {
+        top: 8px;
+        height: 28px;
+      }
     }
 
     .layers-section {
@@ -652,6 +695,8 @@ export class PerformanceOverlay extends LitElement implements Controller {
     const newY = e.clientY - this.dragState.dragStart.y;
 
     const margin = 8;
+    const minY = this.nativeSafeInset("top") + margin;
+    const safeBottom = this.nativeSafeInset("bottom");
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const defaultWidth = Math.min(460, Math.max(0, viewportWidth - margin * 2));
@@ -665,7 +710,10 @@ export class PerformanceOverlay extends LitElement implements Controller {
         margin,
         Math.min(viewportWidth - overlayWidth - margin, newX),
       ),
-      y: Math.max(margin, Math.min(viewportHeight - 100, newY)),
+      y: Math.max(
+        minY,
+        Math.min(Math.max(minY, viewportHeight - safeBottom - 100), newY),
+      ),
     };
   };
 
@@ -684,12 +732,19 @@ export class PerformanceOverlay extends LitElement implements Controller {
     e.preventDefault();
     e.stopPropagation();
 
+    const overlay = this.renderRoot.querySelector<HTMLElement>(
+      ".performance-overlay",
+    );
+    const currentRect = overlay?.getBoundingClientRect();
+    const currentX = currentRect?.left ?? this.position.x;
+    const currentY = currentRect?.top ?? this.position.y;
+    this.position = { x: currentX, y: currentY };
     this.isDragging = true;
     this.dragState = {
       pointerId: e.pointerId,
       dragStart: {
-        x: e.clientX - this.position.x,
-        y: e.clientY - this.position.y,
+        x: e.clientX - currentX,
+        y: e.clientY - currentY,
       },
     };
 
@@ -697,6 +752,14 @@ export class PerformanceOverlay extends LitElement implements Controller {
     globalThis.addEventListener("pointerup", this.onDragPointerUp);
     globalThis.addEventListener("pointercancel", this.onDragPointerUp);
   };
+
+  private nativeSafeInset(edge: "top" | "bottom"): number {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(`--native-safe-${edge}`)
+      .trim();
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  }
 
   private onResizePointerMove = (e: PointerEvent) => {
     if (!this.resizeState || e.pointerId !== this.resizeState.pointerId) return;
@@ -1190,6 +1253,8 @@ export class PerformanceOverlay extends LitElement implements Controller {
     this.ensureUiText();
 
     const margin = 8;
+    const minY = this.nativeSafeInset("top") + margin;
+    const safeBottom = this.nativeSafeInset("bottom");
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const defaultWidth = Math.min(460, Math.max(0, viewportWidth - margin * 2));
@@ -1200,8 +1265,11 @@ export class PerformanceOverlay extends LitElement implements Controller {
     const maxLeft = Math.max(margin, viewportWidth - overlayWidth - margin);
     const clampedX = Math.max(margin, Math.min(this.position.x, maxLeft));
     const clampedY = Math.max(
-      margin,
-      Math.min(this.position.y, viewportHeight - 100),
+      minY,
+      Math.min(
+        this.position.y,
+        Math.max(minY, viewportHeight - safeBottom - 100),
+      ),
     );
 
     const copyLabel =
@@ -1320,64 +1388,65 @@ export class PerformanceOverlay extends LitElement implements Controller {
                       class="collapse-button"
                       @click=${this.toggleRenderLayersExpanded}
                       title=${
-                      this.renderLayersExpanded
-                        ? this.uiText.collapse
-                        : this.uiText.expand
-                    }
+                        this.renderLayersExpanded
+                          ? this.uiText.collapse
+                          : this.uiText.expand
+                      }
                     >
                       ${this.renderLayersExpanded ? "▾" : "▸"}
                     </button>
                   </div>
                   <div class="performance-line">
                     ${translateText(
-                    "performance_overlay.render_layers_summary",
-                    {
-                      frames: this.renderLastTickFrameCount,
-                      ms: this.renderLastTickLayerTotalMs.toFixed(2),
-                    },
-                  )}
+                      "performance_overlay.render_layers_summary",
+                      {
+                        frames: this.renderLastTickFrameCount,
+                        ms: this.renderLastTickLayerTotalMs.toFixed(2),
+                      },
+                    )}
                   </div>
                   ${
-                  this.renderLayersExpanded
-                    ? html`<div
-                          class="layer-row table-header"
-                          style="--pct: 0%;"
-                        >
-                          <span class="layer-name"></span>
-                          <span class="layer-metrics">
-                            ${this.uiText.renderLayersTableHeader}
-                          </span>
-                        </div>
-                        ${renderLayersToShow.map((layer) => {
-                        const width = Math.min(
-                          100,
-                          (layer.avg / maxLayerAvg) * 100 || 0,
-                        );
-                        const perTickRenderMs =
-                          this.renderLastTickLayerDurations[layer.name] ?? 0;
-                        const perTickRenderAvgMs =
-                          this.renderPerTickLayerStats.get(layer.name)?.avg ??
-                          0;
-                        const isInactive = perTickRenderMs <= 0.01;
-                        const title = `${layer.name} | last tick render: ${perTickRenderMs.toFixed(
-                          2,
-                        )}ms`;
-                        return html`<div
-                          class="layer-row ${isInactive ? "inactive" : ""}"
-                          style="--pct: ${width}%;"
-                          title=${title}
-                        >
-                          <span class="layer-name" title=${layer.name}
-                            >${layer.name}
-                          </span>
-                          <span class="layer-metrics">
-                            ${layer.avg.toFixed(2)} / ${layer.max.toFixed(2)}ms
-                            | ${perTickRenderAvgMs.toFixed(2)}ms
-                          </span>
-                        </div>`;
-                      })}`
-                    : html``
-                }
+                    this.renderLayersExpanded
+                      ? html`<div
+                            class="layer-row table-header"
+                            style="--pct: 0%;"
+                          >
+                            <span class="layer-name"></span>
+                            <span class="layer-metrics">
+                              ${this.uiText.renderLayersTableHeader}
+                            </span>
+                          </div>
+                          ${renderLayersToShow.map((layer) => {
+                          const width = Math.min(
+                            100,
+                            (layer.avg / maxLayerAvg) * 100 || 0,
+                          );
+                          const perTickRenderMs =
+                            this.renderLastTickLayerDurations[layer.name] ?? 0;
+                          const perTickRenderAvgMs =
+                            this.renderPerTickLayerStats.get(layer.name)?.avg ??
+                            0;
+                          const isInactive = perTickRenderMs <= 0.01;
+                          const title = `${layer.name} | last tick render: ${perTickRenderMs.toFixed(
+                            2,
+                          )}ms`;
+                          return html`<div
+                            class="layer-row ${isInactive ? "inactive" : ""}"
+                            style="--pct: ${width}%;"
+                            title=${title}
+                          >
+                            <span class="layer-name" title=${layer.name}
+                              >${layer.name}
+                            </span>
+                            <span class="layer-metrics">
+                              ${layer.avg.toFixed(2)} /
+                              ${layer.max.toFixed(2)}ms |
+                              ${perTickRenderAvgMs.toFixed(2)}ms
+                            </span>
+                          </div>`;
+                        })}`
+                      : html``
+                  }
                 </div>`
               : html``
           }
@@ -1390,55 +1459,56 @@ export class PerformanceOverlay extends LitElement implements Controller {
                       class="collapse-button"
                       @click=${this.toggleTickLayersExpanded}
                       title=${
-                      this.tickLayersExpanded
-                        ? this.uiText.collapse
-                        : this.uiText.expand
-                    }
+                        this.tickLayersExpanded
+                          ? this.uiText.collapse
+                          : this.uiText.expand
+                      }
                     >
                       ${this.tickLayersExpanded ? "▾" : "▸"}
                     </button>
                   </div>
                   <div class="performance-line">
                     ${translateText("performance_overlay.tick_layers_summary", {
-                    count: this.tickLayerLastCount,
-                    ms: this.tickLayerLastTotalMs.toFixed(2),
-                  })}
+                      count: this.tickLayerLastCount,
+                      ms: this.tickLayerLastTotalMs.toFixed(2),
+                    })}
                   </div>
                   ${
-                  this.tickLayersExpanded
-                    ? html`<div
-                          class="layer-row table-header"
-                          style="--pct: 0%;"
-                        >
-                          <span class="layer-name"></span>
-                          <span class="layer-metrics">
-                            ${this.uiText.tickLayersTableHeader}
-                          </span>
-                        </div>
-                        ${tickLayersToShow.map((layer) => {
-                        const width = Math.min(
-                          100,
-                          (layer.avg / maxTickLayerAvg) * 100 || 0,
-                        );
-                        const lastTickMs =
-                          this.tickLayerLastDurations[layer.name] ?? 0;
-                        const isInactive = lastTickMs <= 0.01;
-                        const title = `${layer.name} | last tick: ${lastTickMs.toFixed(2)}ms`;
-                        return html`<div
-                          class="layer-row ${isInactive ? "inactive" : ""}"
-                          style="--pct: ${width}%;"
-                          title=${title}
-                        >
-                          <span class="layer-name" title=${layer.name}
-                            >${layer.name}</span
+                    this.tickLayersExpanded
+                      ? html`<div
+                            class="layer-row table-header"
+                            style="--pct: 0%;"
                           >
-                          <span class="layer-metrics">
-                            ${layer.avg.toFixed(2)} / ${layer.max.toFixed(2)}ms
-                          </span>
-                        </div>`;
-                      })}`
-                    : html``
-                }
+                            <span class="layer-name"></span>
+                            <span class="layer-metrics">
+                              ${this.uiText.tickLayersTableHeader}
+                            </span>
+                          </div>
+                          ${tickLayersToShow.map((layer) => {
+                          const width = Math.min(
+                            100,
+                            (layer.avg / maxTickLayerAvg) * 100 || 0,
+                          );
+                          const lastTickMs =
+                            this.tickLayerLastDurations[layer.name] ?? 0;
+                          const isInactive = lastTickMs <= 0.01;
+                          const title = `${layer.name} | last tick: ${lastTickMs.toFixed(2)}ms`;
+                          return html`<div
+                            class="layer-row ${isInactive ? "inactive" : ""}"
+                            style="--pct: ${width}%;"
+                            title=${title}
+                          >
+                            <span class="layer-name" title=${layer.name}
+                              >${layer.name}</span
+                            >
+                            <span class="layer-metrics">
+                              ${layer.avg.toFixed(2)} /
+                              ${layer.max.toFixed(2)}ms
+                            </span>
+                          </div>`;
+                        })}`
+                      : html``
+                  }
                 </div>`
               : html``
           }
