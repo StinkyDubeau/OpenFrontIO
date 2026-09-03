@@ -1,6 +1,7 @@
 import { GameMapSize, GameMapType, TeamGameSpawnAreas } from "./Game";
 import { GameMap, GameMapImpl } from "./GameMap";
 import { GameMapLoader } from "./GameMapLoader";
+import { PagedGameMap, TerrainPageInput } from "./PagedGameMap";
 
 export type TerrainMapData = {
   nations: Nation[];
@@ -20,6 +21,34 @@ export interface MapMetadata {
   width: number;
   height: number;
   num_land_tiles: number;
+}
+
+export interface MapPageMetadata {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  path: string;
+  byte_length: number;
+  sha256: string;
+}
+
+/**
+ * Versioned map storage descriptor. `width` and `height` remain world
+ * dimensions; `page_size` is a storage choice and never a gameplay constant.
+ */
+export interface PagedMapMetadata extends MapMetadata {
+  format: "paged-v1";
+  page_size: number;
+  pages_wide: number;
+  pages_high: number;
+  pages: MapPageMetadata[];
+}
+
+export function isPagedMapMetadata(
+  metadata: MapMetadata,
+): metadata is PagedMapMetadata {
+  return (metadata as Partial<PagedMapMetadata>).format === "paged-v1";
 }
 
 export interface MapManifest {
@@ -75,9 +104,19 @@ export async function loadTerrainMap(
   const manifest = await mapFiles.manifest();
 
   const gameMap =
-    mapSize === GameMapSize.Normal
-      ? await genTerrainFromBin(manifest.map, await mapFiles.mapBin())
-      : await genTerrainFromBin(manifest.map4x, await mapFiles.map4xBin());
+    mapSize === GameMapSize.Normal && isPagedMapMetadata(manifest.map)
+      ? await genTerrainFromPages(
+          manifest.map,
+          await Promise.all(
+            manifest.map.pages.map(async (page) => ({
+              ...page,
+              terrain: await mapFiles.mapPageBin(page.path),
+            })),
+          ),
+        )
+      : mapSize === GameMapSize.Normal
+        ? await genTerrainFromBin(manifest.map, await mapFiles.mapBin())
+        : await genTerrainFromBin(manifest.map4x, await mapFiles.map4xBin());
 
   const miniMap =
     mapSize === GameMapSize.Normal
@@ -234,5 +273,40 @@ export async function genTerrainFromBin(
     mapData.height,
     data,
     mapData.num_land_tiles,
+  );
+}
+
+export async function genTerrainFromPages(
+  metadata: PagedMapMetadata,
+  pages: readonly (MapPageMetadata & { terrain: Uint8Array })[],
+): Promise<GameMap> {
+  if (metadata.pages_wide !== Math.ceil(metadata.width / metadata.page_size)) {
+    throw new Error("Paged map pages_wide does not match its dimensions");
+  }
+  if (metadata.pages_high !== Math.ceil(metadata.height / metadata.page_size)) {
+    throw new Error("Paged map pages_high does not match its dimensions");
+  }
+
+  const terrainPages: TerrainPageInput[] = pages.map((page) => {
+    if (page.terrain.length !== page.byte_length) {
+      throw new Error(
+        `Page ${page.path} length ${page.terrain.length} does not match manifest length ${page.byte_length}`,
+      );
+    }
+    return {
+      pageX: page.x,
+      pageY: page.y,
+      width: page.width,
+      height: page.height,
+      terrain: page.terrain,
+    };
+  });
+
+  return new PagedGameMap(
+    metadata.width,
+    metadata.height,
+    metadata.page_size,
+    terrainPages,
+    metadata.num_land_tiles,
   );
 }

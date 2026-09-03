@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GameMapImpl, type GameMap } from "../../../src/core/game/GameMap";
 import { PagedGameMap } from "../../../src/core/game/PagedGameMap";
+import {
+  genTerrainFromPages,
+  type PagedMapMetadata,
+} from "../../../src/core/game/TerrainMapLoader";
 
 const LAND = 0x80 | 7;
 const OCEAN = 0x20;
@@ -130,5 +134,46 @@ describe("PagedGameMap", () => {
     expect(map.tilePages().every((page) => page.state.length === 64)).toBe(
       true,
     );
+  });
+
+  it("constructs a paged-v1 map from manifest pages in any order", async () => {
+    const metadata: PagedMapMetadata = {
+      format: "paged-v1",
+      width: 5,
+      height: 3,
+      num_land_tiles: 15,
+      page_size: 3,
+      pages_wide: 2,
+      pages_high: 1,
+      pages: [
+        {
+          x: 0,
+          y: 0,
+          width: 3,
+          height: 3,
+          path: "pages/0-0.bin",
+          byte_length: 9,
+          sha256: "a",
+        },
+        {
+          x: 1,
+          y: 0,
+          width: 2,
+          height: 3,
+          path: "pages/1-0.bin",
+          byte_length: 6,
+          sha256: "b",
+        },
+      ],
+    };
+    const map = await genTerrainFromPages(metadata, [
+      { ...metadata.pages[1], terrain: new Uint8Array(6).fill(LAND) },
+      { ...metadata.pages[0], terrain: new Uint8Array(9).fill(LAND) },
+    ]);
+
+    expect(map.width()).toBe(5);
+    expect(map.height()).toBe(3);
+    expect(map.isPaged()).toBe(true);
+    expect(map.terrainByte(map.ref(3, 1))).toBe(LAND);
   });
 });

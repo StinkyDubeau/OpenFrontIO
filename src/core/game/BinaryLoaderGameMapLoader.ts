@@ -47,6 +47,7 @@ export class BinaryLoaderGameMapLoader implements GameMapLoader {
       map16xBin: this.createLazyLoader(() =>
         loadBinary(mapAssetUrl("map16x.bin")),
       ),
+      mapPageBin: (path: string) => loadBinary(mapAssetUrl(path)),
       manifest: this.createLazyLoader(() =>
         fetch(mapAssetUrl("manifest.json")).then((res) => {
           if (!res.ok) {

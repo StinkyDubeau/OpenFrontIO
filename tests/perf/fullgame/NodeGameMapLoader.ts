@@ -25,6 +25,10 @@ export class NodeGameMapLoader implements GameMapLoader {
       mapBin: readBin("map.bin"),
       map4xBin: readBin("map4x.bin"),
       map16xBin: readBin("map16x.bin"),
+      mapPageBin: (pagePath: string) =>
+        Promise.resolve(
+          new Uint8Array(fs.readFileSync(path.join(dir, pagePath))),
+        ),
       manifest: async () =>
         JSON.parse(
           fs.readFileSync(path.join(dir, "manifest.json"), "utf8"),
