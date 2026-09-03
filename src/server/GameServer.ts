@@ -749,6 +749,26 @@ export class GameServer {
     return this.managedOptions?.requestId;
   }
 
+  /**
+   * Closes an ordinary lobby before a deployment drain. A game that has
+   * prestarted is already an in-progress match and must be allowed to finish;
+   * managed games are journaled and are recovered by the master after restart.
+   */
+  public cancelForDeploymentDrain(): boolean {
+    if (this.managedOptions || this.hasStarted() || this._hasEnded)
+      return false;
+    this.log.info("closing unstarted lobby for deployment drain", {
+      gameID: this.id,
+    });
+    this._hasEnded = true;
+    for (const client of [...this.activeClients]) {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.close(1012, "Server deployment pending");
+      }
+    }
+    return true;
+  }
+
   public managedSeatForPersistentId(
     persistentID: string,
   ): ManagedReservedSeat | null | undefined {

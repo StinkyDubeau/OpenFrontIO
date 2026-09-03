@@ -56,6 +56,7 @@ ENV GIT_COMMIT=${GIT_COMMIT}
 ENV CDN_BASE=""
 ENV IDLE_DB_PATH=/var/lib/openfront-idle/idle.sqlite
 ENV PERSISTENT_WORLD_DB_PATH=/var/lib/openfront-idle/idle.sqlite
+ENV IDLE_DEPLOY_DRAIN_STATUS_PATH=/var/lib/openfront-idle/deployment-drain.status
 ENV IDLE_ADMIN_ENABLED=false
 
 EXPOSE 3000

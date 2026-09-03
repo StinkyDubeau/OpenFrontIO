@@ -18,6 +18,7 @@ env_file=/etc/openfront-idle/openfront-idle.env
 service=openfront-idle.service
 health_url=http://127.0.0.1:3000/api/idle/health
 rollback_dir=/var/backups/openfront-idle
+drain_requested=false
 
 if [ ! -f "$env_file" ]; then
     echo "missing $env_file; bootstrap the host before deploying" >&2
@@ -48,6 +49,22 @@ if [ "$persistent_world_db_path" != "$db_path" ]; then
     echo "PERSISTENT_WORLD_DB_PATH must match the backed-up IDLE_DB_PATH: $persistent_world_db_path" >&2
     exit 2
 fi
+drain_status_path=$(sed -n 's/^IDLE_DEPLOY_DRAIN_STATUS_PATH=//p' "$env_file" | tail -n 1)
+case "$drain_status_path" in
+    /var/lib/openfront-idle/*.status) ;;
+    *)
+        echo "missing or unsafe IDLE_DEPLOY_DRAIN_STATUS_PATH in $env_file: $drain_status_path" >&2
+        exit 2
+        ;;
+esac
+drain_timeout=$(sed -n 's/^IDLE_DEPLOY_DRAIN_TIMEOUT_SECONDS=//p' "$env_file" | tail -n 1)
+drain_timeout=${drain_timeout:-7200}
+if ! printf '%s\n' "$drain_timeout" | grep -Eq '^[0-9]+$' \
+    || [ "$drain_timeout" -lt 60 ] \
+    || [ "$drain_timeout" -gt 86400 ]; then
+    echo "IDLE_DEPLOY_DRAIN_TIMEOUT_SECONDS must be between 60 and 86400" >&2
+    exit 2
+fi
 if ! command -v sqlite3 > /dev/null 2>&1; then
     echo "sqlite3 is required for a schema-safe deployment rollback" >&2
     exit 3
@@ -59,7 +76,70 @@ tmp_file=$(mktemp "${env_file}.XXXXXX")
 rollback_snapshot=
 restore_tmp=
 database_existed=false
+
+cancel_deployment_drain() {
+    docker kill --signal=USR1 openfront-idle > /dev/null 2>&1 || true
+    rm -f -- "$drain_status_path"
+    drain_requested=false
+}
+
+request_deployment_drain() {
+    if ! systemctl is-active --quiet "$service"; then
+        return 0
+    fi
+    # Compatibility for the first rollout: an older image has no SIGUSR2
+    # handler, so signalling it would terminate Node instead of draining.
+    if ! docker exec openfront-idle test -f /app/src/server/DeploymentDrainStatusFile.ts; then
+        echo "Current image predates deployment draining; using the existing graceful stop for this one transition"
+        return 0
+    fi
+
+    rm -f -- "$drain_status_path"
+    echo "Requesting deployment drain (timeout ${drain_timeout}s)"
+    docker kill --signal=USR2 openfront-idle > /dev/null
+    drain_requested=true
+    deadline=$(($(date +%s) + drain_timeout))
+    next_report=0
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        if ! systemctl is-active --quiet "$service"; then
+            echo "authority stopped unexpectedly while deployment drain was pending" >&2
+            return 1
+        fi
+        if [ -f "$drain_status_path" ]; then
+            drain_line=$(cat "$drain_status_path")
+            if printf '%s\n' "$drain_line" | grep -Eq '^openfront-drain-v1 [A-Za-z0-9_-]{1,64} (idle|draining|ready) [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+$'; then
+                set -- $drain_line
+                drain_state=$3
+                blocking_games=$4
+                managed_games=$5
+                lobby_games=$6
+                active_clients=$7
+                workers_reported=$8
+                workers_expected=$9
+                pending_admissions=${10}
+                if [ "$drain_state" = ready ]; then
+                    echo "Deployment drain ready: managed=$managed_games clients=$active_clients workers=$workers_reported/$workers_expected"
+                    return 0
+                fi
+                now=$(date +%s)
+                if [ "$now" -ge "$next_report" ]; then
+                    echo "Waiting for safe deployment window: blocking=$blocking_games lobbies=$lobby_games pending=$pending_admissions managed=$managed_games clients=$active_clients workers=$workers_reported/$workers_expected"
+                    next_report=$((now + 30))
+                fi
+            fi
+        fi
+        sleep 2
+    done
+
+    echo "Deployment drain timed out; cancelling deployment and reopening game admission" >&2
+    cancel_deployment_drain
+    return 1
+}
+
 cleanup() {
+    if [ "$drain_requested" = true ]; then
+        cancel_deployment_drain || true
+    fi
     if [ -n "$tmp_file" ]; then
         rm -f -- "$tmp_file"
     fi
@@ -91,6 +171,8 @@ stop_authority() {
     if [ "$container_running" = true ]; then
         return 1
     fi
+    drain_requested=false
+    rm -f -- "$drain_status_path"
     return 0
 }
 
@@ -117,6 +199,10 @@ write_image() {
 
 echo "Pulling $image_ref"
 docker pull "$image_ref"
+
+if ! request_deployment_drain; then
+    exit 8
+fi
 
 # A migration can make an older image unable to open the database. Quiesce the
 # single writer and retain a verified pre-deploy database snapshot so rollback
@@ -172,6 +258,8 @@ restart_and_wait() {
     if ! systemctl restart "$service"; then
         return 1
     fi
+    drain_requested=false
+    rm -f -- "$drain_status_path"
     attempt=1
     while [ "$attempt" -le 30 ]; do
         if curl --fail --silent --show-error --max-time 3 "$health_url" > /dev/null; then

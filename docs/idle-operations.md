@@ -115,6 +115,9 @@ defaults and the complete initial variable list. Production requirements:
   `PERSISTENT_WORLD_DB_PATH` points at the same file. Persistent-world tables
   and migrations are namespaced, while one file keeps deployment rollback and
   encrypted off-host backups atomic across both services;
+- `IDLE_DEPLOY_DRAIN_STATUS_PATH` remains the supplied path under
+  `/var/lib/openfront-idle`, and `IDLE_DEPLOY_DRAIN_TIMEOUT_SECONDS` is the
+  maximum wait for ordinary in-progress matches (two hours by default);
 - `IDLE_TRUSTED_PROXY_ADDRESS=172.30.0.1` matches the dedicated Docker bridge
   gateway created above;
 - `DOMAIN` matches the public audience used for future login tokens;
@@ -175,16 +178,25 @@ sudo /usr/local/sbin/openfront-idle-deploy \
 
 The root-owned deploy script validates the repository and immutable image
 reference, serializes host mutations with `flock`, and pulls the image before
-changing live state. It then briefly stops the single writer, creates and
-integrity-checks a root-only pre-deploy SQLite snapshot, atomically changes
-only `IDLE_IMAGE`, restarts the named service, and polls loopback health. If
-readiness fails, it restores both the previous image and its matching database
-snapshot before verifying rollback health. This schema-coupled rollback is
-required because an older executable may intentionally reject a newer schema.
-The candidate container cannot access `/var/backups/openfront-idle`. The
-wrapper deletes its temporary snapshot only after a healthy new deployment or
-healthy rollback; on any restore/stop failure it leaves the root-only artifact
-in place and prints the exact recovery path.
+changing live state. It then signals the current authority to enter deployment
+drain. Workers stop matchmaking and new lobby admission, close unstarted
+ordinary lobbies, and report their state through an atomically replaced file
+on the existing bind mount. Already assigned matches are honored. The wrapper
+waits until every worker reports no ordinary in-progress game; journaled
+managed worlds do not block because restart recovery is part of their contract.
+If the bounded drain deadline expires, the wrapper cancels the deployment,
+signals workers to reopen admission, and leaves the current image running.
+
+Once drain is ready, the wrapper briefly stops the single writer, creates and
+integrity-checks a root-only pre-deploy SQLite snapshot, atomically changes only
+`IDLE_IMAGE`, restarts the named service, and polls loopback health. If readiness
+fails, it restores both the previous image and its matching database snapshot
+before verifying rollback health. This schema-coupled rollback is required
+because an older executable may intentionally reject a newer schema. The
+candidate container cannot access `/var/backups/openfront-idle`. The wrapper
+deletes its temporary snapshot only after a healthy new deployment or healthy
+rollback; on any restore/stop failure it leaves the root-only artifact in place
+and prints the exact recovery path.
 
 Persistent matches treat this restart as a normal recovery boundary. The
 master first closes public ingress, signals every gameplay worker to flush its

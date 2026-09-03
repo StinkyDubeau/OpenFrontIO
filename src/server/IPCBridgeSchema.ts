@@ -34,6 +34,9 @@ export type WorkerManagedGameTurns = z.infer<
 export type WorkerManagedGameStats = z.infer<
   typeof WorkerManagedGameStatsSchema
 >;
+export type WorkerDeploymentDrainStatus = z.infer<
+  typeof WorkerDeploymentDrainStatusSchema
+>;
 export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 export type MasterMessage = z.infer<typeof MasterMessageSchema>;
 
@@ -172,12 +175,26 @@ const WorkerManagedGameStatsSchema = z
   })
   .strict();
 
+const WorkerDeploymentDrainStatusSchema = z
+  .object({
+    type: z.literal("deploymentDrainStatus"),
+    workerId: z.number().int().nonnegative(),
+    draining: z.boolean(),
+    blockingGames: z.number().int().nonnegative(),
+    managedGames: z.number().int().nonnegative(),
+    lobbyGames: z.number().int().nonnegative(),
+    activeClients: z.number().int().nonnegative(),
+    pendingAdmissions: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const WorkerMessageSchema = z.discriminatedUnion("type", [
   WorkerLobbyListSchema,
   WorkerReadySchema,
   WorkerManagedGameReadySchema,
   WorkerManagedGameTurnsSchema,
   WorkerManagedGameStatsSchema,
+  WorkerDeploymentDrainStatusSchema,
 ]);
 
 // --- Master Messages ---
@@ -255,9 +272,17 @@ const MasterCreateManagedGameSchema = z
     }
   });
 
+const MasterDeploymentDrainSchema = z
+  .object({
+    type: z.literal("deploymentDrain"),
+    enabled: z.boolean(),
+  })
+  .strict();
+
 export const MasterMessageSchema = z.discriminatedUnion("type", [
   MasterLobbiesBroadcastSchema,
   MasterCreateGameSchema,
   MasterCreateManagedGameSchema,
   MasterUpdateGameSchema,
+  MasterDeploymentDrainSchema,
 ]);
