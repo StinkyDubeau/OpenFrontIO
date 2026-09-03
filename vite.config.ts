@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import fs from "fs";
 import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -103,6 +104,66 @@ function legacyIdlePreviewRedirect(): Plugin {
         }
         res.writeHead(302, { Location: "/" });
         res.end();
+      });
+    },
+  };
+}
+
+// Vite snapshots publicDir when the dev server starts. Generated maps can be
+// added by a branch checkout or regeneration while that process stays alive,
+// leaving a newly-added manifest outside Vite's cached public-file set even
+// though its binary pages are present. Serve only map manifests dynamically so
+// the client never receives the SPA HTML fallback where JSON is required.
+function devMapManifestMiddleware(resourcesDir: string): Plugin {
+  const mapsDir = path.resolve(resourcesDir, "maps");
+  return {
+    name: "dev-map-manifest-middleware",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        const requestedUrl =
+          (req as { originalUrl?: string }).originalUrl ?? req.url;
+        if (!requestedUrl) return next();
+
+        let pathname: string;
+        try {
+          pathname = decodeURIComponent(
+            new URL(requestedUrl, "http://x").pathname,
+          );
+        } catch {
+          return next();
+        }
+        const match = /^\/maps\/([a-z0-9][a-z0-9_-]*)\/manifest\.json$/i.exec(
+          pathname,
+        );
+        if (!match) return next();
+
+        const manifestPath = path.resolve(
+          mapsDir,
+          match[1].toLowerCase(),
+          "manifest.json",
+        );
+        if (!manifestPath.startsWith(`${mapsDir}${path.sep}`)) return next();
+
+        let size: number;
+        try {
+          const stat = fs.statSync(manifestPath);
+          if (!stat.isFile()) return next();
+          size = stat.size;
+        } catch {
+          return next();
+        }
+
+        res.writeHead(200, {
+          "cache-control": "no-cache",
+          "content-length": String(size),
+          "content-type": "application/json; charset=utf-8",
+        });
+        if (req.method === "HEAD") {
+          res.end();
+          return;
+        }
+        fs.createReadStream(manifestPath).pipe(res);
       });
     },
   };
@@ -256,6 +317,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       ...(!isProduction
         ? [
+            devMapManifestMiddleware(resourcesDir),
             randomWorkerCreateProxy(devNumWorkers),
             legacyIdlePreviewRedirect(),
             steamLinkAliasRedirect(),
