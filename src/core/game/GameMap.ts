@@ -2,6 +2,25 @@ import { Cell, TerrainType } from "./Game";
 
 export type TileRef = number;
 
+/**
+ * A rectangular, row-major slice of the world. Page coordinates are stable
+ * world-storage coordinates; callers must not infer a fixed grid size.
+ *
+ * The arrays are live references. Simulation code owns mutation while render
+ * and persistence consumers must treat them as read-only snapshots.
+ */
+export interface GameMapTilePage {
+  readonly index: number;
+  readonly pageX: number;
+  readonly pageY: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly width: number;
+  readonly height: number;
+  readonly terrain: Uint8Array;
+  readonly state: Uint16Array;
+}
+
 export interface GameMap {
   ref(x: number, y: number): TileRef;
   isValidRef(ref: TileRef): boolean;
@@ -100,6 +119,16 @@ export interface GameMap {
    */
   tileStateBuffer(): Uint16Array;
 
+  /**
+   * Stable row-major storage pages. Classic maps expose one page; seamless
+   * maps expose an arbitrary manifest-derived grid. New map-sized consumers
+   * should use this instead of assuming tileStateBuffer() is available.
+   */
+  tilePages(): readonly GameMapTilePage[];
+
+  /** True when tile storage is split across more than one allocation. */
+  isPaged(): boolean;
+
   numTilesWithFallout(): number;
 }
 
@@ -117,6 +146,7 @@ export class GameMapImpl implements GameMap {
   // largest maps) and their random-access reads miss cache more often than
   // the division costs.
   private readonly yToRef: Int32Array;
+  private readonly page: GameMapTilePage;
 
   // Terrain bits (Uint8Array)
   private static readonly IS_LAND_BIT = 7;
@@ -154,6 +184,17 @@ export class GameMapImpl implements GameMap {
     for (let y = 0; y < height; y++) {
       this.yToRef[y] = y * width;
     }
+    this.page = {
+      index: 0,
+      pageX: 0,
+      pageY: 0,
+      originX: 0,
+      originY: 0,
+      width,
+      height,
+      terrain: this.terrain,
+      state: this.state,
+    };
   }
   numTilesWithFallout(): number {
     return this._numTilesWithFallout;
@@ -505,6 +546,14 @@ export class GameMapImpl implements GameMap {
 
   tileStateBuffer(): Uint16Array {
     return this.state;
+  }
+
+  tilePages(): readonly GameMapTilePage[] {
+    return [this.page];
+  }
+
+  isPaged(): boolean {
+    return false;
   }
 
   /**

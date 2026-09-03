@@ -1236,6 +1236,14 @@ export class GameImpl implements Game {
   tileStateBuffer(): Uint16Array {
     return this._map.tileStateBuffer();
   }
+
+  tilePages() {
+    return this._map.tilePages();
+  }
+
+  isPaged(): boolean {
+    return this._map.isPaged();
+  }
   updateTile(tile: TileRef, state: number): boolean {
     return this._map.updateTile(tile, state);
   }

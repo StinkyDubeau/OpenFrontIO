@@ -314,8 +314,7 @@ export class GameView implements GameMap {
     }
 
     const spawnPhaseEndUpdate = gu.updates[GameUpdateType.SpawnPhaseEnd][0] as
-      | SpawnPhaseEndUpdate
-      | undefined;
+      SpawnPhaseEndUpdate | undefined;
     if (spawnPhaseEndUpdate) {
       this.startTick = spawnPhaseEndUpdate.startTick;
     }
@@ -1303,6 +1302,14 @@ export class GameView implements GameMap {
   }
   tileStateBuffer(): Uint16Array {
     return this._map.tileStateBuffer();
+  }
+
+  tilePages() {
+    return this._map.tilePages();
+  }
+
+  isPaged(): boolean {
+    return this._map.isPaged();
   }
   updateTile(tile: TileRef, state: number): boolean {
     return this._map.updateTile(tile, state);
