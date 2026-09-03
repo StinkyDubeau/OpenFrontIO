@@ -217,6 +217,11 @@ export class PagedGameMap implements GameMap {
     return this.pages;
   }
 
+  tilePageLocation(ref: TileRef) {
+    const { page, offset } = this.location(ref);
+    return { pageIndex: page.index, offset };
+  }
+
   isPaged(): boolean {
     return true;
   }

@@ -44,7 +44,6 @@ export class SpatialQuery {
     if (!map.isValidRef(from)) return null;
     const scratch = tileTraversalScratch(this.game);
     const gen = bumpTraversalGeneration(scratch);
-    const visited = scratch.visited;
     const stack = scratch.stack;
     stack.length = 0;
 
@@ -55,7 +54,7 @@ export class SpatialQuery {
     let bestDist = Infinity;
 
     const mark = (t: TileRef) => {
-      visited[t] = gen;
+      scratch.mark(t, gen);
       stack.push(t);
       if (predicate(t)) {
         const dist = map.manhattanDist(from, t);
@@ -70,7 +69,7 @@ export class SpatialQuery {
       mark(from);
     }
     const visit = (n: TileRef) => {
-      if (visited[n] !== gen && map.manhattanDist(from, n) <= maxDist) {
+      if (!scratch.has(n, gen) && map.manhattanDist(from, n) <= maxDist) {
         mark(n);
       }
     };

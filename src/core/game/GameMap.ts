@@ -126,6 +126,11 @@ export interface GameMap {
    */
   tilePages(): readonly GameMapTilePage[];
 
+  /** Storage page and local row-major offset for a global tile reference. */
+  tilePageLocation(
+    tile: TileRef,
+  ): Readonly<{ pageIndex: number; offset: number }>;
+
   /** True when tile storage is split across more than one allocation. */
   isPaged(): boolean;
 
@@ -550,6 +555,11 @@ export class GameMapImpl implements GameMap {
 
   tilePages(): readonly GameMapTilePage[] {
     return [this.page];
+  }
+
+  tilePageLocation(tile: TileRef) {
+    if (!this.isValidRef(tile)) throw new Error(`Invalid tile ref ${tile}`);
+    return { pageIndex: 0, offset: tile };
   }
 
   isPaged(): boolean {

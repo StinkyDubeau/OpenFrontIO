@@ -1308,6 +1308,10 @@ export class GameView implements GameMap {
     return this._map.tilePages();
   }
 
+  tilePageLocation(tile: TileRef) {
+    return this._map.tilePageLocation(tile);
+  }
+
   isPaged(): boolean {
     return this._map.isPaged();
   }

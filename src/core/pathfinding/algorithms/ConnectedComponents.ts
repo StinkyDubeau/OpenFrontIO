@@ -77,7 +77,7 @@ export class ConnectedComponents {
   private createPrefilledIds(): Uint8Array {
     const ids = new Uint8Array(this.numTiles);
 
-    if (this.accessTerrainDirectly) {
+    if (this.accessTerrainDirectly && !this.map.isPaged()) {
       this.premarkLandTilesDirect(ids);
     } else {
       this.premarkLandTiles(ids);

@@ -275,7 +275,7 @@ export class PlayerExecution implements Execution {
 
     const tiles = this.floodFillWithGen(
       this.bumpGeneration(),
-      this.traversalState().visited,
+      this.traversalState(),
       [firstTile],
       (tile, cb) => this.mg.forEachNeighbor(tile, cb),
       (tile) => this.mg.ownerID(tile) === this.player.smallID(),
@@ -341,7 +341,6 @@ export class PlayerExecution implements Execution {
 
     const state = this.traversalState();
     const currentGen = this.bumpGeneration();
-    const visited = state.visited;
 
     const clusters: TileRef[][] = [];
 
@@ -351,11 +350,11 @@ export class PlayerExecution implements Execution {
       this.mg.forEachNeighborWithDiag(tile, cb);
     const includeFn = (tile: TileRef) => borderTiles.has(tile);
     borderTiles.forEach((startTile) => {
-      if (visited[startTile] === currentGen) return;
+      if (state.has(startTile, currentGen)) return;
 
       const cluster = this.floodFillWithGen(
         currentGen,
-        visited,
+        state,
         [startTile],
         neighborFn,
         includeFn,
@@ -386,7 +385,7 @@ export class PlayerExecution implements Execution {
 
   private floodFillWithGen(
     currentGen: number,
-    visited: Uint32Array,
+    traversal: TileTraversalScratch,
     startTiles: TileRef[],
     neighborFn: (tile: TileRef, callback: (neighbor: TileRef) => void) => void,
     includeFn: (tile: TileRef) => boolean,
@@ -399,21 +398,21 @@ export class PlayerExecution implements Execution {
     stack.length = 0;
 
     for (const start of startTiles) {
-      if (visited[start] === currentGen) continue;
+      if (traversal.has(start, currentGen)) continue;
       if (!includeFn(start)) continue;
-      visited[start] = currentGen;
+      traversal.mark(start, currentGen);
       result.push(start);
       stack.push(start);
     }
 
     const visit = (neighbor: TileRef) => {
-      if (visited[neighbor] === currentGen) {
+      if (traversal.has(neighbor, currentGen)) {
         return;
       }
       if (!includeFn(neighbor)) {
         return;
       }
-      visited[neighbor] = currentGen;
+      traversal.mark(neighbor, currentGen);
       result.push(neighbor);
       stack.push(neighbor);
     };

@@ -27,14 +27,14 @@ export class AStarWater implements PathFinder<number> {
   private readonly gScore: Uint32Array;
   private readonly cameFrom: Int32Array;
   private readonly queue: PriorityQueue;
-  private readonly terrain: Uint8Array;
+  private readonly map: GameMap;
   private readonly width: number;
   private readonly numNodes: number;
   private readonly heuristicWeight: number;
   private readonly maxIterations: number;
 
   constructor(map: GameMap, config?: AStarWaterConfig) {
-    this.terrain = (map as any).terrain as Uint8Array;
+    this.map = map;
     this.width = map.width();
     this.numNodes = map.width() * map.height();
     this.heuristicWeight = config?.heuristicWeight ?? 5;
@@ -59,7 +59,7 @@ export class AStarWater implements PathFinder<number> {
     const stamp = this.stamp;
     const width = this.width;
     const numNodes = this.numNodes;
-    const terrain = this.terrain;
+    const terrainByte = (tile: TileRef) => this.map.terrainByte(tile);
     const closedStamp = this.closedStamp;
     const gScoreStamp = this.gScoreStamp;
     const gScore = this.gScore;
@@ -124,7 +124,7 @@ export class AStarWater implements PathFinder<number> {
 
       if (current >= width) {
         const neighbor = current - width;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighbor] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -152,7 +152,7 @@ export class AStarWater implements PathFinder<number> {
 
       if (current < numNodes - width) {
         const neighbor = current + width;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighbor] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -180,7 +180,7 @@ export class AStarWater implements PathFinder<number> {
 
       if (currentX !== 0) {
         const neighbor = current - 1;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighbor] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -208,7 +208,7 @@ export class AStarWater implements PathFinder<number> {
 
       if (currentX !== width - 1) {
         const neighbor = current + 1;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighbor] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)

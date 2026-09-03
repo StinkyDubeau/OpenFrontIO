@@ -21,7 +21,6 @@ const MAGNITUDE_MASK = 0x1f;
 export class SmoothingWaterTransformer implements PathFinder<TileRef> {
   private readonly mapWidth: number;
   private readonly localAStar: AStarWaterBounded;
-  private readonly terrain: Uint8Array;
   private readonly isTraversable: (tile: TileRef) => boolean;
 
   constructor(
@@ -31,7 +30,6 @@ export class SmoothingWaterTransformer implements PathFinder<TileRef> {
   ) {
     this.mapWidth = map.width();
     this.localAStar = new AStarWaterBounded(map, LOCAL_ASTAR_MAX_AREA);
-    this.terrain = (map as any).terrain as Uint8Array;
     this.isTraversable = isTraversable;
   }
 
@@ -219,7 +217,7 @@ export class SmoothingWaterTransformer implements PathFinder<TileRef> {
       if (!this.isTraversable(tile)) return false;
 
       // Check magnitude - avoid shallow water
-      const magnitude = this.terrain[tile] & MAGNITUDE_MASK;
+      const magnitude = this.map.terrainByte(tile) & MAGNITUDE_MASK;
       if (magnitude < minMagnitude) return false;
 
       if (x === x1 && y === y1) return true;
@@ -234,7 +232,7 @@ export class SmoothingWaterTransformer implements PathFinder<TileRef> {
         err -= dy;
 
         const intermediateTile = (y * this.mapWidth + x) as TileRef;
-        const intMag = this.terrain[intermediateTile] & MAGNITUDE_MASK;
+        const intMag = this.map.terrainByte(intermediateTile) & MAGNITUDE_MASK;
         if (!this.isTraversable(intermediateTile) || intMag < minMagnitude) {
           // Try alternative path
           x -= sx;
@@ -243,7 +241,7 @@ export class SmoothingWaterTransformer implements PathFinder<TileRef> {
           err += dx;
 
           const altTile = (y * this.mapWidth + x) as TileRef;
-          const altMag = this.terrain[altTile] & MAGNITUDE_MASK;
+          const altMag = this.map.terrainByte(altTile) & MAGNITUDE_MASK;
           if (!this.isTraversable(altTile) || altMag < minMagnitude)
             return false;
 

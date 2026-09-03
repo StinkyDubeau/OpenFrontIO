@@ -34,7 +34,7 @@ export class AStarWaterBounded implements PathFinder<number> {
   private readonly gScore: Uint32Array;
   private readonly cameFrom: Int32Array;
   private readonly queue: MinHeap;
-  private readonly terrain: Uint8Array;
+  private readonly map: GameMap;
   private readonly mapWidth: number;
   private readonly heuristicWeight: number;
   private readonly maxIterations: number;
@@ -44,7 +44,7 @@ export class AStarWaterBounded implements PathFinder<number> {
     maxSearchArea: number,
     config?: BoundedAStarConfig,
   ) {
-    this.terrain = (map as any).terrain as Uint8Array;
+    this.map = map;
     this.mapWidth = map.width();
     this.heuristicWeight = config?.heuristicWeight ?? 3;
     this.maxIterations = config?.maxIterations ?? 100_000;
@@ -98,7 +98,7 @@ export class AStarWaterBounded implements PathFinder<number> {
 
     const stamp = this.stamp;
     const mapWidth = this.mapWidth;
-    const terrain = this.terrain;
+    const terrainByte = (tile: TileRef) => this.map.terrainByte(tile);
     const closedStamp = this.closedStamp;
     const gScoreStamp = this.gScoreStamp;
     const gScore = this.gScore;
@@ -200,7 +200,7 @@ export class AStarWaterBounded implements PathFinder<number> {
       if (currentY > minY) {
         const neighbor = current - mapWidth;
         const neighborLocal = currentLocal - boundsWidth;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighborLocal] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -227,7 +227,7 @@ export class AStarWaterBounded implements PathFinder<number> {
       if (currentY < maxY) {
         const neighbor = current + mapWidth;
         const neighborLocal = currentLocal + boundsWidth;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighborLocal] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -254,7 +254,7 @@ export class AStarWaterBounded implements PathFinder<number> {
       if (currentX > minX) {
         const neighbor = current - 1;
         const neighborLocal = currentLocal - 1;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighborLocal] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
@@ -281,7 +281,7 @@ export class AStarWaterBounded implements PathFinder<number> {
       if (currentX < maxX) {
         const neighbor = current + 1;
         const neighborLocal = currentLocal + 1;
-        const neighborTerrain = terrain[neighbor];
+        const neighborTerrain = terrainByte(neighbor);
         if (
           closedStamp[neighborLocal] !== stamp &&
           (neighbor === goal || (neighborTerrain & landMask) === 0)
