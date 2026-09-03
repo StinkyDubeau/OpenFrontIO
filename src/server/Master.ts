@@ -242,6 +242,9 @@ export async function startMaster() {
     persistentWorldRepository,
     {
       runtimeCoordinator: persistentWorldRuntimeBridge,
+      // Debug quick-start schedules a world a few seconds out. Production
+      // retains the domain's normal one-minute minimum.
+      minimumStartDelayMs: ServerEnv.env() === GameEnv.Dev ? 1_000 : undefined,
       onRuntimeError: (error) =>
         log.warn("Persistent-world runtime reconciliation failed", error),
     },

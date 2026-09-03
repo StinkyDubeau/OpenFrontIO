@@ -12,6 +12,7 @@ import {
   TogglePerformanceOverlayEvent,
 } from "../../InputHandler";
 import type { LangSelector } from "../../LangSelector";
+import { runtimeDebugEnabled } from "../../RuntimeDebug";
 import { translateText } from "../../Utils";
 import { FrameProfiler } from "../FrameProfiler";
 
@@ -46,6 +47,21 @@ export class PerformanceOverlay extends LitElement implements Controller {
 
   @state()
   private tickDelayMax: number = 0;
+
+  @state()
+  private pendingTurns: number = 0;
+
+  @state()
+  private viewUpdateAvg: number = 0;
+
+  @state()
+  private gpuUploadAvg: number = 0;
+
+  @state()
+  private mainThreadAvg: number = 0;
+
+  @state()
+  private mainThreadMax: number = 0;
 
   @state()
   private isVisible: boolean = false;
@@ -87,6 +103,9 @@ export class PerformanceOverlay extends LitElement implements Controller {
   private tickExecutionTimesSum: number = 0;
   private tickDelayTimes: number[] = [];
   private tickDelayTimesSum: number = 0;
+  private viewUpdateTimes: number[] = [];
+  private gpuUploadTimes: number[] = [];
+  private mainThreadTimes: number[] = [];
   private tickTimestamps: number[] = [];
   private tickHead1s: number = 0;
   private tickHead60s: number = 0;
@@ -472,23 +491,35 @@ export class PerformanceOverlay extends LitElement implements Controller {
   private onTogglePerformanceOverlay = (
     _event: TogglePerformanceOverlayEvent,
   ) => {
+    if (!runtimeDebugEnabled()) return;
     const nextVisible = !this.isVisible;
     this.setVisible(nextVisible);
     this.userSettings.setPerformanceOverlay(nextVisible);
   };
 
   private onTickMetricsEvent = (event: TickMetricsEvent) => {
-    this.updateTickMetrics(event.tickExecutionDuration, event.tickDelay);
+    this.updateTickMetrics(
+      event.tickExecutionDuration,
+      event.tickDelay,
+      event.pendingTurns,
+      event.viewUpdateDuration,
+      event.gpuUploadDuration,
+      event.mainThreadDuration,
+    );
   };
 
   private onUserSettingsChanged = (event: CustomEvent<string>) => {
-    const nextVisible = event.detail === "true";
+    const nextVisible = runtimeDebugEnabled() && event.detail === "true";
     if (this.isVisible === nextVisible) return;
     this.setVisible(nextVisible);
   };
 
   init() {
-    this.setVisible(this.userSettings.performanceOverlay());
+    // Profiling hooks and the overlay itself are inaccessible outside runtime
+    // debug mode. Development builds and `?debug=1` auto-open it for the
+    // current performance investigation; production remains silent by default.
+    const debug = runtimeDebugEnabled();
+    this.setVisible(debug);
 
     if (this.subscribedEventBus && this.subscribedEventBus !== this.eventBus) {
       this.subscribedEventBus.off(
@@ -561,6 +592,7 @@ export class PerformanceOverlay extends LitElement implements Controller {
   }
 
   setVisible(visible: boolean) {
+    if (visible && !runtimeDebugEnabled()) visible = false;
     this.isVisible = visible;
     FrameProfiler.setEnabled(visible);
 
@@ -741,6 +773,14 @@ export class PerformanceOverlay extends LitElement implements Controller {
     this.tickExecutionMax = 0;
     this.tickDelayAvg = 0;
     this.tickDelayMax = 0;
+    this.pendingTurns = 0;
+    this.viewUpdateAvg = 0;
+    this.gpuUploadAvg = 0;
+    this.mainThreadAvg = 0;
+    this.mainThreadMax = 0;
+    this.viewUpdateTimes = [];
+    this.gpuUploadTimes = [];
+    this.mainThreadTimes = [];
     this.currentTPS = 0;
     this.averageTPS = 0;
     this.tickTimestamps = [];
@@ -928,7 +968,14 @@ export class PerformanceOverlay extends LitElement implements Controller {
     });
   }
 
-  updateTickMetrics(tickExecutionDuration?: number, tickDelay?: number) {
+  updateTickMetrics(
+    tickExecutionDuration?: number,
+    tickDelay?: number,
+    pendingTurns?: number,
+    viewUpdateDuration?: number,
+    gpuUploadDuration?: number,
+    mainThreadDuration?: number,
+  ) {
     if (!this.isVisible) return;
 
     const now = performance.now();
@@ -997,6 +1044,43 @@ export class PerformanceOverlay extends LitElement implements Controller {
         this.tickDelayMax = Math.round(max);
       }
     }
+
+    if (pendingTurns !== undefined) this.pendingTurns = pendingTurns;
+    this.viewUpdateAvg = this.pushTiming(
+      this.viewUpdateTimes,
+      viewUpdateDuration,
+    ).average;
+    this.gpuUploadAvg = this.pushTiming(
+      this.gpuUploadTimes,
+      gpuUploadDuration,
+    ).average;
+    const mainThread = this.pushTiming(
+      this.mainThreadTimes,
+      mainThreadDuration,
+    );
+    this.mainThreadAvg = mainThread.average;
+    this.mainThreadMax = mainThread.maximum;
+  }
+
+  private pushTiming(
+    samples: number[],
+    value: number | undefined,
+  ): { average: number; maximum: number } {
+    if (value !== undefined && Number.isFinite(value)) {
+      samples.push(value);
+      if (samples.length > 60) samples.shift();
+    }
+    if (samples.length === 0) return { average: 0, maximum: 0 };
+    let sum = 0;
+    let maximum = 0;
+    for (const sample of samples) {
+      sum += sample;
+      maximum = Math.max(maximum, sample);
+    }
+    return {
+      average: Math.round((sum / samples.length) * 100) / 100,
+      maximum: Math.round(maximum * 100) / 100,
+    };
   }
 
   private getPerformanceColor(fps: number): string {
@@ -1031,6 +1115,16 @@ export class PerformanceOverlay extends LitElement implements Controller {
         delayMaxMs: this.tickDelayMax,
         executionSamples: [...this.tickExecutionTimes],
         delaySamples: [...this.tickDelayTimes],
+        pendingTurns: this.pendingTurns,
+      },
+      client: {
+        viewUpdateAvgMs: this.viewUpdateAvg,
+        gpuUploadAvgMs: this.gpuUploadAvg,
+        mainThreadAvgMs: this.mainThreadAvg,
+        mainThreadMaxMs: this.mainThreadMax,
+        viewUpdateSamples: [...this.viewUpdateTimes],
+        gpuUploadSamples: [...this.gpuUploadTimes],
+        mainThreadSamples: [...this.mainThreadTimes],
       },
       renderPerTickLast: {
         frames: this.renderLastTickFrameCount,
@@ -1203,34 +1297,58 @@ export class PerformanceOverlay extends LitElement implements Controller {
             <span>${this.tickDelayAvg.toFixed(2)}ms</span>
             (${this.uiText.maxLabel} <span>${this.tickDelayMax}ms</span>)
           </div>
-          ${this.layerStats.size
-            ? html`<div class="layers-section">
-                <div class="performance-line section-header">
-                  <span>${this.uiText.layersHeader}</span>
-                  <button
-                    class="collapse-button"
-                    @click=${this.toggleRenderLayersExpanded}
-                    title=${this.renderLayersExpanded
-                      ? this.uiText.collapse
-                      : this.uiText.expand}
-                  >
-                    ${this.renderLayersExpanded ? "▾" : "▸"}
-                  </button>
-                </div>
-                <div class="performance-line">
-                  ${translateText("performance_overlay.render_layers_summary", {
-                    frames: this.renderLastTickFrameCount,
-                    ms: this.renderLastTickLayerTotalMs.toFixed(2),
-                  })}
-                </div>
-                ${this.renderLayersExpanded
-                  ? html`<div class="layer-row table-header" style="--pct: 0%;">
-                        <span class="layer-name"></span>
-                        <span class="layer-metrics">
-                          ${this.uiText.renderLayersTableHeader}
-                        </span>
-                      </div>
-                      ${renderLayersToShow.map((layer) => {
+          <div class="performance-line">
+            Worker backlog <span>${this.pendingTurns}</span> turns
+          </div>
+          <div class="performance-line">
+            Client view <span>${this.viewUpdateAvg.toFixed(2)}ms</span>
+          </div>
+          <div class="performance-line">
+            GPU submit <span>${this.gpuUploadAvg.toFixed(2)}ms</span>
+          </div>
+          <div class="performance-line">
+            Main tick <span>${this.mainThreadAvg.toFixed(2)}ms</span>
+            (${this.uiText.maxLabel}
+            <span>${this.mainThreadMax.toFixed(2)}ms</span>)
+          </div>
+          ${
+            this.layerStats.size
+              ? html`<div class="layers-section">
+                  <div class="performance-line section-header">
+                    <span>${this.uiText.layersHeader}</span>
+                    <button
+                      class="collapse-button"
+                      @click=${this.toggleRenderLayersExpanded}
+                      title=${
+                      this.renderLayersExpanded
+                        ? this.uiText.collapse
+                        : this.uiText.expand
+                    }
+                    >
+                      ${this.renderLayersExpanded ? "▾" : "▸"}
+                    </button>
+                  </div>
+                  <div class="performance-line">
+                    ${translateText(
+                    "performance_overlay.render_layers_summary",
+                    {
+                      frames: this.renderLastTickFrameCount,
+                      ms: this.renderLastTickLayerTotalMs.toFixed(2),
+                    },
+                  )}
+                  </div>
+                  ${
+                  this.renderLayersExpanded
+                    ? html`<div
+                          class="layer-row table-header"
+                          style="--pct: 0%;"
+                        >
+                          <span class="layer-name"></span>
+                          <span class="layer-metrics">
+                            ${this.uiText.renderLayersTableHeader}
+                          </span>
+                        </div>
+                        ${renderLayersToShow.map((layer) => {
                         const width = Math.min(
                           100,
                           (layer.avg / maxLayerAvg) * 100 || 0,
@@ -1258,37 +1376,46 @@ export class PerformanceOverlay extends LitElement implements Controller {
                           </span>
                         </div>`;
                       })}`
-                  : html``}
-              </div>`
-            : html``}
-          ${this.tickLayerStats.size
-            ? html`<div class="layers-section">
-                <div class="performance-line section-header">
-                  <span>${this.uiText.tickLayersHeader}</span>
-                  <button
-                    class="collapse-button"
-                    @click=${this.toggleTickLayersExpanded}
-                    title=${this.tickLayersExpanded
-                      ? this.uiText.collapse
-                      : this.uiText.expand}
-                  >
-                    ${this.tickLayersExpanded ? "▾" : "▸"}
-                  </button>
-                </div>
-                <div class="performance-line">
-                  ${translateText("performance_overlay.tick_layers_summary", {
+                    : html``
+                }
+                </div>`
+              : html``
+          }
+          ${
+            this.tickLayerStats.size
+              ? html`<div class="layers-section">
+                  <div class="performance-line section-header">
+                    <span>${this.uiText.tickLayersHeader}</span>
+                    <button
+                      class="collapse-button"
+                      @click=${this.toggleTickLayersExpanded}
+                      title=${
+                      this.tickLayersExpanded
+                        ? this.uiText.collapse
+                        : this.uiText.expand
+                    }
+                    >
+                      ${this.tickLayersExpanded ? "▾" : "▸"}
+                    </button>
+                  </div>
+                  <div class="performance-line">
+                    ${translateText("performance_overlay.tick_layers_summary", {
                     count: this.tickLayerLastCount,
                     ms: this.tickLayerLastTotalMs.toFixed(2),
                   })}
-                </div>
-                ${this.tickLayersExpanded
-                  ? html`<div class="layer-row table-header" style="--pct: 0%;">
-                        <span class="layer-name"></span>
-                        <span class="layer-metrics">
-                          ${this.uiText.tickLayersTableHeader}
-                        </span>
-                      </div>
-                      ${tickLayersToShow.map((layer) => {
+                  </div>
+                  ${
+                  this.tickLayersExpanded
+                    ? html`<div
+                          class="layer-row table-header"
+                          style="--pct: 0%;"
+                        >
+                          <span class="layer-name"></span>
+                          <span class="layer-metrics">
+                            ${this.uiText.tickLayersTableHeader}
+                          </span>
+                        </div>
+                        ${tickLayersToShow.map((layer) => {
                         const width = Math.min(
                           100,
                           (layer.avg / maxTickLayerAvg) * 100 || 0,
@@ -1310,9 +1437,11 @@ export class PerformanceOverlay extends LitElement implements Controller {
                           </span>
                         </div>`;
                       })}`
-                  : html``}
-              </div>`
-            : html``}
+                    : html``
+                }
+                </div>`
+              : html``
+          }
         </div>
       </div>
     `;

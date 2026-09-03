@@ -1,5 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { quickJoinDebugGame, quickStartDebugGame } from "../DebugQuickStart";
+import { runtimeDebugEnabled } from "../RuntimeDebug";
 import { requestHaptic } from "../ui/Haptics";
 
 const REQUIRED_LOGO_TAPS = 7;
@@ -53,6 +55,8 @@ export function openDeveloperMenu(
 @customElement("idlefront-developer-menu")
 export class IdleFrontDeveloperMenu extends LitElement {
   @state() private copyState: "idle" | "copied" | "failed" = "idle";
+  @state() private gameAction: "idle" | "starting" | "joining" = "idle";
+  @state() private gameStatus = "";
   private previouslyFocused: HTMLElement | null = null;
 
   createRenderRoot() {
@@ -121,6 +125,34 @@ export class IdleFrontDeveloperMenu extends LitElement {
 
   private reload = (): void => {
     location.reload();
+  };
+
+  private quickStart = async (): Promise<void> => {
+    this.gameAction = "starting";
+    this.gameStatus = "Preparing the test game…";
+    try {
+      await quickStartDebugGame((message) => (this.gameStatus = message));
+      this.close();
+    } catch (error) {
+      this.gameStatus =
+        error instanceof Error ? error.message : "Quick start failed";
+      this.gameAction = "idle";
+      requestHaptic("error");
+    }
+  };
+
+  private quickJoin = async (): Promise<void> => {
+    this.gameAction = "joining";
+    this.gameStatus = "Looking for a test game…";
+    try {
+      await quickJoinDebugGame((message) => (this.gameStatus = message));
+      this.close();
+    } catch (error) {
+      this.gameStatus =
+        error instanceof Error ? error.message : "Quick join failed";
+      this.gameAction = "idle";
+      requestHaptic("error");
+    }
   };
 
   render() {
@@ -203,6 +235,39 @@ export class IdleFrontDeveloperMenu extends LitElement {
           </nav>
 
           <div class="atlas-dev-menu__actions">
+            ${
+              runtimeDebugEnabled()
+                ? html`
+                    <button
+                      class="atlas-war-button"
+                      type="button"
+                      ?disabled=${this.gameAction !== "idle"}
+                      @click=${this.quickStart}
+                    >
+                      <span
+                        ><strong>Quick start</strong
+                        ><small>New solo Expanded Earth test</small></span
+                      >
+                    </button>
+                    <button
+                      class="atlas-war-button atlas-war-button--secondary"
+                      type="button"
+                      ?disabled=${this.gameAction !== "idle"}
+                      @click=${this.quickJoin}
+                    >
+                      <span
+                        ><strong>Quick join</strong
+                        ><small>Enter the newest running test</small></span
+                      >
+                    </button>
+                    ${
+                    this.gameStatus
+                      ? html`<p role="status">${this.gameStatus}</p>`
+                      : null
+                  }
+                  `
+                : null
+            }
             <button
               class="atlas-war-button atlas-war-button--secondary"
               type="button"

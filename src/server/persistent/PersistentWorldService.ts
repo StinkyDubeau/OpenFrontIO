@@ -55,6 +55,8 @@ export interface PersistentWorldServiceOptions {
   randomBytes?: (size: number) => Buffer;
   runtimeCoordinator?: PersistentWorldRuntimeCoordinator;
   onRuntimeError?: (error: unknown) => void;
+  /** Test/dev override. Production keeps the one-minute invitation floor. */
+  minimumStartDelayMs?: number;
 }
 
 /**
@@ -77,6 +79,7 @@ export class PersistentWorldService {
   private readonly secureRandomBytes: (size: number) => Buffer;
   private readonly runtimeCoordinator?: PersistentWorldRuntimeCoordinator;
   private readonly onRuntimeError: (error: unknown) => void;
+  private readonly minimumStartDelayMs: number;
   private readonly presence = new Map<string, Map<string, number>>();
   private scheduler: NodeJS.Timeout | undefined;
 
@@ -88,6 +91,8 @@ export class PersistentWorldService {
     this.secureRandomBytes = options.randomBytes ?? randomBytes;
     this.runtimeCoordinator = options.runtimeCoordinator;
     this.onRuntimeError = options.onRuntimeError ?? (() => undefined);
+    this.minimumStartDelayMs =
+      options.minimumStartDelayMs ?? MIN_START_DELAY_MS;
   }
 
   createGuestSession(inputValue: unknown): NewPersistentWorldControllerSession {
@@ -134,7 +139,7 @@ export class PersistentWorldService {
     const session = this.resumeSession(bearerToken);
     const input = CreatePersistentWorldRequestSchema.parse(inputValue);
     const now = this.now();
-    if (input.startsAt < now + MIN_START_DELAY_MS) {
+    if (input.startsAt < now + this.minimumStartDelayMs) {
       throw new PersistentWorldServiceError(
         400,
         "START_TOO_SOON",

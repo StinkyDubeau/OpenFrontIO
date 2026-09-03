@@ -157,6 +157,30 @@ describe("PersistentWorldService lifecycle", () => {
     });
   });
 
+  it("allows a shorter invitation floor only when explicitly configured", () => {
+    service.close();
+    repository = new PersistentWorldRepository({
+      dbPath,
+      now: () => now,
+    });
+    service = new PersistentWorldService(repository, {
+      now: () => now,
+      minimumStartDelayMs: 1_000,
+    });
+    const host = guest("Debug Host");
+
+    expect(() =>
+      createWorld(host.bearerToken, { startsAt: now + 500 }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: "START_TOO_SOON",
+      }),
+    );
+    expect(
+      createWorld(host.bearerToken, { startsAt: now + 1_000 }).snapshot.world,
+    ).toMatchObject({ startsAt: now + 1_000, phase: "scheduled" });
+  });
+
   it("requires a private invitation until a guest has durably RSVPed", () => {
     const host = guest("Host");
     const player = guest("Invitee");

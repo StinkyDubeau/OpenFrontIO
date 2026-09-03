@@ -506,7 +506,7 @@ function mountWebGLFrameLoop(
     // Structures, railroads and relations normally skip GPU upload unless
     // marked dirty, now force
     view.updateStructures(frameData.units as Map<number, UnitState>);
-    view.uploadRailroadState(frameData.railroadState);
+    view.uploadRailroadState(frameData.railroadState, allRefs);
     view.updateRelations(frameData.relationMatrix, frameData.relationSize);
 
     builder.update(gameView);
@@ -880,13 +880,26 @@ export class ClientGameRunner {
       gu.updates[GameUpdateType.Hash].forEach((hu: HashUpdate) => {
         this.eventBus.emit(new SendHashEvent(hu.tick, hu.hash));
       });
+      const mainThreadStartedAt = performance.now();
+      const viewUpdateStartedAt = mainThreadStartedAt;
       this.gameView.update(gu);
+      const viewUpdateDuration = performance.now() - viewUpdateStartedAt;
+      const gpuUploadStartedAt = performance.now();
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
+      const gpuUploadDuration = performance.now() - gpuUploadStartedAt;
+      const mainThreadDuration = performance.now() - mainThreadStartedAt;
 
       // Emit tick metrics event for performance overlay
       this.eventBus.emit(
-        new TickMetricsEvent(gu.tickExecutionDuration, this.currentTickDelay),
+        new TickMetricsEvent(
+          gu.tickExecutionDuration,
+          this.currentTickDelay,
+          gu.pendingTurns,
+          viewUpdateDuration,
+          gpuUploadDuration,
+          mainThreadDuration,
+        ),
       );
 
       // Reset tick delay for next measurement

@@ -2100,6 +2100,11 @@ body.atlas-theme.in-game {
   );
 }
 
+/* Debug quick-launch belongs to menus; the in-game profiler replaces it. */
+body.atlas-theme.in-game idlefront-debug-quick-launch {
+  display: none;
+}
+
 body.atlas-theme.in-game
   > atlas-game-hud
   :where(.atlas-hud-corner-stack, game-left-sidebar > aside) {

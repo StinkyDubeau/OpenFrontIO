@@ -193,6 +193,10 @@ export class TickMetricsEvent implements GameEvent {
   constructor(
     public readonly tickExecutionDuration?: number,
     public readonly tickDelay?: number,
+    public readonly pendingTurns?: number,
+    public readonly viewUpdateDuration?: number,
+    public readonly gpuUploadDuration?: number,
+    public readonly mainThreadDuration?: number,
   ) {}
 }
 

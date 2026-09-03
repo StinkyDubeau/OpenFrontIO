@@ -75,11 +75,13 @@ import {
   installSafariPinchZoomBlocker,
 } from "./utilities/DisableSafariPinchZoom";
 
+import { syncRuntimeDebugMode } from "./RuntimeDebug";
 import "./components/AtlasGameHud";
 import "./components/AtlasGlobalOverlays";
 import "./components/AtlasPageDeck";
 import "./components/AtlasPrimitives";
 import { mountAtlasUiLab } from "./components/AtlasUiLab";
+import "./components/DebugQuickLaunch";
 import "./components/DesktopNavBar";
 import "./components/MainLayout";
 import "./components/MobileNavBar";
@@ -203,6 +205,11 @@ class Client {
   }> | null = null;
 
   async initialize(): Promise<void> {
+    if (syncRuntimeDebugMode()) {
+      document.body.append(
+        document.createElement("idlefront-debug-quick-launch"),
+      );
+    }
     crazyGamesSDK.maybeInit();
 
     // Register modals with the URL router. Lobby modals (join/host) and
