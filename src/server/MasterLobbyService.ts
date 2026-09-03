@@ -17,6 +17,7 @@ import {
   WorkerManagedGameStats,
   WorkerManagedGameTurns,
   WorkerMessageSchema,
+  type WorkerDeploymentDrainStatus,
 } from "./IPCBridgeSchema";
 import { logger } from "./Logger";
 import { MapPlaylist } from "./MapPlaylist";
@@ -26,6 +27,18 @@ import { ServerEnv } from "./ServerEnv";
 export interface MasterLobbyServiceOptions {
   playlist: MapPlaylist;
   log: typeof logger;
+}
+
+export interface DeploymentDrainStatus {
+  draining: boolean;
+  ready: boolean;
+  workersExpected: number;
+  workersReported: number;
+  blockingGames: number;
+  managedGames: number;
+  lobbyGames: number;
+  activeClients: number;
+  pendingAdmissions: number;
 }
 
 export class MasterLobbyService {
@@ -52,6 +65,14 @@ export class MasterLobbyService {
   >();
   private managedGameTurnHandler?: (message: WorkerManagedGameTurns) => void;
   private managedGameStatsHandler?: (message: WorkerManagedGameStats) => void;
+  private deploymentDraining = false;
+  private readonly workerDrainStatuses = new Map<
+    number,
+    WorkerDeploymentDrainStatus
+  >();
+  private deploymentDrainStatusHandler?: (
+    status: DeploymentDrainStatus,
+  ) => void;
   private started = false;
 
   constructor(
@@ -86,8 +107,104 @@ export class MasterLobbyService {
         case "managedGameStats":
           this.handleManagedGameStats(workerId, msg);
           break;
+        case "deploymentDrainStatus":
+          this.handleDeploymentDrainStatus(workerId, msg);
+          break;
       }
     });
+  }
+
+  setDeploymentDrainStatusHandler(
+    handler: ((status: DeploymentDrainStatus) => void) | undefined,
+  ): void {
+    this.deploymentDrainStatusHandler = handler;
+  }
+
+  beginDeploymentDrain(): DeploymentDrainStatus {
+    if (!this.deploymentDraining) {
+      this.deploymentDraining = true;
+      this.workerDrainStatuses.clear();
+      this.broadcastDeploymentDrain(true);
+    }
+    return this.emitDeploymentDrainStatus();
+  }
+
+  cancelDeploymentDrain(): DeploymentDrainStatus {
+    if (this.deploymentDraining) this.broadcastDeploymentDrain(false);
+    this.deploymentDraining = false;
+    this.workerDrainStatuses.clear();
+    return this.emitDeploymentDrainStatus();
+  }
+
+  deploymentDrainStatus(): DeploymentDrainStatus {
+    const workersExpected = this.workers.size;
+    const statuses = [...this.workerDrainStatuses.values()].filter(
+      (status) => status.draining,
+    );
+    const totals = statuses.reduce(
+      (total, status) => ({
+        blockingGames: total.blockingGames + status.blockingGames,
+        managedGames: total.managedGames + status.managedGames,
+        lobbyGames: total.lobbyGames + status.lobbyGames,
+        activeClients: total.activeClients + status.activeClients,
+        pendingAdmissions: total.pendingAdmissions + status.pendingAdmissions,
+      }),
+      {
+        blockingGames: 0,
+        managedGames: 0,
+        lobbyGames: 0,
+        activeClients: 0,
+        pendingAdmissions: 0,
+      },
+    );
+    const workersReported = statuses.length;
+    return {
+      draining: this.deploymentDraining,
+      ready:
+        this.deploymentDraining &&
+        workersExpected > 0 &&
+        workersReported === workersExpected &&
+        totals.blockingGames === 0 &&
+        totals.lobbyGames === 0 &&
+        totals.pendingAdmissions === 0,
+      workersExpected,
+      workersReported,
+      ...totals,
+    };
+  }
+
+  private broadcastDeploymentDrain(enabled: boolean): void {
+    for (const worker of this.workers.values()) {
+      worker.send({ type: "deploymentDrain", enabled }, (error) => {
+        if (!error) return;
+        this.log.error("Failed to update worker deployment-drain state", {
+          enabled,
+          error: error.message,
+        });
+        worker.kill();
+      });
+    }
+  }
+
+  private handleDeploymentDrainStatus(
+    registeredWorkerId: number,
+    status: WorkerDeploymentDrainStatus,
+  ): void {
+    if (status.workerId !== registeredWorkerId) {
+      this.log.error("Ignoring deployment-drain status from the wrong worker", {
+        registeredWorkerId,
+        claimedWorkerId: status.workerId,
+      });
+      return;
+    }
+    this.workerDrainStatuses.set(registeredWorkerId, status);
+    this.emitDeploymentDrainStatus();
+  }
+
+  private emitDeploymentDrainStatus(): DeploymentDrainStatus {
+    const status = this.deploymentDrainStatus();
+    this.deploymentDrainStatusHandler?.(status);
+    return status;
   }
 
   /**
@@ -309,6 +426,8 @@ export class MasterLobbyService {
     this.workers.delete(workerId);
     this.workerLobbies.delete(workerId);
     this.readyWorkers.delete(workerId);
+    this.workerDrainStatuses.delete(workerId);
+    if (this.deploymentDraining) this.emitDeploymentDrainStatus();
     for (const [requestId, pending] of this.pendingManagedGames) {
       if (pending.workerId === workerId) {
         this.rejectManagedGame(
@@ -331,6 +450,10 @@ export class MasterLobbyService {
     this.log.info(
       `Worker ${workerId} is ready. (${this.readyWorkers.size}/${ServerEnv.numWorkers()} ready)`,
     );
+    if (this.deploymentDraining) {
+      const worker = this.workers.get(workerId);
+      worker?.send({ type: "deploymentDrain", enabled: true });
+    }
     if (this.readyWorkers.size === ServerEnv.numWorkers() && !this.started) {
       this.started = true;
       this.log.info("All workers ready, starting game scheduling");
@@ -449,6 +572,7 @@ export class MasterLobbyService {
   }
 
   private async maybeScheduleLobby() {
+    if (this.deploymentDraining) return;
     const lobbiesByType = this.getAllLobbies().games;
 
     // Scheduled types only: hosted lobbies are started by their host, never

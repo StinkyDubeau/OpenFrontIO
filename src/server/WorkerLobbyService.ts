@@ -11,6 +11,7 @@ import {
   InternalGameInfo,
   InternalPublicGames,
   MasterMessageSchema,
+  type WorkerDeploymentDrainStatus,
   type WorkerLobbyList,
   type WorkerManagedGameReady,
   type WorkerManagedGameStats,
@@ -46,6 +47,7 @@ export class WorkerLobbyService {
   // counts-only delta is enough. Null (not "") is used so that an
   // empty-lobby first broadcast still emits a full.
   private lastFullGameIds: string | null = null;
+  private deploymentDrainReporter: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly server: http.Server,
@@ -175,7 +177,37 @@ export class WorkerLobbyService {
         game.setStartsAt(msg.startsAt);
         break;
       }
+      case "deploymentDrain":
+        this.setDeploymentDraining(msg.enabled);
+        break;
     }
+  }
+
+  private setDeploymentDraining(enabled: boolean): void {
+    this.gm.setDeploymentDraining(enabled);
+    this.sendDeploymentDrainStatus();
+    if (!enabled) {
+      if (this.deploymentDrainReporter !== undefined) {
+        clearInterval(this.deploymentDrainReporter);
+        this.deploymentDrainReporter = undefined;
+      }
+      return;
+    }
+    if (this.deploymentDrainReporter !== undefined) return;
+    this.deploymentDrainReporter = setInterval(
+      () => this.sendDeploymentDrainStatus(),
+      1_000,
+    );
+    this.deploymentDrainReporter.unref?.();
+  }
+
+  private sendDeploymentDrainStatus(): void {
+    this.sendToMaster({
+      type: "deploymentDrainStatus",
+      workerId: ServerEnv.workerId() ?? 0,
+      draining: this.gm.isDeploymentDraining(),
+      ...this.gm.deploymentDrainStatus(),
+    } satisfies WorkerDeploymentDrainStatus);
   }
 
   sendReady(workerId: number) {

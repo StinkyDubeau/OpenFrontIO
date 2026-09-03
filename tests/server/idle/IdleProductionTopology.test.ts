@@ -42,6 +42,14 @@ describe("IdleFront production topology", () => {
     expect(deployment).toContain(
       'if [ "$persistent_world_db_path" != "$db_path" ]',
     );
+    expect(dockerfile).toContain(
+      "ENV IDLE_DEPLOY_DRAIN_STATUS_PATH=/var/lib/openfront-idle/deployment-drain.status",
+    );
+    expect(environment).toContain(
+      "IDLE_DEPLOY_DRAIN_STATUS_PATH=/var/lib/openfront-idle/deployment-drain.status",
+    );
+    expect(deployment).toContain("docker kill --signal=USR2 openfront-idle");
+    expect(deployment).toContain("docker kill --signal=USR1 openfront-idle");
   });
 
   it("can open both namespaced stores in one SQLite file", () => {

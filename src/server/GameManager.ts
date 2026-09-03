@@ -21,6 +21,8 @@ import {
 
 export class GameManager {
   private games: Map<GameID, GameServer> = new Map();
+  private deploymentDraining = false;
+  private pendingMatchmakingPolls = 0;
 
   constructor(
     private log: Logger,
@@ -93,7 +95,14 @@ export class GameManager {
     matchmakingTeams?: string[][],
     managedOptions?: ManagedGameOptions,
     managedHooks?: ManagedGameHooks,
+    allowDuringDeploymentDrain = false,
   ): GameServer | null {
+    if (this.deploymentDraining && !allowDuringDeploymentDrain) {
+      this.log.info("refusing game creation during deployment drain", {
+        gameID: id,
+      });
+      return null;
+    }
     if (this.games.has(id)) {
       this.log.warn("cannot create game, id already exists", { gameID: id });
       return null;
@@ -138,6 +147,66 @@ export class GameManager {
     return this.games.size;
   }
 
+  public isDeploymentDraining(): boolean {
+    return this.deploymentDraining;
+  }
+
+  public beginMatchmakingPoll(): boolean {
+    if (this.deploymentDraining) return false;
+    this.pendingMatchmakingPolls += 1;
+    return true;
+  }
+
+  public endMatchmakingPoll(): void {
+    this.pendingMatchmakingPolls = Math.max(
+      0,
+      this.pendingMatchmakingPolls - 1,
+    );
+  }
+
+  public setDeploymentDraining(enabled: boolean): void {
+    if (this.deploymentDraining === enabled) return;
+    this.deploymentDraining = enabled;
+    if (!enabled) return;
+
+    // Do not let a countdown cross into Active while a deployment is waiting.
+    // Managed games are deliberately retained because their turn journals make
+    // restart a supported recovery boundary.
+    for (const game of this.games.values()) game.cancelForDeploymentDrain();
+  }
+
+  public deploymentDrainStatus(): {
+    blockingGames: number;
+    managedGames: number;
+    lobbyGames: number;
+    activeClients: number;
+    pendingAdmissions: number;
+  } {
+    let blockingGames = 0;
+    let managedGames = 0;
+    let lobbyGames = 0;
+    let activeClients = 0;
+    for (const game of this.games.values()) {
+      const phase = game.phase();
+      if (phase === GamePhase.Finished) continue;
+      activeClients += game.activeClients.length;
+      if (game.managedRequestId() !== undefined) {
+        managedGames += 1;
+      } else if (phase === GamePhase.Active) {
+        blockingGames += 1;
+      } else {
+        lobbyGames += 1;
+      }
+    }
+    return {
+      blockingGames,
+      managedGames,
+      lobbyGames,
+      activeClients,
+      pendingAdmissions: this.pendingMatchmakingPolls,
+    };
+  }
+
   activeClients(): number {
     let totalClients = 0;
     this.games.forEach((game: GameServer) => {
@@ -160,9 +229,20 @@ export class GameManager {
   tick() {
     const active = new Map<GameID, GameServer>();
     for (const [id, game] of this.games) {
+      if (
+        this.deploymentDraining &&
+        !game.hasStarted() &&
+        game.managedRequestId() === undefined
+      ) {
+        game.cancelForDeploymentDrain();
+      }
       const phase = game.phase();
       if (phase === GamePhase.Lobby) {
-        game.maybeAutoStartListed();
+        if (this.deploymentDraining) {
+          game.cancelForDeploymentDrain();
+        } else {
+          game.maybeAutoStartListed();
+        }
       }
       if (phase === GamePhase.Active) {
         // A matchmade game missing a player at the start deadline is

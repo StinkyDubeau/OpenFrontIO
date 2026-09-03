@@ -157,6 +157,10 @@ export async function startWorker() {
   // and returns it, so callers don't need to know the sharding. nginx (and the
   // vite dev proxy) randomly route here to spread new games across workers.
   app.post("/api/create_game", async (req, res) => {
+    if (gm.isDeploymentDraining()) {
+      res.setHeader("Retry-After", "60");
+      return res.status(503).json({ error: "Server deployment pending" });
+    }
     // Identify the creator from their token. Never accept persistentID directly.
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
@@ -845,6 +849,7 @@ const MatchmakingAssignmentSchema = z.object({
 function startMatchmakingLoop(gm: GameManager, mode: "1v1" | "2v2") {
   startPolling(
     async () => {
+      if (!gm.beginMatchmakingPoll()) return;
       try {
         const url = `${ServerEnv.jwtIssuer() + "/matchmaking/checkin"}`;
         const gameId = ServerEnv.generateGameIdForWorker(workerId);
@@ -909,6 +914,12 @@ function startMatchmakingLoop(gm: GameManager, mode: "1v1" | "2v2") {
             Date.now() + 15000,
             undefined,
             parsed.success ? parsed.data.teams : undefined,
+            undefined,
+            undefined,
+            // An assignment returned by an already-running long poll is a
+            // commitment to those players. Let it finish rather than strand
+            // them; the deployment drain will wait for this game as well.
+            true,
           );
           if (game === null) {
             log.warn(`Failed to create matchmaking game ${gameId}`);
@@ -920,6 +931,8 @@ function startMatchmakingLoop(gm: GameManager, mode: "1v1" | "2v2") {
           return;
         }
         log.error(`Error polling ${mode} lobby:`, error);
+      } finally {
+        gm.endMatchmakingPoll();
       }
     },
     5000 + Math.random() * 1000,

@@ -333,6 +333,69 @@ describe("managed-game master/worker bridge", () => {
     expect(statsHandler).toHaveBeenCalledWith(stats);
   });
 
+  it("aggregates worker drain reports and resumes scheduling when cancelled", () => {
+    const worker = new EventEmitter() as EventEmitter & {
+      send: ReturnType<typeof vi.fn>;
+      kill: ReturnType<typeof vi.fn>;
+    };
+    worker.send = vi.fn((_message, callback) => callback?.());
+    worker.kill = vi.fn();
+    const master = new MasterLobbyService({} as any, log);
+    const statusHandler = vi.fn();
+    master.setDeploymentDrainStatusHandler(statusHandler);
+    master.registerWorker(0, worker as any);
+    worker.emit("message", { type: "workerReady", workerId: 0 });
+
+    expect(master.beginDeploymentDrain()).toMatchObject({
+      draining: true,
+      ready: false,
+      workersExpected: 1,
+      workersReported: 0,
+    });
+    expect(worker.send).toHaveBeenCalledWith(
+      { type: "deploymentDrain", enabled: true },
+      expect.any(Function),
+    );
+
+    worker.emit("message", {
+      type: "deploymentDrainStatus",
+      workerId: 0,
+      draining: true,
+      blockingGames: 1,
+      managedGames: 2,
+      lobbyGames: 0,
+      activeClients: 3,
+      pendingAdmissions: 0,
+    });
+    expect(master.deploymentDrainStatus()).toMatchObject({
+      ready: false,
+      blockingGames: 1,
+      managedGames: 2,
+    });
+
+    worker.emit("message", {
+      type: "deploymentDrainStatus",
+      workerId: 0,
+      draining: true,
+      blockingGames: 0,
+      managedGames: 2,
+      lobbyGames: 0,
+      activeClients: 2,
+      pendingAdmissions: 0,
+    });
+    expect(master.deploymentDrainStatus()).toMatchObject({
+      ready: true,
+      blockingGames: 0,
+      managedGames: 2,
+    });
+
+    expect(master.cancelDeploymentDrain()).toMatchObject({
+      draining: false,
+      ready: false,
+    });
+    expect(statusHandler).toHaveBeenCalled();
+  });
+
   it("creates a managed GameServer once and acknowledges an idempotent replay", () => {
     const created = { managedRequestId: () => managedCommand.requestId };
     const gm = {

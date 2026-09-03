@@ -10,6 +10,10 @@ import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GameEnv } from "../core/configuration/Config";
+import {
+  removeDeploymentDrainStatus,
+  writeDeploymentDrainStatus,
+} from "./DeploymentDrainStatusFile";
 import { createIdleRouter, IdleService } from "./idle";
 import { verifyClientToken } from "./jwt";
 import { logger } from "./Logger";
@@ -311,6 +315,47 @@ export async function startMaster() {
   process.env.INSTANCE_ID = INSTANCE_ID;
 
   log.info(`Instance ID: ${INSTANCE_ID}`);
+
+  const deploymentDrainStatusPath = process.env.IDLE_DEPLOY_DRAIN_STATUS_PATH;
+  if (deploymentDrainStatusPath) {
+    try {
+      removeDeploymentDrainStatus(deploymentDrainStatusPath);
+    } catch (error) {
+      log.error("Could not clear stale deployment-drain status", error);
+    }
+    lobbyService.setDeploymentDrainStatusHandler((status) => {
+      try {
+        writeDeploymentDrainStatus(
+          deploymentDrainStatusPath,
+          INSTANCE_ID,
+          status,
+        );
+      } catch (error) {
+        log.error("Could not write deployment-drain status", error);
+      }
+    });
+    process.once("exit", () => {
+      try {
+        removeDeploymentDrainStatus(deploymentDrainStatusPath);
+      } catch {
+        // The host-side deploy wrapper also removes stale status files.
+      }
+    });
+  }
+
+  process.on("SIGUSR2", () => {
+    if (masterShutdownStarted) return;
+    log.info("deployment drain requested; stopping new game scheduling");
+    persistentWorldService?.stopScheduler();
+    lobbyService.beginDeploymentDrain();
+  });
+  process.on("SIGUSR1", () => {
+    if (masterShutdownStarted) return;
+    log.info("deployment drain cancelled; resuming game scheduling");
+    lobbyService.cancelDeploymentDrain();
+    persistentWorldService?.activateDueWorlds();
+    persistentWorldService?.startScheduler();
+  });
 
   // Fork workers
   for (let i = 0; i < ServerEnv.numWorkers(); i++) {
