@@ -20,7 +20,7 @@ export class PlayPage extends LitElement {
           <section class="atlas-launch-console" aria-label="IdleFront">
             <h1 class="sr-only">IdleFront</h1>
             <div class="atlas-app-identity" aria-hidden="true">
-              <product-wordmark></product-wordmark>
+              <product-wordmark balanced></product-wordmark>
             </div>
 
             <div class="atlas-identity-card">

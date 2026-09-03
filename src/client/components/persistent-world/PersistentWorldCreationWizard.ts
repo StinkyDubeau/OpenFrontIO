@@ -58,7 +58,7 @@ export class PersistentWorldCreationWizard extends LitElement {
   @property({ type: Boolean }) submitting = false;
   @property() error = "";
   @state() private step = 0;
-  @state() private name = "Game title";
+  @state() private name: string = placeholderCopy.wizard.worldNameDefault;
   @state() private duration: PersistentWorldDuration = "1d";
   @state() private access: PersistentWorldAccess = "private";
   @state() private mode: PersistentWorldMode = "ffa";
@@ -73,7 +73,7 @@ export class PersistentWorldCreationWizard extends LitElement {
   }
 
   render() {
-    const stepNames = ["World", "Players", "Start", "Invitation"];
+    const stepNames = placeholderCopy.wizard.stepTitles;
     return html`
       <section class="pw-wizard" aria-labelledby="pw-wizard-title">
         <header class="pw-wizard__header">
@@ -176,16 +176,18 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">01</span>
           <div>
-            <h2 data-copy-slot="wizard.stepHeading">
-              ${placeholderCopy.wizard.stepHeading}
+            <h2 data-copy-slot="wizard.stepHeadings.0">
+              ${placeholderCopy.wizard.stepHeadings[0]}
             </h2>
-            <p data-copy-slot="wizard.stepInstructions">
-              ${placeholderCopy.wizard.stepInstructions}
+            <p data-copy-slot="wizard.stepInstructions.0">
+              ${placeholderCopy.wizard.stepInstructions[0]}
             </p>
           </div>
         </div>
         <label class="pw-field">
-          <span>World name</span>
+          <span data-copy-slot="wizard.worldNameLabel"
+            >${placeholderCopy.wizard.worldNameLabel}</span
+          >
           <input
             type="text"
             maxlength="100"
@@ -196,7 +198,9 @@ export class PersistentWorldCreationWizard extends LitElement {
           />
         </label>
         <fieldset class="pw-choice-grid pw-choice-grid--three">
-          <legend>Target pace</legend>
+          <legend data-copy-slot="wizard.pacingLabel">
+            ${placeholderCopy.wizard.pacingLabel}
+          </legend>
           ${(["1h", "1d", "7d"] as const).map(
             (duration) => html`
               <label
@@ -217,7 +221,10 @@ export class PersistentWorldCreationWizard extends LitElement {
                   }</span
                 >
                 <strong>${formatWorldDuration(duration)}</strong>
-                <small>${placeholderCopy.wizard.pacingDescription}</small>
+                <small
+                  data-copy-slot=${`wizard.pacingDescriptions.${duration}`}
+                  >${placeholderCopy.wizard.pacingDescriptions[duration]}</small
+                >
               </label>
             `,
           )}
@@ -235,11 +242,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">02</span>
           <div>
-            <h2 data-copy-slot="wizard.stepHeading">
-              ${placeholderCopy.wizard.stepHeading}
+            <h2 data-copy-slot="wizard.stepHeadings.1">
+              ${placeholderCopy.wizard.stepHeadings[1]}
             </h2>
-            <p data-copy-slot="wizard.stepInstructions">
-              ${placeholderCopy.wizard.stepInstructions}
+            <p data-copy-slot="wizard.stepInstructions.1">
+              ${placeholderCopy.wizard.stepInstructions[1]}
             </p>
           </div>
         </div>
@@ -251,9 +258,9 @@ export class PersistentWorldCreationWizard extends LitElement {
                 [
                   "private",
                   "Private",
-                  placeholderCopy.wizard.optionDescription,
+                  placeholderCopy.wizard.privateDescription,
                 ],
-                ["public", "Public", placeholderCopy.wizard.optionDescription],
+                ["public", "Public", placeholderCopy.wizard.publicDescription],
               ],
               this.access,
               (value) => (this.access = value as PersistentWorldAccess),
@@ -267,9 +274,9 @@ export class PersistentWorldCreationWizard extends LitElement {
                 [
                   "ffa",
                   "Free for all",
-                  placeholderCopy.wizard.optionDescription,
+                  placeholderCopy.wizard.freeForAllDescription,
                 ],
-                ["teams", "Teams", placeholderCopy.wizard.optionDescription],
+                ["teams", "Teams", placeholderCopy.wizard.teamsDescription],
               ],
               this.mode,
               (value) => (this.mode = value as PersistentWorldMode),
@@ -279,9 +286,10 @@ export class PersistentWorldCreationWizard extends LitElement {
         </div>
         <div class="pw-stepper-field">
           <div>
-            <span>Human commanders</span
-            ><small data-copy-slot="wizard.optionDescription"
-              >${placeholderCopy.wizard.optionDescription}</small
+            <span data-copy-slot="wizard.playerCountLabel"
+              >${placeholderCopy.wizard.playerCountLabel}</span
+            ><small data-copy-slot="wizard.playerCountDescription"
+              >${placeholderCopy.wizard.playerCountDescription}</small
             >
           </div>
           <div class="pw-stepper">
@@ -332,11 +340,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-wizard-step__intro">
           <span class="pw-step-number">03</span>
           <div>
-            <h2 data-copy-slot="wizard.stepHeading">
-              ${placeholderCopy.wizard.stepHeading}
+            <h2 data-copy-slot="wizard.stepHeadings.2">
+              ${placeholderCopy.wizard.stepHeadings[2]}
             </h2>
-            <p data-copy-slot="wizard.stepInstructions">
-              ${placeholderCopy.wizard.stepInstructions}
+            <p data-copy-slot="wizard.stepInstructions.2">
+              ${placeholderCopy.wizard.stepInstructions[2]}
             </p>
           </div>
         </div>
@@ -398,11 +406,11 @@ export class PersistentWorldCreationWizard extends LitElement {
         <div class="pw-review-seal" aria-hidden="true"><span>IV</span></div>
         <div class="pw-wizard-step__intro pw-wizard-step__intro--centered">
           <div>
-            <h2 data-copy-slot="wizard.stepHeading">
-              ${placeholderCopy.wizard.stepHeading}
+            <h2 data-copy-slot="wizard.stepHeadings.3">
+              ${placeholderCopy.wizard.stepHeadings[3]}
             </h2>
-            <p data-copy-slot="wizard.stepInstructions">
-              ${placeholderCopy.wizard.stepInstructions}
+            <p data-copy-slot="wizard.stepInstructions.3">
+              ${placeholderCopy.wizard.stepInstructions[3]}
             </p>
           </div>
         </div>

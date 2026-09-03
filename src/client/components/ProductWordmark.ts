@@ -22,8 +22,48 @@ export class ProductWordmark extends LitElement {
   @property({ type: Boolean, reflect: true })
   quiet = false;
 
+  @property({ type: Boolean, reflect: true })
+  balanced = false;
+
   createRenderRoot() {
     return this;
+  }
+
+  protected firstUpdated() {
+    this.balanceTypeLines();
+    void document.fonts?.ready.then(() => this.balanceTypeLines());
+  }
+
+  protected updated() {
+    this.balanceTypeLines();
+  }
+
+  private balanceTypeLines() {
+    if (!this.balanced) return;
+    const name = this.querySelector<HTMLElement>(".atlas-wordmark__name");
+    const descriptor = this.querySelector<HTMLElement>(
+      ".atlas-wordmark__descriptor",
+    );
+    if (!name || !descriptor) return;
+
+    name.style.transform = "none";
+    descriptor.style.transform = "none";
+    const nameWidth = name.getBoundingClientRect().width;
+    const descriptorWidth = descriptor.getBoundingClientRect().width;
+    const targetWidth = Math.max(nameWidth, descriptorWidth);
+    if (targetWidth <= 0) return;
+
+    this.style.setProperty("--atlas-wordmark-line-width", `${targetWidth}px`);
+    this.style.setProperty(
+      "--atlas-wordmark-name-scale",
+      String(targetWidth / nameWidth),
+    );
+    this.style.setProperty(
+      "--atlas-wordmark-descriptor-scale",
+      String(targetWidth / descriptorWidth),
+    );
+    name.style.removeProperty("transform");
+    descriptor.style.removeProperty("transform");
   }
 
   render() {

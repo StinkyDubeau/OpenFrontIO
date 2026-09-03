@@ -1846,7 +1846,7 @@
   },
   "username": {
     "account_invalid_chars": "Username can only contain letters, numbers, underscores, hyphens, and single spaces between words.",
-    "enter_username": "Enter your username",
+    "enter_username": "Enter a username",
     "invalid_chars": "Username can only contain letters, numbers, spaces, and underscores.",
     "not_string": "Username must be a string.",
     "tag": "TAG",

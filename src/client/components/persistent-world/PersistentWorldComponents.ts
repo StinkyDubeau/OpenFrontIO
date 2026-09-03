@@ -642,7 +642,7 @@ export class PersistentWorldList extends LitElement {
           ${
             this.worlds.length === 0
               ? html`<div class="pw-empty-state">
-                  <strong>Nothing on the table.</strong
+                  <strong>Start a match?</strong
                   ><span>${this.emptyMessage}</span>
                 </div>`
               : this.worlds.map((card) => this.renderCard(card))

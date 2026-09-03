@@ -3833,6 +3833,32 @@ body[data-page="page-play"].atlas-theme:not(.in-game)
   transform: scale(1.08);
 }
 
+body[data-page="page-play"].atlas-theme:not(.in-game)
+  .atlas-app-identity
+  product-wordmark[balanced]
+  .atlas-wordmark__type {
+  width: var(--atlas-wordmark-line-width, auto);
+  height: 2.7rem;
+  justify-content: space-between;
+  gap: 0;
+}
+
+body[data-page="page-play"].atlas-theme:not(.in-game)
+  .atlas-app-identity
+  product-wordmark[balanced]
+  .atlas-wordmark__name {
+  transform: scaleX(var(--atlas-wordmark-name-scale, 1));
+  transform-origin: left center;
+}
+
+body[data-page="page-play"].atlas-theme:not(.in-game)
+  .atlas-app-identity
+  product-wordmark[balanced]
+  .atlas-wordmark__descriptor {
+  transform: scaleX(var(--atlas-wordmark-descriptor-scale, 1));
+  transform-origin: left center;
+}
+
 .atlas-title-stage .atlas-identity-card {
   display: grid;
   min-height: 0;
@@ -4084,6 +4110,12 @@ body[data-page="page-play"].atlas-theme:not(.in-game)
   transition:
     transform 340ms var(--war-button-spring),
     box-shadow 120ms ease;
+}
+
+.atlas-quick-play__icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.5));
 }
 
 .atlas-quick-play:hover:not(:disabled) .atlas-quick-play__icon,

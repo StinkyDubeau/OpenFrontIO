@@ -59,7 +59,17 @@ export class GameModeSelector extends LitElement {
           @click=${this.openWorlds}
           data-haptic="medium"
         >
-          <span class="atlas-quick-play__icon" aria-hidden="true">▶</span>
+          <span class="atlas-quick-play__icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none">
+              <path
+                d="m7.25 5.25 6.9 4.75-6.9 4.75z"
+                stroke="currentColor"
+                stroke-width="1.55"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
           <span class="atlas-quick-play__copy">
             <strong data-copy-slot="landing.primaryAction"
               >${placeholderCopy.landing.primaryAction}</strong

@@ -690,6 +690,7 @@ idlefront-wordmark {
   display: inline-flex;
   min-height: 2.35rem;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   overflow: hidden;
   border: 1px solid var(--pw-header-gem-border);
@@ -778,6 +779,23 @@ idlefront-wordmark {
 
 .pw-header-action > span:first-child {
   font-size: 1.05rem;
+}
+
+.pw-header-action__icon {
+  display: grid;
+  width: 1.08rem;
+  height: 1.08rem;
+  place-items: center;
+}
+
+.pw-header-action__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
 }
 
 .pw-header-action--quiet {
