@@ -4,6 +4,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import { assetUrl } from "../../../core/AssetUrls";
 import type { EventBus } from "../../../core/EventBus";
 import { GameMode, type Team } from "../../../core/game/Game";
+import { recordDeveloperMenuLogoTap } from "../../components/DeveloperMenu";
 import type { Controller } from "../../Controller";
 import { Platform } from "../../Platform";
 import { themeProvider } from "../../theme/ThemeProvider";
@@ -101,6 +102,13 @@ export class GameLeftSidebar extends LitElement implements Controller {
     this.isPlayerStatsShown = !this.isPlayerStatsShown;
   }
 
+  private onLogoTap(event: PointerEvent): void {
+    recordDeveloperMenuLogoTap(performance.now(), {
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
   private toggleTeamStats(): void {
     this.isTeamStatsShown = !this.isTeamStatsShown;
   }
@@ -118,6 +126,23 @@ export class GameLeftSidebar extends LitElement implements Controller {
         style="margin-top: ${this.barOffset}px;"
       >
         <div class="flex items-center gap-4 xl:gap-6 text-white">
+          <div
+            class="atlas-map-brand-mark"
+            aria-hidden="true"
+            @pointerup=${this.onLogoTap}
+          >
+            <svg viewBox="0 0 36 36" focusable="false">
+              <circle cx="18" cy="18" r="13.5"></circle>
+              <path d="M8.4 20.5c4.7-5.4 9.1-8 19.2-6.4"></path>
+              <path d="m21.2 13.7-2.1 6-6 2.2 2.2-6.1 5.9-2.1Z"></path>
+              <circle
+                class="atlas-map-brand-mark__pin"
+                cx="17.2"
+                cy="17.8"
+                r="1.6"
+              ></circle>
+            </svg>
+          </div>
           <div
             class="cursor-pointer p-0.5 bg-gray-700/50 hover:bg-gray-600 border rounded-md border-slate-500 transition-colors"
             @click=${this.togglePlayerStats}
@@ -153,26 +178,26 @@ export class GameLeftSidebar extends LitElement implements Controller {
                     role="button"
                     tabindex="0"
                     @keydown=${(e: KeyboardEvent) => {
-                    if (
-                      e.key === "Enter" ||
-                      e.key === " " ||
-                      e.code === "Space"
-                    ) {
-                      e.preventDefault();
-                      this.toggleTeamStats();
-                    }
-                  }}
+                      if (
+                        e.key === "Enter" ||
+                        e.key === " " ||
+                        e.code === "Space"
+                      ) {
+                        e.preventDefault();
+                        this.toggleTeamStats();
+                      }
+                    }}
                   >
                     <img
                       src=${
-                      this.isTeamStatsShown
-                        ? teamStatsSolidIcon
-                        : teamStatsRegularIcon
-                    }
+                        this.isTeamStatsShown
+                          ? teamStatsSolidIcon
+                          : teamStatsRegularIcon
+                      }
                       alt=${
-                      translateText("help_modal.icon_alt_team_leaderboard") ||
-                      "Team Leaderboard Icon"
-                    }
+                        translateText("help_modal.icon_alt_team_leaderboard") ||
+                        "Team Leaderboard Icon"
+                      }
                       width="20"
                       height="20"
                     />

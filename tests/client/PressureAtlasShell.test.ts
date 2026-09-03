@@ -166,6 +166,23 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(document).toContain("font-size: max(16px, 1em) !important;");
   });
 
+  test("keeps the hidden developer trigger on the world map logo", () => {
+    const mapSidebar = source("src/client/hud/layers/GameLeftSidebar.ts");
+    const landingWordmark = source("src/client/components/ProductWordmark.ts");
+    const worldWordmark = source(
+      "src/client/components/persistent-world/PersistentWorldComponents.ts",
+    );
+    const styles = source("src/client/styles/war-room.css");
+
+    expect(mapSidebar).toContain('class="atlas-map-brand-mark"');
+    expect(mapSidebar).toContain("recordDeveloperMenuLogoTap");
+    expect(mapSidebar).toContain("@pointerup=${this.onLogoTap}");
+    expect(landingWordmark).not.toContain("recordDeveloperMenuLogoTap");
+    expect(worldWordmark).not.toContain("recordDeveloperMenuLogoTap");
+    expect(styles).toMatch(/\.atlas-map-brand-mark\s*\{[^}]*cursor: default;/s);
+    expect(styles).toContain("@keyframes atlas-dev-unlock-ring");
+  });
+
   test("applies the Dynamic Island inset once at the scene boundary", () => {
     const document = source("index.html");
     const baseStyles = source("src/client/styles.css");

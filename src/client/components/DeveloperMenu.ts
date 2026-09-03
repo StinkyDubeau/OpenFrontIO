@@ -8,6 +8,11 @@ const TAP_SEQUENCE_TIMEOUT_MS = 4_000;
 let logoTapCount = 0;
 let lastLogoTapAt = 0;
 
+export interface DeveloperMenuOrigin {
+  x: number;
+  y: number;
+}
+
 export function resetDeveloperMenuTapSequence(): void {
   logoTapCount = 0;
   lastLogoTapAt = 0;
@@ -16,6 +21,7 @@ export function resetDeveloperMenuTapSequence(): void {
 /** Records one logo activation and opens the singleton menu on tap seven. */
 export function recordDeveloperMenuLogoTap(
   now: number = performance.now(),
+  origin?: DeveloperMenuOrigin,
 ): boolean {
   if (now - lastLogoTapAt > TAP_SEQUENCE_TIMEOUT_MS) logoTapCount = 0;
   lastLogoTapAt = now;
@@ -24,16 +30,22 @@ export function recordDeveloperMenuLogoTap(
 
   resetDeveloperMenuTapSequence();
   requestHaptic("success");
-  openDeveloperMenu();
+  openDeveloperMenu(origin);
   return true;
 }
 
-export function openDeveloperMenu(): IdleFrontDeveloperMenu {
+export function openDeveloperMenu(
+  origin?: DeveloperMenuOrigin,
+): IdleFrontDeveloperMenu {
   const existing = document.querySelector<IdleFrontDeveloperMenu>(
     "idlefront-developer-menu",
   );
   if (existing) return existing;
   const menu = document.createElement("idlefront-developer-menu");
+  if (origin) {
+    menu.style.setProperty("--atlas-dev-origin-x", `${origin.x}px`);
+    menu.style.setProperty("--atlas-dev-origin-y", `${origin.y}px`);
+  }
   document.body.append(menu);
   return menu;
 }
@@ -222,6 +234,7 @@ export class IdleFrontDeveloperMenu extends LitElement {
           </footer>
         </section>
       </div>
+      <div class="atlas-dev-menu__unlock-flare" aria-hidden="true"></div>
     `;
   }
 }

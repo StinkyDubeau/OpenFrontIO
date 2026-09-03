@@ -324,11 +324,47 @@ atlas-surface {
 /* Hidden developer utility                                                   */
 /* -------------------------------------------------------------------------- */
 
-.atlas-wordmark--dev-trigger,
-.pw-wordmark--dev-trigger {
+.atlas-map-brand-mark {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(208 168 70 / 0.48);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 35% 28%,
+      rgb(255 241 174 / 0.22),
+      transparent 34%
+    ),
+    linear-gradient(150deg, #194b3a, #071b17 70%);
+  color: #d8b45d;
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.18),
+    inset 0 -2px 4px rgb(0 0 0 / 0.52),
+    0 1px 3px rgb(0 0 0 / 0.46);
+  cursor: default;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.atlas-map-brand-mark svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+  pointer-events: none;
+}
+
+.atlas-map-brand-mark__pin {
+  fill: #f5ce68;
+  stroke: #14251e;
+  stroke-width: 0.8;
 }
 
 body.atlas-dev-menu-open {
@@ -358,6 +394,45 @@ idlefront-developer-menu {
   backdrop-filter: blur(13px) saturate(0.82);
   -webkit-backdrop-filter: blur(13px) saturate(0.82);
   animation: atlas-dev-backdrop-in 180ms ease both;
+}
+
+.atlas-dev-menu__unlock-flare {
+  position: fixed;
+  z-index: 2;
+  top: var(--atlas-dev-origin-y, 50%);
+  left: var(--atlas-dev-origin-x, 50%);
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.atlas-dev-menu__unlock-flare::before,
+.atlas-dev-menu__unlock-flare::after {
+  position: absolute;
+  border-radius: 50%;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.atlas-dev-menu__unlock-flare::before {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 2px solid #f1cb69;
+  box-shadow:
+    0 0 0 2px rgb(23 101 74 / 0.72),
+    0 0 18px 5px rgb(235 189 71 / 0.72),
+    inset 0 0 9px #fff1a9;
+  animation: atlas-dev-unlock-ring 620ms cubic-bezier(0.18, 0.85, 0.3, 1) both;
+}
+
+.atlas-dev-menu__unlock-flare::after {
+  width: 1.05rem;
+  height: 1.05rem;
+  background:
+    linear-gradient(90deg, transparent 44%, #fff6c9 45% 55%, transparent 56%),
+    linear-gradient(transparent 44%, #fff6c9 45% 55%, transparent 56%);
+  filter: drop-shadow(0 0 6px #f2c85e);
+  animation: atlas-dev-unlock-spark 540ms ease-out both;
 }
 
 .atlas-dev-menu {
@@ -532,6 +607,35 @@ idlefront-developer-menu {
   }
   64% {
     transform: translateY(-3px) scale(1.006);
+  }
+}
+
+@keyframes atlas-dev-unlock-ring {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(-18deg);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(4.4) rotate(24deg);
+  }
+}
+
+@keyframes atlas-dev-unlock-spark {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+  }
+  32% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.55) rotate(35deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.4) rotate(85deg);
   }
 }
 

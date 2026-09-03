@@ -5,7 +5,6 @@ import {
   resetDeveloperMenuTapSequence,
   type IdleFrontDeveloperMenu,
 } from "../../src/client/components/DeveloperMenu";
-import "../../src/client/components/ProductWordmark";
 
 describe("secret developer menu", () => {
   beforeEach(() => {
@@ -19,21 +18,18 @@ describe("secret developer menu", () => {
   });
 
   it("opens only after seven logo taps", async () => {
-    const wordmark = document.createElement("product-wordmark");
-    document.body.append(wordmark);
-    await wordmark.updateComplete;
-    const logo = wordmark.querySelector<HTMLElement>(".atlas-wordmark")!;
-    expect(logo.getAttribute("role")).toBe("button");
-
-    for (let tap = 0; tap < 6; tap++) logo.click();
+    for (let tap = 0; tap < 6; tap++) recordDeveloperMenuLogoTap(tap * 100);
     expect(document.querySelector("idlefront-developer-menu")).toBeNull();
 
-    logo.click();
+    recordDeveloperMenuLogoTap(600, { x: 32, y: 48 });
     const menu = document.querySelector<IdleFrontDeveloperMenu>(
       "idlefront-developer-menu",
     );
     expect(menu).not.toBeNull();
+    expect(menu!.style.getPropertyValue("--atlas-dev-origin-x")).toBe("32px");
+    expect(menu!.style.getPropertyValue("--atlas-dev-origin-y")).toBe("48px");
     await menu!.updateComplete;
+    expect(menu!.querySelector(".atlas-dev-menu__unlock-flare")).not.toBeNull();
     expect(menu!.querySelector('a[href="/?ui-lab=1"]')).not.toBeNull();
     expect(
       menu!.querySelector('a[href="/?ui-lab=stone-buttons"]'),

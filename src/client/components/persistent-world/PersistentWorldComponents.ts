@@ -9,7 +9,6 @@ import type {
 } from "../../../core/PersistentWorldSchemas";
 import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import { translateText } from "../../Utils";
-import { recordDeveloperMenuLogoTap } from "../DeveloperMenu";
 
 @customElement("idlefront-wordmark")
 export class IdleFrontWordmark extends LitElement {
@@ -17,18 +16,9 @@ export class IdleFrontWordmark extends LitElement {
     return this;
   }
 
-  private onLogoTap = (): void => {
-    recordDeveloperMenuLogoTap();
-  };
-
   render() {
     return html`
-      <span
-        class="pw-wordmark pw-wordmark--dev-trigger"
-        role="button"
-        aria-label="IdleFront"
-        @click=${this.onLogoTap}
-      >
+      <span class="pw-wordmark" aria-label="IdleFront">
         <svg viewBox="0 0 36 36" aria-hidden="true">
           <circle cx="18" cy="18" r="13.5"></circle>
           <path d="M8.4 20.5c4.7-5.4 9.1-8 19.2-6.4"></path>
