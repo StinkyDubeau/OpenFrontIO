@@ -361,7 +361,7 @@ function createWebGLView(
         // dynamically via view.addPlayers() as they come in from the simulation,
         // but the NamePass / palette / relation matrix all need a static upper
         // bound at construction time.
-        maxPlayers: 1024,
+        maxPlayers: gameMap.isPaged() ? 4096 : 1024,
       },
       terrainSource,
       palette,

@@ -142,6 +142,12 @@ export class GameView implements GameMap {
   private _cosmetics: Map<string, PlayerCosmetics> = new Map();
 
   private _map: GameMap;
+  /**
+   * Compatibility mirror for the current WebGL pipeline. The authoritative
+   * client map remains page-backed; this can be removed once every render pass
+   * consumes tilePages() directly.
+   */
+  private readonly renderTileState: Uint16Array;
 
   constructor(
     public worker: WorkerClient,
@@ -154,6 +160,9 @@ export class GameView implements GameMap {
     humans: Player[],
   ) {
     this._map = this._mapData.gameMap;
+    this.renderTileState = this._map.isPaged()
+      ? new Uint16Array(this._map.width() * this._map.height())
+      : this._map.tileStateBuffer();
     this.lastUpdate = null;
     this.unitGrid = new UnitGrid(this._map);
     this._cosmetics = new Map(
@@ -188,7 +197,7 @@ export class GameView implements GameMap {
     this._frame = {
       tick: 0,
       inSpawnPhase: true,
-      tileState: this._map.tileStateBuffer(),
+      tileState: this.renderTileState,
       trailState: this.trailManager.getTrailState(),
       spiralRibbons: this.spiralTrails.getRibbons(),
       railroadState: this.railroadCache.railroadState,
@@ -593,7 +602,7 @@ export class GameView implements GameMap {
     f.playerStatus = computePlayerStatus(this._playerStates, this._unitStates, {
       localPlayerSmallID: this._myPlayer?.smallID() ?? 0,
       localPlayerID: this._myPlayer?.id() ?? "",
-      tileState: this._map.tileStateBuffer(),
+      tileState: this.renderTileState,
       tick: gu.tick,
       allianceDuration: this._config.allianceDuration(),
       isTransitiveTarget: (sid) =>
@@ -1301,7 +1310,7 @@ export class GameView implements GameMap {
     return this._map.tileState(tile);
   }
   tileStateBuffer(): Uint16Array {
-    return this._map.tileStateBuffer();
+    return this.renderTileState;
   }
 
   tilePages() {
@@ -1316,7 +1325,9 @@ export class GameView implements GameMap {
     return this._map.isPaged();
   }
   updateTile(tile: TileRef, state: number): boolean {
-    return this._map.updateTile(tile, state);
+    const terrainChanged = this._map.updateTile(tile, state);
+    this.renderTileState[tile] = this._map.tileState(tile);
+    return terrainChanged;
   }
   numTilesWithFallout(): number {
     return this._map.numTilesWithFallout();
