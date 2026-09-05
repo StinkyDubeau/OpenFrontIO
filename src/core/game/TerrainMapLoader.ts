@@ -15,8 +15,6 @@ export type TerrainMapData = {
   layerImages?: Map<string, ImageBitmap>;
 };
 
-const loadedMaps = new Map<string, TerrainMapData>();
-
 export interface MapMetadata {
   width: number;
   height: number;
@@ -97,9 +95,10 @@ export async function loadTerrainMap(
    *  pass false — it never renders layers and should not retain ImageBitmaps. */
   loadImages: boolean = true,
 ): Promise<TerrainMapData> {
-  const cacheKey = `${map}:${mapSize}`;
-  const cached = loadedMaps.get(cacheKey);
-  if (cached !== undefined) return cached;
+  // GameMap contains mutable ownership/fallout state. Reusing it across games
+  // also reused the previous world's territory (and made parallel views alias
+  // one another). Browser asset caching still reuses downloaded terrain bytes;
+  // each simulation/render view must own a fresh map state.
   const mapFiles = terrainMapFileLoader.getMapData(map);
   const manifest = await mapFiles.manifest();
 
@@ -214,7 +213,6 @@ export async function loadTerrainMap(
     layers,
     layerImages,
   };
-  loadedMaps.set(cacheKey, result);
   return result;
 }
 

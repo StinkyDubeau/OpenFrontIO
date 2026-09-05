@@ -205,11 +205,7 @@ class Client {
   }> | null = null;
 
   async initialize(): Promise<void> {
-    if (syncRuntimeDebugMode()) {
-      document.body.append(
-        document.createElement("idlefront-debug-quick-launch"),
-      );
-    }
+    syncRuntimeDebugMode();
     crazyGamesSDK.maybeInit();
 
     // Register modals with the URL router. Lobby modals (join/host) and

@@ -1124,6 +1124,10 @@ idlefront-wordmark {
     var(--pw-safe-bottom) var(--pw-safe-left);
 }
 
+.pw-hub--debug {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
 .pw-hub__intro {
   display: grid;
   width: min(82rem, 100%);

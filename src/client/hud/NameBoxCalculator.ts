@@ -23,7 +23,11 @@ const SPAWN_REGION_DIAMETER = 8;
  * spawn tile. Tracks re-rolls immediately, since spawnTile updates the same
  * tick the player picks a new location.
  */
-export function placeSpawnName(game: Game, player: Player): NameViewData {
+export function placeSpawnName(
+  game: Game,
+  player: Player,
+  includeBounds = false,
+): NameViewData {
   const spawnTile = player.spawnTile();
   if (spawnTile === undefined) {
     return { x: 0, y: 0, size: 0 };
@@ -41,10 +45,23 @@ export function placeSpawnName(game: Game, player: Player): NameViewData {
     x: Math.ceil(game.x(spawnTile)),
     y: Math.ceil(game.y(spawnTile) - fontSize / 3),
     size: fontSize,
+    ...(includeBounds
+      ? {
+          bounds: {
+            width: SPAWN_REGION_DIAMETER,
+            height: SPAWN_REGION_DIAMETER,
+            centerY: game.y(spawnTile),
+          },
+        }
+      : {}),
   };
 }
 
-export function placeName(game: Game, player: Player): NameViewData {
+export function placeName(
+  game: Game,
+  player: Player,
+  includeBounds = false,
+): NameViewData {
   const boundingBox =
     player.largestClusterBoundingBox ??
     calculateBoundingBox(game, player.borderTiles());
@@ -84,12 +101,22 @@ export function placeName(game: Game, player: Player): NameViewData {
   );
 
   const fontSize = calculateFontSize(largestRectangle, player.displayName());
+  const centerY = center.y;
   center = new Cell(center.x, center.y - fontSize / 3);
 
   return {
     x: Math.ceil(center.x),
     y: Math.ceil(center.y),
     size: fontSize,
+    ...(includeBounds
+      ? {
+          bounds: {
+            width: largestRectangle.width,
+            height: largestRectangle.height,
+            centerY,
+          },
+        }
+      : {}),
   };
 }
 

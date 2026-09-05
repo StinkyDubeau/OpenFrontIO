@@ -2,15 +2,16 @@
 
 ## What this release does
 
-New persistent worlds run the existing OpenFront GameRunner in one Node worker
+Populated online matches run the existing OpenFront GameRunner in one Node worker
 thread per world. Browsers render the resulting state; they do not execute the
 world's combat, economy, pathfinding or AI. The network worker remains separate
 from that CPU work. The server targets the existing 100 ms turn interval, not
 the speed of the slowest phone.
 
 No combat, structure, AI, economy, movement-cost or pacing formula was changed.
-The only core implementation edits are exposing the existing full player-view
-projection and releasing consumed GameRunner turn entries every 1,024 turns.
+Core implementation edits expose the existing full player-view projection,
+release consumed GameRunner turn entries every 1,024 turns, add optional name
+layout bounds, and avoid sharing mutable terrain ownership between game loads.
 This does not release the server's durable/replay journal.
 
 Clients use a versioned binary view envelope, field diffs and typed arrays.
@@ -47,12 +48,23 @@ on underscores randomly rejected valid tokens. Verification now uses the fixed
    The debug overlay labels execution CPU as **Server simulation**. Client
    view/GPU-submit measurements remain separate.
 
-The runtime selection is persisted with the world configuration. Older worlds
-without `serverSimulation: true` retain the legacy execution path. Replays and
-ordinary non-managed matches retain that path too. Anonymized worlds are
-excluded until per-viewer identity projections are implemented. Set
-`IDLE_SERVER_SIMULATION=0` before creating worlds to disable this rollout;
-it does not mutate a running world's execution mode.
+Newly started or recovered populated online matches default to server simulation,
+including ordinary public/private and anonymized matches. Empty rolling lobbies
+do not allocate simulation workers. Offline games and replays remain local.
+Explicit `serverSimulation: false` or `IDLE_SERVER_SIMULATION=0` retains the
+legacy rollback path; changing these settings does not mutate an already
+running world's execution mode. Anonymized workers contain neutral human-name
+tokens, with identity and name geometry projected using each client's authorized
+roster. The existing anonymous team-assignment behavior remains intact.
+
+The follow-up also fixes raw-UUID online guest joins, guest identity loss after
+failed account refresh, stale quick-join runtime IDs, overlapping Firefox
+stylesheet replacement, and LAN worker-count drift. Debug quick tools now occupy
+normal layout space only in the match list, not over the lobby RSVP action.
+Development bootstrap obtains the running worker count from `/api/client-config`;
+local account requests use a same-origin development proxy instead of the
+phone's `localhost`. The account service itself still needs proper deployment
+at `api.idlefront.io`; guest play does not require it.
 
 ## Measurements and verification
 
@@ -78,7 +90,8 @@ bandwidth solution for ten-times-larger boards.
 The real local WebSocket test authenticated three independent identities.
 Two clients matched across 359 live frames, one reconnected, a normal attack
 was observed, and the third client intentionally stopped acknowledging.
-Healthy clients continued at 9.95 TPS. Initial load was excluded from TPS.
+Healthy clients continued at 9.98 TPS in the follow-up run, with normal attacks
+and reconnect confirmed. Initial load was excluded from TPS.
 
 Final 1,800-tick rerun also compared all current unit positions against the
 authoritative snapshot. Tile state, unit positions and player reserves matched.
@@ -89,9 +102,12 @@ projection reduced mean uncompressed payload to 199 KB/tick. Sampled deflate
 frames averaged 65 KB (roughly 5.2 Mbit/s at 10 TPS); the tick-901 snapshot
 compressed to about 17.45 MB. Actual Internet delivery still needs measurement.
 
-Final regression run: **298 test files, 3,183 tests passed**. TypeScript and
-production Vite build passed. Existing Vite asset-resolution/chunk-size warnings
-remain; this pass did not rewrite the UI assets.
+The follow-up full regression run passed **303 files / 3,201 tests**, including
+anonymous-rules parity, guest joins, stale quick joins, and racing stylesheet
+loads. The shell tests require the installed Git `sh` on PATH. TypeScript,
+changed-file linters, production Vite build and the Expo SDK 57 iOS bundle export
+passed. Expo Doctor passed all 21 checks. Existing Vite asset-resolution/chunk-size
+warnings remain; this pass did not rewrite the UI assets.
 
 Reproduce with:
 
@@ -111,6 +127,10 @@ Visual validation on this Windows Chrome session was blocked by its hardware
 acceleration warning. Quick start reached the game route; no claim is made
 about GPU frame rate on that machine. Client CPU/state tests use the actual
 GameView, not a substitute simulation.
+
+Follow-up browser-control connections timed out, so the mobile layout has not
+been visually revalidated. Expo tunnel startup was rejected by the execution
+policy; the successful iOS export is not a live Expo preview link.
 
 ## What this does not yet solve
 

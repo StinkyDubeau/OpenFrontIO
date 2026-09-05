@@ -49,6 +49,10 @@ import type {
 } from "./IPCBridgeSchema";
 import { ServerEnv } from "./ServerEnv";
 import { SimulationHost, type TickResult } from "./simulation/SimulationHost";
+import {
+  simulationStartInfo,
+  usesServerSimulation,
+} from "./simulation/SimulationPolicy";
 import { ViewConnection } from "./simulation/ViewConnection";
 import {
   noopMatchTelemetryEmitter,
@@ -120,16 +124,6 @@ export class GameServer {
   private viewGeneration = new Map<WebSocket, number>();
   private viewHistory: { tick: number; bytes: Uint8Array }[] = [];
   private viewHistoryBytes = 0;
-
-  private get usesServerSimulation(): boolean {
-    // Per-viewer anonymized identities need their own projection before this
-    // optional mode can support anonymized matches.
-    return (
-      !!this.managedOptions &&
-      this.gameConfig.serverSimulation === true &&
-      !this.gameConfig.anonymizeNames
-    );
-  }
 
   private sendViewError(
     ws: WebSocket,
@@ -1649,10 +1643,13 @@ export class GameServer {
       );
     }
 
-    if (this.usesServerSimulation) {
+    if (usesServerSimulation(this.wireGameStartInfo)) {
       this.gameStartInfo.simulationMode = "server-v1";
       this.wireGameStartInfo.simulationMode = "server-v1";
-      this.simulation = new SimulationHost(this.gameStartInfo, this.turns);
+      this.simulation = new SimulationHost(
+        simulationStartInfo(this.wireGameStartInfo),
+        this.turns,
+      );
       void this.simulation.ready
         .then(() => {
           this.simulationDeadline =

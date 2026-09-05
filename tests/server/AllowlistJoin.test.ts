@@ -74,6 +74,7 @@ describe("GameServer - allowlist (allowedPublicIds)", () => {
   function makeGame(allowedPublicIds?: string[]) {
     return new GameServer("test-game", mockLogger, Date.now(), {
       gameType: GameType.Private,
+      serverSimulation: false, // Authorization fixture, no simulation terrain.
       ...(allowedPublicIds ? { allowedPublicIds } : {}),
     } as any);
   }

@@ -18,7 +18,7 @@ describe("thin render client", () => {
       sendViewMessage: send,
     };
     const client = new RemoteWorkerClient(
-      {} as GameStartInfo,
+      { players: [], config: {} } as unknown as GameStartInfo,
       "test",
       transport as unknown as Transport,
     );
@@ -52,12 +52,16 @@ describe("thin render client", () => {
   it("routes action RPCs and rejects outstanding requests when closing", async () => {
     let receive!: (sequence: number, packet: ViewPacket) => void;
     const send = vi.fn();
-    const client = new RemoteWorkerClient({} as GameStartInfo, "test", {
-      setViewReceiver: (r: typeof receive) => {
-        receive = r;
-      },
-      sendViewMessage: send,
-    } as unknown as Transport);
+    const client = new RemoteWorkerClient(
+      { players: [], config: {} } as unknown as GameStartInfo,
+      "test",
+      {
+        setViewReceiver: (r: typeof receive) => {
+          receive = r;
+        },
+        sendViewMessage: send,
+      } as unknown as Transport,
+    );
     await client.initialize();
     const pending = client.playerBorderTiles("player");
     const query = send.mock.calls[0][0].query;

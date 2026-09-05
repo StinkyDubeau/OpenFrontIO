@@ -1050,4 +1050,7 @@ export interface NameViewData {
   x: number;
   y: number;
   size: number;
+  // Anonymous server views fit each permitted name without rerunning the
+  // territory search on the client. Not part of simulation state or rules.
+  bounds?: { width: number; height: number; centerY: number };
 }

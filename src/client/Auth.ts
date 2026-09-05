@@ -3,6 +3,7 @@ import { UserSettings } from "src/core/game/UserSettings";
 import { z } from "zod";
 import { TokenPayload, TokenPayloadSchema } from "../core/ApiSchemas";
 import { base64urlToUuid } from "../core/Base64";
+import { PersistentIdSchema } from "../core/Schemas";
 import { getApiBase, getAudience } from "./Api";
 import { crazyGamesSDK } from "./CrazyGamesSDK";
 import { steamSDK } from "./SteamSDK";
@@ -14,6 +15,7 @@ const PERSISTENT_ID_KEY = "player_persistent_id";
 
 let __jwt: string | null = null;
 let __guestPlayToken: string | null = null;
+let __onlineGuestPromise: Promise<string> | null = null;
 let __refreshPromise: Promise<void> | null = null;
 let __expiresAt: number = 0;
 
@@ -140,6 +142,9 @@ export async function userAuth(
   try {
     const jwt = __jwt;
     if (!jwt) {
+      // A world guest has a separate, signed play credential. An unrelated
+      // account refresh must not delay joining or log that guest out.
+      if (__guestPlayToken !== null) return false;
       if (!shouldRefresh) {
         console.warn("No JWT found and shouldRefresh is false");
         return false;
@@ -161,7 +166,14 @@ export async function userAuth(
     const payload = decodeJwt(jwt);
     const { iss, aud } = payload;
 
-    if (iss !== getApiBase()) {
+    const apiBase = getApiBase();
+    // A same-origin development proxy changes the fetch URL, not the issuer
+    // signed into a real account JWT by the local account service.
+    const expectedIssuer =
+      apiBase === `${window.location.origin}/dev-account-api`
+        ? "http://localhost:8787"
+        : apiBase;
+    if (iss !== expectedIssuer) {
       // JWT was not issued by the correct server
       console.error('unexpected "iss" claim value');
       logOut();
@@ -239,7 +251,10 @@ async function doRefreshJwt(): Promise<void> {
     });
     if (response.status !== 200) {
       console.error("Refresh failed", response);
-      logOut();
+      // A missing account cookie is not a request to erase the guest's world
+      // identity. In-flight refreshes can finish after a guest token is bound.
+      __jwt = null;
+      __expiresAt = 0;
       return;
     }
     const json = await response.json();
@@ -369,6 +384,46 @@ export async function getPlayToken(): Promise<string> {
   const result = await userAuth();
   if (result !== false) return result.jwt;
   return getPersistentIDFromLocalStorage();
+}
+
+/** Online guests need a server-signed credential; a local UUID is offline-only. */
+export async function getOnlinePlayToken(): Promise<string> {
+  const token = await getPlayToken();
+  if (!PersistentIdSchema.safeParse(token).success) return token;
+  if (__onlineGuestPromise) return __onlineGuestPromise;
+  __onlineGuestPromise = (async () => {
+    const { persistentWorldApi, PersistentWorldApiError } =
+      await import("./PersistentWorldApi");
+    let session = null;
+    if (persistentWorldApi.sessionToken()) {
+      try {
+        session = await persistentWorldApi.resumeSession();
+      } catch (error) {
+        if (!(error instanceof PersistentWorldApiError) || error.status !== 401)
+          throw error;
+        persistentWorldApi.forgetSession();
+      }
+    }
+    if (!session) {
+      const input = document.querySelector("username-input") as {
+        getUsername?: () => string;
+      } | null;
+      const username = input?.getUsername?.().trim() ?? "";
+      await persistentWorldApi.createGuestSession(
+        username.length > 0 ? username : "Player",
+      );
+    }
+    const signed = await persistentWorldApi.bindGameIdentityWithToken(token);
+    if (!signed)
+      throw new Error("The server did not issue a guest play credential");
+    setGuestPlayToken(signed);
+    return signed;
+  })();
+  try {
+    return await __onlineGuestPromise;
+  } finally {
+    __onlineGuestPromise = null;
+  }
 }
 
 /** Cache the worker credential returned by the guest persistent-world API. */

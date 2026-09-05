@@ -68,6 +68,7 @@ describe("GameServer custom tribes", () => {
       gameMap: "plains",
       gameMapSize: 100,
       bots: 400,
+      serverSimulation: false, // This fixture uses a deliberately fake terrain map.
       ...config,
     } as any);
   }

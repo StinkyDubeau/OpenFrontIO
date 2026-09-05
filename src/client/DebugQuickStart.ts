@@ -4,6 +4,7 @@ import type {
   PersistentWorldLobbySnapshot,
 } from "../core/PersistentWorldSchemas";
 import { getPlayToken, setGuestPlayToken } from "./Auth";
+import { ClientEnv } from "./ClientEnv";
 import type { JoinLobbyEvent } from "./Main";
 import {
   persistentWorldApi,
@@ -68,6 +69,11 @@ async function waitForRuntime(
   const deadline = Date.now() + RUNTIME_WAIT_MS;
   while (Date.now() < deadline) {
     const snapshot = await persistentWorldApi.getSnapshot(worldId);
+    if (
+      snapshot.world.phase !== "active" &&
+      snapshot.world.phase !== "scheduled"
+    )
+      throw new Error("This test world has ended. Create a new test world.");
     if (snapshot.runtimeGameId) return snapshot;
     const seconds = Math.max(
       1,
@@ -132,6 +138,7 @@ export async function quickJoinDebugGame(
   const candidates = activeFirst([...mine, ...publicWorlds]).filter((card) => {
     if (
       seen.has(card.world.id) ||
+      card.viewerEliminated ||
       !card.world.name.startsWith("Server playtest ") ||
       (card.world.phase !== "active" && card.world.phase !== "scheduled")
     ) {
@@ -147,12 +154,26 @@ export async function quickJoinDebugGame(
       snapshot = await persistentWorldApi.rsvp(card.world.id);
     }
     if (!snapshot.viewer.isMember) continue;
+    if (
+      snapshot.world.phase !== "active" &&
+      snapshot.world.phase !== "scheduled"
+    )
+      continue;
     if (!snapshot.runtimeGameId) {
       if (snapshot.world.phase !== "scheduled") continue;
       status("Joined. Waiting for the test game to start…");
       snapshot = await waitForRuntime(card.world.id, status);
     }
     status("Joining the running game…");
+    const exists = await fetch(
+      `/${ClientEnv.workerPath(snapshot.runtimeGameId!)}/api/game/${encodeURIComponent(snapshot.runtimeGameId!)}/exists`,
+    );
+    if (!exists.ok)
+      throw new Error(
+        "The game worker is unavailable. Reload this page and try again.",
+      );
+    const runtime = await exists.json();
+    if (!runtime.exists) continue;
     enterRuntime(snapshot.runtimeGameId!);
     return snapshot.world.id;
   }

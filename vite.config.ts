@@ -174,7 +174,7 @@ function devMapManifestMiddleware(resourcesDir: string): Plugin {
 // so the worker can mint a self-owned id. Runs as direct middleware (before
 // vite's /api proxy).
 const RANDOM_WORKER_PATHS = ["/api/create_game", "/api/adminbot/create_game"];
-function randomWorkerCreateProxy(numWorkers: number): Plugin {
+function randomWorkerCreateProxy(numWorkers: () => number): Plugin {
   return {
     name: "random-worker-create-proxy",
     configureServer(server) {
@@ -182,7 +182,7 @@ function randomWorkerCreateProxy(numWorkers: number): Plugin {
         if (req.method !== "POST") return next();
         const path = (req.url ?? "").split("?")[0];
         if (!RANDOM_WORKER_PATHS.includes(path)) return next();
-        const port = 3001 + Math.floor(Math.random() * numWorkers);
+        const port = 3001 + Math.floor(Math.random() * numWorkers());
         const proxyReq = http.request(
           {
             host: "localhost",
@@ -209,7 +209,50 @@ function randomWorkerCreateProxy(numWorkers: number): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const isProduction = mode === "production";
-  const devNumWorkers = parseInt(env.NUM_WORKERS ?? "2", 10);
+  let devNumWorkers = parseInt(env.NUM_WORKERS ?? "2", 10);
+  // Vite and the backend can be launched independently. Inject the running
+  // server's public bootstrap, not an unrelated shell's worker-count default.
+  const liveDevBootstrap = (): Plugin => ({
+    name: "live-dev-bootstrap",
+    apply: "serve",
+    transformIndexHtml: {
+      order: "post",
+      async handler() {
+        try {
+          const response = await fetch(
+            "http://127.0.0.1:3000/api/client-config",
+            { signal: AbortSignal.timeout(2000) },
+          );
+          if (!response.ok) return;
+          const config = await response.json();
+          if (!Number.isSafeInteger(config.numWorkers) || config.numWorkers < 1)
+            return;
+          const safeConfig: Record<string, string | number> = {
+            numWorkers: config.numWorkers,
+          };
+          for (const key of [
+            "gameEnv",
+            "jwtAudience",
+            "turnstileSiteKey",
+            "instanceId",
+            "gitCommit",
+          ])
+            if (typeof config[key] === "string") safeConfig[key] = config[key];
+          devNumWorkers = config.numWorkers;
+          return [
+            {
+              tag: "script",
+              injectTo: "body",
+              children: `Object.assign(window.BOOTSTRAP_CONFIG, ${JSON.stringify(safeConfig).replace(/</g, "\\u003c")});`,
+            },
+          ];
+        } catch {
+          // Static UI work still loads while the backend is offline.
+          return;
+        }
+      },
+    },
+  });
   const resourcesDir = getResourcesDir(__dirname);
   const sourceDirs = [resourcesDir];
   const assetManifest: AssetManifest = isProduction
@@ -318,7 +361,8 @@ export default defineConfig(({ mode }) => {
       ...(!isProduction
         ? [
             devMapManifestMiddleware(resourcesDir),
-            randomWorkerCreateProxy(devNumWorkers),
+            liveDevBootstrap(),
+            randomWorkerCreateProxy(() => devNumWorkers),
             legacyIdlePreviewRedirect(),
             steamLinkAliasRedirect(),
           ]
@@ -390,21 +434,17 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
         // Worker proxies
-        "/w0": {
-          target: "ws://localhost:3001",
+        "^/w[0-9]+(?=/|$)": {
+          target: "ws://127.0.0.1:3000",
           ws: true,
           secure: false,
           changeOrigin: true,
           bypass: (req) => devGameHtmlBypass(req),
-          rewrite: (path) => path.replace(/^\/w0/, ""),
         },
-        "/w1": {
-          target: "ws://localhost:3002",
-          ws: true,
-          secure: false,
+        "/dev-account-api": {
+          target: "http://127.0.0.1:8787",
           changeOrigin: true,
-          bypass: (req) => devGameHtmlBypass(req),
-          rewrite: (path) => path.replace(/^\/w1/, ""),
+          rewrite: (path) => path.replace(/^\/dev-account-api/, ""),
         },
         // API proxies
         "/api": {

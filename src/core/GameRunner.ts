@@ -180,13 +180,19 @@ export class GameRunner {
     // thread doesn't structured-clone an identical ~all-players record on
     // every other tick.
     let viewDataChanged = false;
+    const anonymousNames =
+      this.game.config().gameConfig().anonymizeNames === true;
     if (this.game.inSpawnPhase()) {
       for (const p of this.game.players()) {
         if (p.type() !== PlayerType.Human && p.type() !== PlayerType.Nation) {
           continue;
         }
         if (p.spawnTile() === undefined) continue;
-        this.playerViewData[p.id()] = placeSpawnName(this.game, p);
+        this.playerViewData[p.id()] = placeSpawnName(
+          this.game,
+          p,
+          anonymousNames,
+        );
         viewDataChanged = true;
       }
     }
@@ -198,7 +204,7 @@ export class GameRunner {
       this.game.ticks() % 30 === 0
     ) {
       for (const p of this.game.players()) {
-        this.playerViewData[p.id()] = placeName(this.game, p);
+        this.playerViewData[p.id()] = placeName(this.game, p, anonymousNames);
       }
       viewDataChanged = true;
     }

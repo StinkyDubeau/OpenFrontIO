@@ -33,7 +33,7 @@ import {
   Winner,
 } from "../core/Schemas";
 import { replacer } from "../core/Util";
-import { getPlayToken } from "./Auth";
+import { getOnlinePlayToken, getPlayToken } from "./Auth";
 import { LobbyConfig } from "./ClientGameRunner";
 import { showInGameAlert } from "./InGameModal";
 import { LocalServer } from "./LocalServer";
@@ -449,7 +449,7 @@ export class Transport {
       clanTag: this.lobbyConfig.playerClanTag ?? null,
       cosmetics: this.lobbyConfig.cosmetics,
       turnstileToken: this.lobbyConfig.turnstileToken,
-      token: await getPlayToken(),
+      token: await (this.isLocal ? getPlayToken() : getOnlinePlayToken()),
     } satisfies ClientJoinMessage);
   }
 
@@ -459,7 +459,7 @@ export class Transport {
       gameID: this.lobbyConfig.gameID,
       // Note: clientID is not sent - server looks it up from persistentID in token
       lastTurn: lastTurn,
-      token: await getPlayToken(),
+      token: await (this.isLocal ? getPlayToken() : getOnlinePlayToken()),
     } satisfies ClientRejoinMessage);
   }
 

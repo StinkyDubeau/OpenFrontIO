@@ -10,8 +10,10 @@
  */
 
 let sheet: CSSStyleSheet | null = null;
+let revision = 0;
 
 async function populate(target: CSSStyleSheet): Promise<void> {
+  const requestedRevision = ++revision;
   const parts: string[] = [];
   for (const style of Array.from(document.querySelectorAll("style"))) {
     parts.push(style.textContent ?? "");
@@ -19,20 +21,29 @@ async function populate(target: CSSStyleSheet): Promise<void> {
   const links = Array.from(
     document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
   );
-  await Promise.all(
+  const linkedParts = await Promise.all(
     links.map(async (link) => {
       try {
         const response = await fetch(link.href);
         if (response.ok) {
-          parts.push(await response.text());
+          return await response.text();
         }
       } catch {
         // Unreachable stylesheet — skip; the component renders unstyled
         // rather than breaking.
       }
+      return "";
     }),
   );
-  await target.replace(parts.join("\n"));
+  if (requestedRevision !== revision) return;
+  try {
+    // Firefox rejects overlapping asynchronous replace() calls while its
+    // stylesheet is marked unmodifiable (initial load + load/HMR can race).
+    // Commit only the latest collected CSS with one synchronous replacement.
+    target.replaceSync([...parts, ...linkedParts].join("\n"));
+  } catch (error) {
+    console.warn("Shared component styles could not be updated", error);
+  }
 }
 
 export function documentStylesSheet(): CSSStyleSheet {

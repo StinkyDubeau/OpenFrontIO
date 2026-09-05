@@ -28,7 +28,7 @@ import {
   isValidGameID,
 } from "../core/Schemas";
 import { getUserMe, setLobbyListed } from "./Api";
-import { getPlayToken } from "./Auth";
+import { getOnlinePlayToken } from "./Auth";
 import "./components/baseComponents/Modal";
 import { BaseModal } from "./components/BaseModal";
 import "./components/ConfirmDialog";
@@ -236,10 +236,11 @@ export class HostLobbyModal extends BaseModal {
   private renderVisibilityToggle() {
     const segment = (labelKey: string, isPublic: boolean) => html`
       <button
-        class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all ${this
-          .publiclyListed === isPublic
-          ? "bg-malibu-blue text-white"
-          : "text-white/50 hover:text-white"}"
+        class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all ${
+          this.publiclyListed === isPublic
+            ? "bg-malibu-blue text-white"
+            : "text-white/50 hover:text-white"
+        }"
         @click=${() => this.handleVisibilitySelect(isPublic)}
       >
         ${translateText(labelKey)}
@@ -582,15 +583,17 @@ export class HostLobbyModal extends BaseModal {
             @map-selected=${this.handleConfigMapSelected}
             @random-map-selected=${this.handleConfigRandomMapSelected}
             @difficulty-selected=${this.handleConfigDifficultySelected}
-            @doomsday-clock-speed-selected=${this
-              .handleConfigDoomsdayClockSpeedSelected}
+            @doomsday-clock-speed-selected=${
+              this.handleConfigDoomsdayClockSpeedSelected
+            }
             @game-mode-selected=${this.handleConfigGameModeSelected}
             @team-count-selected=${this.handleConfigTeamCountSelected}
             @bots-changed=${this.handleBotsChange}
             @nations-changed=${this.handleNationsChange}
             @option-toggle-changed=${this.handleConfigOptionToggleChanged}
-            @host-cheat-toggle-changed=${this
-              .handleConfigHostCheatToggleChanged}
+            @host-cheat-toggle-changed=${
+              this.handleConfigHostCheatToggleChanged
+            }
             @unit-toggle-changed=${this.handleConfigUnitToggleChanged}
           ></game-config-settings>
 
@@ -602,9 +605,11 @@ export class HostLobbyModal extends BaseModal {
             .currentClientID=${this.lobbyCreatorClientID}
             .teamCount=${this.teamCount}
             .nationCount=${this.nations}
-            .onKickPlayer=${this.publiclyListed
-              ? undefined
-              : (clientID: string) => this.kickPlayer(clientID)}
+            .onKickPlayer=${
+              this.publiclyListed
+                ? undefined
+                : (clientID: string) => this.kickPlayer(clientID)
+            }
             .onToggleNameReveal=${(clientID: string) =>
               this.toggleNameReveal(clientID)}
             .nameReveals=${this.nameReveals}
@@ -624,23 +629,25 @@ export class HostLobbyModal extends BaseModal {
           ></o-button>
         </div>
 
-        ${this.showSubscriptionRequired
-          ? html`<confirm-dialog
-              .heading=${translateText(
-                "host_modal.subscription_required_title",
-              )}
-              .message=${translateText("host_modal.subscription_required_body")}
-              variant="warning"
-              .showClose=${true}
-              .buttons=${"confirmOnly"}
-              .confirmText=${translateText("host_modal.view_subscriptions")}
-              @cancel=${() => (this.showSubscriptionRequired = false)}
-              @confirm=${() => {
-                this.showSubscriptionRequired = false;
-                window.location.href = "/#modal=store&tab=subscriptions";
-              }}
-            ></confirm-dialog>`
-          : ""}
+        ${
+          this.showSubscriptionRequired
+            ? html`<confirm-dialog
+                .heading=${translateText(
+                  "host_modal.subscription_required_title",
+                )}
+                .message=${translateText("host_modal.subscription_required_body")}
+                variant="warning"
+                .showClose=${true}
+                .buttons=${"confirmOnly"}
+                .confirmText=${translateText("host_modal.view_subscriptions")}
+                @cancel=${() => (this.showSubscriptionRequired = false)}
+                @confirm=${() => {
+                  this.showSubscriptionRequired = false;
+                  window.location.href = "/#modal=store&tab=subscriptions";
+                }}
+              ></confirm-dialog>`
+            : ""
+        }
       </div>
     `;
   }
@@ -1464,7 +1471,7 @@ export class HostLobbyModal extends BaseModal {
 async function createLobby(): Promise<GameInfo> {
   // Send JWT token for creator identification - server extracts persistentID from it
   // persistentID should never be exposed to other clients
-  const token = await getPlayToken();
+  const token = await getOnlinePlayToken();
   try {
     // No worker prefix and no id: nginx (prod) / the vite dev proxy randomly
     // routes to a worker, which mints a self-owned id and returns it.

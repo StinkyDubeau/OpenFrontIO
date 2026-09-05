@@ -10,11 +10,10 @@ export class DebugQuickLaunch extends LitElement {
 
   static styles = css`
     :host {
-      position: fixed;
-      right: max(12px, env(safe-area-inset-right));
-      bottom: max(12px, env(safe-area-inset-bottom));
-      z-index: 10000;
-      max-width: min(360px, calc(100vw - 24px));
+      display: block;
+      min-width: 0;
+      width: 100%;
+      margin-bottom: 12px;
       color: #f6f1df;
       font:
         600 12px/1.25 system-ui,
@@ -39,9 +38,7 @@ export class DebugQuickLaunch extends LitElement {
       grid-column: 1 / -1;
       min-width: 0;
       margin: 0 4px 1px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
       color: rgb(246 241 223 / 78%);
     }
 
@@ -82,14 +79,6 @@ export class DebugQuickLaunch extends LitElement {
       cursor: wait;
       filter: grayscale(0.45) brightness(0.72);
     }
-
-    @media (max-width: 520px) {
-      :host {
-        right: max(8px, env(safe-area-inset-right));
-        bottom: max(8px, env(safe-area-inset-bottom));
-        max-width: calc(100vw - 16px);
-      }
-    }
   `;
 
   private run = async (action: "starting" | "joining"): Promise<void> => {
@@ -103,8 +92,9 @@ export class DebugQuickLaunch extends LitElement {
     } catch (error) {
       this.status =
         error instanceof Error ? error.message : "Debug action failed";
-      this.action = "idle";
       requestHaptic("error");
+    } finally {
+      this.action = "idle";
     }
   };
 

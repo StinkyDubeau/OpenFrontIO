@@ -18,6 +18,8 @@ import {
   persistentWorldShareUrl,
   rememberInvitation,
 } from "../../PersistentWorldApi";
+import { runtimeDebugEnabled } from "../../RuntimeDebug";
+import "../DebugQuickLaunch";
 import "./PersistentWorldComponents";
 import { PersistentWorldQuickChat } from "./PersistentWorldComponents";
 import "./PersistentWorldCreationWizard";
@@ -205,7 +207,8 @@ export class PersistentWorldPage extends LitElement {
 
   private renderHub() {
     return html`
-      <main class="pw-hub">
+      <main class="pw-hub ${runtimeDebugEnabled() ? "pw-hub--debug" : ""}">
+        ${runtimeDebugEnabled() ? html`<idlefront-debug-quick-launch></idlefront-debug-quick-launch>` : nothing}
         <section class="pw-hub__intro">
           <div>
             <span class="pw-eyebrow" data-copy-slot="worlds.eyebrow"

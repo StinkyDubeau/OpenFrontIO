@@ -11,6 +11,7 @@ import type { ErrorUpdate, GameUpdateViewData } from "../core/game/GameUpdates";
 import type { ViewQuery } from "../core/network/ViewProtocol";
 import type { ClientID, GameStartInfo, Turn } from "../core/Schemas";
 import { WorkerClient } from "../core/worker/WorkerClient";
+import { RemoteViewIdentity } from "./RemoteViewIdentity";
 import type { Transport } from "./Transport";
 
 /** Same renderer/query interface, with no browser simulation worker. */
@@ -28,12 +29,14 @@ export class RemoteWorkerClient extends WorkerClient {
     }
   >();
   private stopped = false;
+  private identities: RemoteViewIdentity;
   constructor(
     start: GameStartInfo,
     clientID: ClientID | undefined,
     private transport: Transport,
   ) {
     super(start, clientID);
+    this.identities = new RemoteViewIdentity(start);
   }
   override async initialize(): Promise<void> {
     this.transport.setViewReceiver((sequence, packet) => {
@@ -81,6 +84,7 @@ export class RemoteWorkerClient extends WorkerClient {
           return;
         }
         update.tickExecutionDuration = 0; // Simulation time belongs to the server.
+        this.identities.apply(update);
         this.callback?.(update);
         if (!packet.snapshot || packet.snapshot === "end")
           this.appliedTick = update.tick;

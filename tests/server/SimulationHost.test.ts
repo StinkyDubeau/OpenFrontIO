@@ -1,5 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { RemoteViewIdentity } from "../../src/client/RemoteViewIdentity";
 import { GameView } from "../../src/client/view/GameView";
 import { createGameRunner } from "../../src/core/GameRunner";
 import type { GameStartInfo, Turn } from "../../src/core/Schemas";
@@ -20,6 +21,7 @@ import { decodeViewPacket } from "../../src/core/network/ViewProtocol";
 import type { WorkerClient } from "../../src/core/worker/WorkerClient";
 import { NodeGameMapLoader } from "../../src/server/simulation/NodeGameMapLoader";
 import { SimulationHost } from "../../src/server/simulation/SimulationHost";
+import { simulationStartInfo } from "../../src/server/simulation/SimulationPolicy";
 
 export const authorityTestStart: GameStartInfo = {
   gameID: "authTest",
@@ -46,6 +48,78 @@ export const authorityTestStart: GameStartInfo = {
 };
 
 describe("headless simulation and rendering parity", () => {
+  it("preserves anonymous team rules and exact permitted name placement without sending real identities", async () => {
+    const wire: GameStartInfo = {
+      ...authorityTestStart,
+      listed: true,
+      config: {
+        ...authorityTestStart.config,
+        anonymizeNames: true,
+        gameMode: GameMode.Team,
+        playerTeams: 2,
+      },
+      players: Array.from({ length: 4 }, (_, index) => ({
+        clientID: `human00${index}`,
+        username: `Secret Name ${index}`,
+        clanTag: "SECRET",
+        friends: [`human00${(index + 1) % 4}`],
+      })),
+    };
+    const permitted: GameStartInfo = {
+      ...wire,
+      players: wire.players.map((p, index) => ({
+        ...p,
+        username: index === 0 ? p.username : `Anonymous Player ${index}`,
+        clanTag: null,
+        friends: undefined,
+      })),
+    };
+    const host = new SimulationHost(simulationStartInfo(wire));
+    const identity = new RemoteViewIdentity(permitted);
+    let expected: GameUpdateViewData;
+    const reference = await createGameRunner(
+      permitted,
+      undefined,
+      new NodeGameMapLoader(path.resolve("resources/maps")),
+      (u) => {
+        if ("errMsg" in u) throw new Error(u.errMsg);
+        expected = u;
+      },
+    );
+    try {
+      await host.ready;
+      for (let turnNumber = 0; turnNumber < 330; turnNumber++) {
+        const turn: Turn = { turnNumber, intents: [] };
+        reference.addTurn(turn);
+        reference.executeNextTick();
+        const result = await host.turn(turn);
+        const packet = decodeViewPacket(result.bytes.buffer as ArrayBuffer);
+        if (packet.kind !== "update") throw new Error("Expected update");
+        expect(new TextDecoder().decode(result.bytes)).not.toContain(
+          "Secret Name",
+        );
+        expect(new TextDecoder().decode(result.bytes)).not.toContain("SECRET");
+        expect(packet.update.updates[GameUpdateType.Hash]).toEqual(
+          expected!.updates[GameUpdateType.Hash],
+        );
+        expect(packet.update.packedTileUpdates).toEqual(
+          expected!.packedTileUpdates,
+        );
+        identity.apply(packet.update);
+        expect(packet.update.playerNameViewData).toEqual(
+          expected!.playerNameViewData,
+        );
+      }
+      const snapshot = await host.snapshot();
+      for (const bytes of snapshot.packets) {
+        expect(new TextDecoder().decode(bytes)).not.toContain("Secret Name");
+        expect(new TextDecoder().decode(bytes)).not.toContain("SECRET");
+      }
+    } finally {
+      host.stop();
+    }
+  }, 120_000);
+
   it("runs unchanged rules, restores a late view, and continues both views identically", async () => {
     const host = new SimulationHost(authorityTestStart);
     const loader = new NodeGameMapLoader(path.resolve("resources/maps"));

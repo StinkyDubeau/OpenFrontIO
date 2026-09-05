@@ -465,6 +465,18 @@ export async function startMaster() {
   process.once("SIGINT", () => gracefullyStopMaster("SIGINT"));
 }
 
+app.get("/api/client-config", (_req, res) => {
+  setNoStoreHeaders(res);
+  res.json({
+    numWorkers: ServerEnv.numWorkers(),
+    gameEnv: ServerEnv.gameEnvName(),
+    jwtAudience: ServerEnv.jwtAudience(),
+    turnstileSiteKey: ServerEnv.turnstileSiteKey(),
+    instanceId: ServerEnv.instanceId(),
+    gitCommit: ServerEnv.gitCommit(),
+  });
+});
+
 app.get("/api/health", (_req, res) => {
   const ready =
     (lobbyService?.isHealthy() ?? false) &&

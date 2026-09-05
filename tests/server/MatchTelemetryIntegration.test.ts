@@ -96,6 +96,7 @@ describe("GameServer match telemetry", () => {
       Date.now(),
       {
         donateGold: false,
+        serverSimulation: false, // Legacy synchronous turn/telemetry fixture.
         donateTroops: false,
         gameMap: GameMapType.World,
         gameType: GameType.Private,

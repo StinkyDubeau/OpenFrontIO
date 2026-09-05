@@ -40,7 +40,7 @@ import {
 import { UserSettings } from "../core/game/UserSettings";
 import {
   getAuthHeader,
-  getPlayToken,
+  getOnlinePlayToken,
   isSessionActive,
   logOut,
   userAuth,
@@ -914,7 +914,7 @@ export async function setLobbyListed(
   listed: boolean,
 ): Promise<{ ok: true; listed: boolean } | { ok: false; error?: string }> {
   try {
-    const token = await getPlayToken();
+    const token = await getOnlinePlayToken();
     const response = await fetch(
       `/${ClientEnv.workerPath(gameID)}/api/game/${gameID}/listing`,
       {
@@ -948,7 +948,7 @@ export async function setLobbyListed(
 export async function createNextLobby(
   previousGameID: string,
 ): Promise<GameInfo> {
-  const token = await getPlayToken();
+  const token = await getOnlinePlayToken();
   const response = await fetch(
     `/${ClientEnv.workerPath(previousGameID)}/api/create_game?previous=${previousGameID}`,
     {
@@ -975,7 +975,10 @@ export function getApiBase() {
     if (apiDomain) {
       return `https://${apiDomain}`;
     }
-    return localStorage.getItem("apiHost") ?? "http://localhost:8787";
+    return (
+      localStorage.getItem("apiHost") ??
+      `${window.location.origin}/dev-account-api`
+    );
   }
 
   return `https://api.${domainname}`;
