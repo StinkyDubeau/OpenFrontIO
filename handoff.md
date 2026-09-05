@@ -8,10 +8,16 @@ Work is on `main`. The new XL board is separately versioned and opt-in via
 `IDLE_WORLD_MAP_SCALE=3` for new managed worlds. The user will play about 12 hours
 through the development tunnel, not the periodically restarting production host.
 They approved disabling the forced 170-minute ending; other gameplay rules stay.
-Do not restart the backend until active players have left. At this handoff one
-game connection remained, so the new backend has not been activated and no long
-playtest has been started. Do not mistake the finished CPU benchmark for a live
-12-hour soak or on-phone graphics certification.
+The user subsequently approved restart. The XL backend is now active on the
+development host, and the long-mode three-client socket test passed at 9.94
+live TPS with matching frames, reconnect and attack input. Disposable test
+worlds were archived and their simulations cleared before handoff. No user
+long playtest has been started. Do not restart while the user is playing or
+mistake these short tests for a 12-hour soak or on-phone graphics certification.
+
+Expo CLI browser sign-in completed after SDK 57 rejected the anonymous preview.
+Metro is now authenticated; the phone must sign into Expo Go too. Current link:
+`exp://mdv4nt4-mushroomlemonade-8081.exp.direct`.
 
 ## September 3 seamless-world implementation
 

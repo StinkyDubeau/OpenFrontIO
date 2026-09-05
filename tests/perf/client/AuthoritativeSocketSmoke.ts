@@ -2,10 +2,13 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import { GameMapType } from "../../../src/core/game/Game";
 import { GameUpdateType } from "../../../src/core/game/GameUpdates";
 import { decodeViewPacket } from "../../../src/core/network/ViewProtocol";
 
 const base = "http://127.0.0.1:9000/api/worlds";
+const longSession = process.argv.includes("--long");
+const expectLargeMap = process.argv.includes("--large");
 async function api(
   route: string,
   token?: string,
@@ -44,7 +47,7 @@ const identities = await Promise.all(
 );
 const created = await api("", identities[0].bearer, "POST", {
   name: "Server playtest socket smoke",
-  targetDuration: "1h",
+  targetDuration: longSession ? "1d" : "1h",
   access: "public",
   mode: "ffa",
   maxHumans: 8,
@@ -129,6 +132,16 @@ await new Promise<void>((resolve, reject) => {
             if (msg.type === "error") throw new Error(JSON.stringify(msg));
             if (msg.type === "start") {
               assert.equal(msg.gameStartInfo.simulationMode, "server-v1");
+              if (expectLargeMap)
+                assert.equal(
+                  msg.gameStartInfo.config.gameMap,
+                  GameMapType.ExpandedGiantWorldLarge,
+                );
+              if (longSession)
+                assert.equal(
+                  msg.gameStartInfo.config.disableForcedTimeLimit,
+                  true,
+                );
               assert.equal(msg.turns.length, 0);
               clientID = msg.myClientID;
               ws.send(
@@ -244,6 +257,8 @@ assert.ok(compared >= 90);
 console.log(
   JSON.stringify({
     gameID,
+    longSession,
+    expectLargeMap,
     joins,
     counts,
     identicalFrames: compared,

@@ -82,14 +82,32 @@ and the production Vite build passed. Real worker tests need an unsandboxed
 Node account lookup on this Windows host. No on-phone visual validation or
 12-hour soak has been claimed.
 
-Activation is pending: at the last check the existing development game
-`jUiDnKFf` had one connected client. The backend was intentionally not restarted,
-`IDLE_WORLD_MAP_SCALE=3` was not yet applied to its environment, and no new long
-world was created. The next step is to confirm the user has left their match,
-check active connections again, restart only this project's backend with the
-new setting, and run the three-client socket smoke test before inviting play.
+Activated September 5 after the user explicitly approved the backend restart.
+The development backend runs commit `277df804` with `IDLE_WORLD_MAP_SCALE=3`
+and one gameplay worker. The authenticated public tunnel serves the new build
+and the 12,324 × 5,844 manifest with all 78 pages.
 
-After the operator has loaded the new backend **with no active players**:
+The live three-client socket smoke test on an XL one-day world passed:
+**9.94 live TPS**, 359 matching frames across the healthy clients, successful
+reconnect, player-action query and observed attack input. The third client
+stopped acknowledging and did not block the others. Start-message assertions
+verified the XL map and disabled forced time limit. This is about 36 seconds
+of live updates, not a twelve-hour stability test. The first harness attempt
+used the wrong start-message config property; correcting the test to `config`
+resolved that harness error without a gameplay change.
+
+Both disposable smoke-test worlds were cancelled/archived with their history
+retained. A final backend restart, after no active managed player connections
+remained, removed those temporary simulations. No user long playtest was
+started automatically. No further restarts should happen during play.
+
+Expo Go SDK 57 initially rejected the anonymous CLI preview. Browser login on
+the host completed, and Metro was restarted under the authenticated Expo
+account. The live preview is
+`exp://mdv4nt4-mushroomlemonade-8081.exp.direct`; the phone must also sign into
+Expo Go. HTTP manifest checks alone do not certify successful on-phone launch.
+
+To start the playtest on the now-active development backend:
 
 1. Open `https://atlas-dev.sightings.today/worlds?debug=1` and fully reload.
 2. Enable **Long session**, then **Quick start**. This creates the world at the
@@ -112,4 +130,9 @@ Reproduce:
 node scripts/generate-expanded-earth.mjs --scale=3 --output-root=tests/perf/output/<fresh-directory>
 tsx tests/perf/client/AuthoritativePerf.ts 6000 tests/perf/output/<fresh-directory> 2000
 node scripts/generate-expanded-earth.mjs --variant=large
+tsx tests/perf/client/AuthoritativeSocketSmoke.ts --long --large
 ```
+
+The socket harness creates a real development world. Archive that disposable
+world and clear its simulation after testing; do not leave a one-day benchmark
+world competing for CPU with the user's playtest.
