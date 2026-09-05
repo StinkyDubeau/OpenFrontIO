@@ -87,6 +87,50 @@ describe("WinCheckExecution", () => {
   });
 });
 
+describe("long-world lifecycle exception", () => {
+  it.each([GameMode.FFA, GameMode.Team])(
+    "keeps conquest and custom timers but allows a 12-hour %s world",
+    async (gameMode) => {
+      const game = await setup("big_plains", {
+        gameMode,
+        playerTeams: 2,
+        disableForcedTimeLimit: true,
+      });
+      const player = {
+        numTilesOwned: vi.fn(() => 10),
+        name: () => "Player",
+        team: () => "Blue",
+      };
+      vi.spyOn(game, "players").mockReturnValue([player as unknown as Player]);
+      vi.spyOn(game, "numLandTiles").mockReturnValue(100);
+      vi.spyOn(game, "numTilesWithFallout").mockReturnValue(0);
+      vi.spyOn(game, "elapsedGameSeconds").mockReturnValue(12 * 3600);
+      const won = vi.spyOn(game, "setWinner").mockImplementation(() => {});
+      const check = () => {
+        const execution = new WinCheckExecution();
+        execution.init(game, game.ticks());
+        if (gameMode === GameMode.FFA) execution.checkWinnerFFA();
+        else execution.checkWinnerTeam();
+      };
+      check();
+      expect(won).not.toHaveBeenCalled();
+      game.config().gameConfig().disableForcedTimeLimit = false;
+      check();
+      expect(won).toHaveBeenCalledOnce();
+      won.mockClear();
+      game.config().gameConfig().disableForcedTimeLimit = true;
+      game.config().gameConfig().maxTimerValue = 5;
+      check();
+      expect(won).toHaveBeenCalledOnce();
+      won.mockClear();
+      game.config().gameConfig().maxTimerValue = undefined;
+      player.numTilesOwned.mockReturnValue(99);
+      check();
+      expect(won).toHaveBeenCalledOnce();
+    },
+  );
+});
+
 describe("WinCheckExecution - Nation Winners", () => {
   test("should set Nation as winner when reaching 80% territory", async () => {
     // Setup game

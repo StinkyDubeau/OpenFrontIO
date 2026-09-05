@@ -21,6 +21,18 @@ import { SimulationHost } from "../../../src/server/simulation/SimulationHost";
 import "./Shims";
 
 const ticks = Number(process.argv[2] ?? 1800);
+const mapsDir = path.resolve(process.argv[3] ?? "resources/maps");
+const bots = Number(process.argv[4] ?? 2000);
+if (
+  !Number.isSafeInteger(ticks) ||
+  ticks < 2 ||
+  !Number.isSafeInteger(bots) ||
+  bots < 0 ||
+  bots > 3900
+)
+  throw new Error(
+    "Usage: AuthoritativePerf.ts <ticks >= 2> [maps directory] [bots 0..3900]",
+  );
 const start: GameStartInfo = {
   gameID: "authPerf",
   lobbyCreatedAt: 0,
@@ -31,20 +43,21 @@ const start: GameStartInfo = {
     gameMode: GameMode.FFA,
     difficulty: Difficulty.Medium,
     nations: "default",
-    bots: 2000,
+    bots,
     randomSpawn: true,
     donateGold: false,
     donateTroops: false,
     infiniteGold: false,
     infiniteTroops: false,
     instantBuild: false,
+    disableForcedTimeLimit: true,
   },
   players: [
     { clientID: "human001", username: "First player", clanTag: null },
     { clientID: "human002", username: "Second player", clanTag: null },
   ],
 };
-const loader = new NodeGameMapLoader(path.resolve("resources/maps"));
+const loader = new NodeGameMapLoader(mapsDir);
 const makeView = async (clientID: string) =>
   new GameView(
     {} as WorkerClient,
@@ -61,7 +74,10 @@ const makeView = async (clientID: string) =>
     start.gameID,
     start.players,
   );
-const host = new SimulationHost(start);
+const host = new SimulationHost(start, [], mapsDir);
+let peakRss = 0;
+let maxDebtMs = 0;
+let debtMs = 0;
 const server: number[] = [],
   clients: number[] = [],
   wire: number[] = [];
@@ -98,6 +114,9 @@ try {
           : [],
     });
     server.push(result.duration);
+    debtMs = Math.max(0, debtMs + result.duration - 100);
+    maxDebtMs = Math.max(maxDebtMs, debtMs);
+    peakRss = Math.max(peakRss, process.memoryUsage.rss());
     wire.push(result.bytes.byteLength);
     if (turnNumber % 100 === 0)
       compressedSamples.push(deflateRawSync(result.bytes).byteLength);
@@ -167,7 +186,11 @@ try {
       {
         ticks,
         map: start.config.gameMap,
-        bots: 2000,
+        mapsDir,
+        width: first.width(),
+        height: first.height(),
+        tiles: first.width() * first.height(),
+        bots,
         nations: "default",
         elapsedMs: performance.now() - wall,
         serverTickMs: describe(server),
@@ -176,6 +199,11 @@ try {
         sampledCompressedFrameBytes: describe(compressedSamples),
         lateJoin: snapshotResult,
         bothViewsEqual: true,
+        peakProcessRssBytes: peakRss,
+        estimatedSerialCapacityTPS: 1000 / describe(server).mean,
+        overBudgetTicks: server.filter((ms) => ms > 100).length,
+        finalSimulationDebtMs: debtMs,
+        maxSimulationDebtMs: maxDebtMs,
         note: "Headless CPU benchmark, excludes DOM, GPU, network latency and socket compression.",
       },
       null,

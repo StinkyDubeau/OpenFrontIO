@@ -53,6 +53,7 @@ describe("persistent-world runtime bridge", () => {
   });
 
   afterEach(() => service.close());
+  afterEach(() => vi.unstubAllEnvs());
 
   function setup() {
     const host = service.createGuestSession({ displayName: "Map Keeper" });
@@ -72,6 +73,42 @@ describe("persistent-world runtime bridge", () => {
     const world = repository.markActive(created.snapshot.world.id, now);
     return { host, gameplayHash, world };
   }
+
+  it("selects the XL board for new runtimes without changing already-persisted maps", async () => {
+    const { world } = setup();
+    const dispatch = vi.fn(
+      async (
+        command: MasterCreateManagedGame,
+      ): Promise<WorkerManagedGameReady> => ({
+        type: "managedGameReady",
+        requestId: command.requestId,
+        gameID: command.gameID,
+        workerId: 0,
+        outcome: "created",
+      }),
+    );
+    const playlist = {
+      gameConfig: async () => UPSTREAM_CONFIG,
+    } as unknown as MapPlaylist;
+    vi.stubEnv("IDLE_WORLD_MAP_SCALE", "3");
+    await new PersistentWorldRuntimeBridge(
+      repository,
+      playlist,
+      dispatch,
+    ).ensure(world);
+    expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
+      GameMapType.ExpandedGiantWorldLarge,
+    );
+    vi.stubEnv("IDLE_WORLD_MAP_SCALE", "2");
+    await new PersistentWorldRuntimeBridge(
+      repository,
+      playlist,
+      dispatch,
+    ).ensure(world);
+    expect(dispatch.mock.calls[1][0].gameConfig.gameMap).toBe(
+      GameMapType.ExpandedGiantWorldLarge,
+    );
+  });
 
   it("freezes bound RSVP seats and exposes only an acknowledged runtime", async () => {
     const { host, gameplayHash, world } = setup();
@@ -114,6 +151,7 @@ describe("persistent-world runtime bridge", () => {
       randomSpawn: true,
       publicGameModifiers: expect.objectContaining({ isRandomSpawn: true }),
       liveStatsEnabled: true,
+      disableForcedTimeLimit: true,
     });
     expect(commands).toHaveLength(1);
     expect(commands[0].initialTurns).toEqual([]);

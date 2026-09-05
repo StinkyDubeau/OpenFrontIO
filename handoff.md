@@ -1,5 +1,18 @@
 # Idle Multiplayer OpenFront Fork — Handoff
 
+## September 5 larger-map / long-session preparation
+
+See `docs/large-world-playtest-2026-09-05.md` for the 72-million-tile benchmark,
+join-queue fix, catchup overview, lifecycle permission, and activation gate.
+Work is on `main`. The new XL board is separately versioned and opt-in via
+`IDLE_WORLD_MAP_SCALE=3` for new managed worlds. The user will play about 12 hours
+through the development tunnel, not the periodically restarting production host.
+They approved disabling the forced 170-minute ending; other gameplay rules stay.
+Do not restart the backend until active players have left. At this handoff one
+game connection remained, so the new backend has not been activated and no long
+playtest has been started. Do not mistake the finished CPU benchmark for a live
+12-hour soak or on-phone graphics certification.
+
 ## September 3 seamless-world implementation
 
 The massive-board experiment now lives on `experimental/seamless-world`,

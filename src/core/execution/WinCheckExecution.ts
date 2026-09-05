@@ -111,7 +111,8 @@ export class WinCheckExecution implements Execution {
         this.mg.config().percentageTilesOwnedToWin() ||
       (this.mg.config().gameConfig().maxTimerValue !== undefined &&
         timeElapsed - this.mg.config().gameConfig().maxTimerValue! * 60 >= 0) ||
-      timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS
+      (!this.mg.config().gameConfig().disableForcedTimeLimit &&
+        timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS)
     ) {
       this.mg.setWinner(max, this.mg.stats().stats());
       console.log(`${max.name()} has won the game`);
@@ -169,7 +170,8 @@ export class WinCheckExecution implements Execution {
       percentage > this.mg.config().percentageTilesOwnedToWin() ||
       (this.mg.config().gameConfig().maxTimerValue !== undefined &&
         timeElapsed - this.mg.config().gameConfig().maxTimerValue! * 60 >= 0) ||
-      timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS
+      (!this.mg.config().gameConfig().disableForcedTimeLimit &&
+        timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS)
     ) {
       if (max[0] === ColoredTeams.Bot) return;
       this.mg.setWinner(max[0], this.mg.stats().stats());

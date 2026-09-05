@@ -26,6 +26,9 @@ export class GoToUnitEvent implements GameEvent {
   constructor(public unit: UnitView) {}
 }
 
+/** Show the complete board while an initial/reconnecting view paints in. */
+export class FitMapEvent implements GameEvent {}
+
 export const GOTO_INTERVAL_MS = 16;
 export const CAMERA_MAX_SPEED = 15;
 export const CAMERA_SMOOTHING = 0.03;
@@ -54,6 +57,10 @@ export class TransformHandler {
     this.eventBus.on(GoToPositionEvent, (e) => this.onGoToPosition(e));
     this.eventBus.on(GoToUnitEvent, (e) => this.onGoToUnit(e));
     this.eventBus.on(CenterCameraEvent, () => this.centerCamera());
+    this.eventBus.on(FitMapEvent, () => {
+      this.updateCanvasBoundingRect();
+      this.centerAll();
+    });
   }
 
   public updateCanvasBoundingRect() {
@@ -304,7 +311,12 @@ export class TransformHandler {
     this.scale /= zoomFactor;
 
     // Clamp the scale to prevent extreme zooming
-    this.scale = Math.max(0.2, Math.min(20, this.scale));
+    const minScale = Math.min(
+      0.2,
+      this.boundingRect().width / this.game.width(),
+      this.boundingRect().height / this.game.height(),
+    );
+    this.scale = Math.max(minScale, Math.min(20, this.scale));
 
     const canvasCoords = this.screenToCanvasCoordinates(event.x, event.y);
 

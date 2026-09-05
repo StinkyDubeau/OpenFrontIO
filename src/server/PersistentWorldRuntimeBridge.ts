@@ -208,8 +208,16 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       // The seamless-world branch changes only the physical board and its
       // population. Every economy, AI, structure and combat rule continues
       // to come from the current OpenFront configuration.
-      gameMap: GameMapType.ExpandedGiantWorld,
+      // Operator-selected for NEW worlds only; persisted runtimes retain their
+      // original map/config. Never swap terrain beneath an existing session.
+      gameMap:
+        process.env.IDLE_WORLD_MAP_SCALE === "3"
+          ? GameMapType.ExpandedGiantWorldLarge
+          : GameMapType.ExpandedGiantWorld,
       serverSimulation: process.env.IDLE_SERVER_SIMULATION !== "0",
+      // User-approved lifecycle exception for long playtests. Normal conquest,
+      // economy, AI, combat, structures and explicit timers remain unchanged.
+      disableForcedTimeLimit: world.targetDuration !== "1h",
       gameMapSize: GameMapSize.Normal,
       bots: 2000,
       nations: "default",

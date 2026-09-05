@@ -4,6 +4,42 @@ import { ViewConnection } from "../../src/server/simulation/ViewConnection";
 
 afterEach(() => vi.useRealTimers());
 describe("view flow control", () => {
+  it("streams snapshots larger than the live queue, preserving order and releasing chunks", () => {
+    vi.useFakeTimers();
+    const ws = { readyState: 1, send: vi.fn() };
+    const slow = vi.fn();
+    const view = new ViewConnection(ws as unknown as WebSocket, slow);
+    const chunks = Array.from(
+      { length: 1500 },
+      (_, i) => new Uint8Array([i % 255]),
+    );
+    view.startSnapshot(chunks);
+    view.enqueue(new Uint8Array([255]), 900);
+    expect(ws.send).toHaveBeenCalledTimes(8);
+    for (let ack = 8; ack <= 1504; ack += 8)
+      view.acknowledge(Math.min(ack, 1501));
+    expect(slow).not.toHaveBeenCalled();
+    expect(ws.send).toHaveBeenCalledTimes(1501);
+    for (let i = 0; i < 1500; i++) {
+      expect(ws.send.mock.calls[i][0][4]).toBe(i % 255);
+      expect(chunks[i]).toBeUndefined();
+    }
+    expect(ws.send.mock.calls[1500][0][4]).toBe(255);
+    view.stop();
+  });
+
+  it("still bounds live ticks while a snapshot is stalled", () => {
+    vi.useFakeTimers();
+    const slow = vi.fn();
+    const view = new ViewConnection(
+      { readyState: 1, send: vi.fn() } as unknown as WebSocket,
+      slow,
+    );
+    view.startSnapshot(Array.from({ length: 1500 }, () => new Uint8Array([0])));
+    for (let i = 0; i < 1025; i++) view.enqueue(new Uint8Array([1]), i);
+    expect(slow).toHaveBeenCalledOnce();
+    expect(view.isClosed).toBe(true);
+  });
   it("pipelines eight frames, ignores invalid acknowledgements, then advances", () => {
     vi.useFakeTimers();
     const ws = { readyState: 1, send: vi.fn() };

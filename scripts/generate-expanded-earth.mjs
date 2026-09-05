@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   readFileSync,
-  rmSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,12 +24,39 @@ function integerArg(name, fallback) {
   return value;
 }
 
-const scale = integerArg("scale", 2);
+const largeVariant = process.argv.includes("--variant=large");
+const scale = integerArg("scale", largeVariant ? 3 : 2);
+if (largeVariant && scale !== 3)
+  throw new Error("The versioned large variant must remain scale=3");
 const pageSize = integerArg("page-size", 1024);
 const sourceName = "giantworldmap";
-const outputName = "expandedgiantworld";
+const mapId = largeVariant ? "ExpandedGiantWorldLarge" : "ExpandedGiantWorld";
+const mapName = largeVariant ? "Expanded Earth XL" : "Expanded Earth";
+const outputName = mapId.toLowerCase();
 const sourceDir = join(repo, "resources", "maps", sourceName);
-const outputDir = join(repo, "resources", "maps", outputName);
+// Experimental assets must never replace maps used by running games.
+const outputArg = process.argv
+  .find((arg) => arg.startsWith("--output-root="))
+  ?.slice(14);
+const outputRoot = outputArg
+  ? resolve(repo, outputArg)
+  : join(repo, "resources", "maps");
+const relativeOutput = relative(repo, outputRoot);
+if (
+  !relativeOutput ||
+  isAbsolute(relativeOutput) ||
+  relativeOutput.startsWith(`..${sep}`) ||
+  relativeOutput === ".."
+) {
+  throw new Error("Output root must be a directory inside this repository");
+}
+if (scale !== 2 && !largeVariant && !outputArg)
+  throw new Error("Non-default scales require an isolated --output-root");
+const outputDir = join(outputRoot, outputName);
+if (outputArg && existsSync(outputDir))
+  throw new Error(
+    "Experimental output already exists; choose a fresh output root",
+  );
 const pagesDir = join(outputDir, "pages");
 const englishPath = join(repo, "resources", "lang", "en.json");
 const sourceGeneratorDir = join(
@@ -58,10 +86,14 @@ if (source.length !== sourceWidth * sourceHeight) {
 
 const width = sourceWidth * scale;
 const height = sourceHeight * scale;
+if (!Number.isSafeInteger(width * height) || width * height > 0x7fffffff) {
+  throw new Error(
+    "Scaled map exceeds the engine's signed 32-bit tile address space",
+  );
+}
 const pagesWide = Math.ceil(width / pageSize);
 const pagesHigh = Math.ceil(height / pageSize);
 
-rmSync(outputDir, { recursive: true, force: true });
 mkdirSync(pagesDir, { recursive: true });
 
 const pages = [];
@@ -119,11 +151,67 @@ function scaleSpawnAreas(groups) {
   );
 }
 
+// Keep the half-resolution pathfinding grid at exactly half the new world
+// dimensions. Copying Giant Earth's LOD only works for scale=2.
+function halfMap(sample, fullWidth, fullHeight) {
+  const halfWidth = Math.floor(fullWidth / 2);
+  const halfHeight = Math.floor(fullHeight / 2);
+  const data = Buffer.alloc(halfWidth * halfHeight);
+  let land = 0;
+  for (let y = 0; y < halfHeight; y++) {
+    for (let x = 0; x < halfWidth; x++) {
+      let selected = sample(x * 2, y * 2);
+      for (let dx = 0; dx < 2; dx++) {
+        for (let dy = 0; dy < 2; dy++) {
+          const next = sample(x * 2 + dx, y * 2 + dy);
+          // Same water > impassable > land priority as createMiniMap in Go.
+          if (!(selected & 128)) continue;
+          if (!(next & 128) || (selected & 31) !== 31) selected = next;
+        }
+      }
+      data[y * halfWidth + x] = selected & ~64;
+      if (selected & 128 && (selected & 31) !== 31) land++;
+    }
+  }
+  for (let y = 0; y < halfHeight; y++) {
+    for (let x = 0; x < halfWidth; x++) {
+      const index = y * halfWidth + x;
+      if ((data[index] & 159) === 159) continue;
+      const neighbours = [
+        x > 0 ? index - 1 : index,
+        x + 1 < halfWidth ? index + 1 : index,
+        y > 0 ? index - halfWidth : index,
+        y + 1 < halfHeight ? index + halfWidth : index,
+      ];
+      if (neighbours.some((n) => (data[n] & 128) !== (data[index] & 128)))
+        data[index] |= 64;
+    }
+  }
+  return {
+    data,
+    metadata: { width: halfWidth, height: halfHeight, num_land_tiles: land },
+  };
+}
+let lod4, lod16;
+if (scale !== 2) {
+  lod4 = halfMap(
+    (x, y) =>
+      source[Math.floor(y / scale) * sourceWidth + Math.floor(x / scale)],
+    width,
+    height,
+  );
+  lod16 = halfMap(
+    (x, y) => lod4.data[y * lod4.metadata.width + x],
+    lod4.metadata.width,
+    lod4.metadata.height,
+  );
+}
+
 const manifest = {
   ...sourceManifest,
-  id: "ExpandedGiantWorld",
-  name: "Expanded Earth",
-  translation_key: "map.expandedgiantworld",
+  id: mapId,
+  name: mapName,
+  translation_key: `map.${outputName}`,
   multiplayer_frequency: 0,
   map: {
     format: "paged-v1",
@@ -136,8 +224,8 @@ const manifest = {
     pages,
   },
   // The normal renderer/pathfinder LOD is one half the linear world size.
-  map4x: sourceManifest.map,
-  map16x: sourceManifest.map4x,
+  map4x: lod4?.metadata ?? sourceManifest.map,
+  map16x: lod16?.metadata ?? sourceManifest.map4x,
   nations: scaleCoordinates(sourceManifest.nations),
   additionalNations: scaleCoordinates(sourceManifest.additionalNations),
   teamGameSpawnAreas: scaleSpawnAreas(sourceManifest.teamGameSpawnAreas),
@@ -147,8 +235,17 @@ writeFileSync(
   join(outputDir, "manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
-copyFileSync(join(sourceDir, "map.bin"), join(outputDir, "map4x.bin"));
-copyFileSync(join(sourceDir, "map4x.bin"), join(outputDir, "map16x.bin"));
+// The Go asset pipeline emits this contiguous intermediate before our paged
+// transform. Only that known generated file is obsolete; never wipe a tree.
+const contiguousIntermediate = join(outputDir, "map.bin");
+if (existsSync(contiguousIntermediate)) unlinkSync(contiguousIntermediate);
+if (lod4 && lod16) {
+  writeFileSync(join(outputDir, "map4x.bin"), lod4.data);
+  writeFileSync(join(outputDir, "map16x.bin"), lod16.data);
+} else {
+  copyFileSync(join(sourceDir, "map.bin"), join(outputDir, "map4x.bin"));
+  copyFileSync(join(sourceDir, "map4x.bin"), join(outputDir, "map16x.bin"));
+}
 copyFileSync(
   join(sourceDir, "thumbnail.webp"),
   join(outputDir, "thumbnail.webp"),
@@ -180,9 +277,9 @@ function updateGeneratorSource() {
     join(outputGeneratorDir, "info.json"),
     `${JSON.stringify(
       {
-        id: "ExpandedGiantWorld",
-        name: "Expanded Earth",
-        translation_key: "map.expandedgiantworld",
+        id: mapId,
+        name: mapName,
+        translation_key: `map.${outputName}`,
         categories: ["world"],
         multiplayer_frequency: 0,
         nations: manifest.nations,
@@ -198,14 +295,16 @@ function updateEnglishName() {
   english.map = Object.fromEntries(
     Object.entries({
       ...english.map,
-      expandedgiantworld: "Expanded Earth",
+      [outputName]: mapName,
     }).sort(([a], [b]) => a.localeCompare(b)),
   );
   writeFileSync(englishPath, `${JSON.stringify(english, null, 2)}\n`);
 }
 
-updateGeneratorSource();
-updateEnglishName();
+if (!outputArg) {
+  updateGeneratorSource();
+  updateEnglishName();
+}
 
 console.log(
   `Expanded Earth: ${width}x${height}, ${pagesWide}x${pagesHigh} pages, scale ${scale}x`,

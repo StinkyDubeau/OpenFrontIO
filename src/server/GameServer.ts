@@ -177,8 +177,7 @@ export class GameServer {
           ws.readyState !== WebSocket.OPEN
         )
           return;
-        for (const bytes of snapshot.packets)
-          connection.enqueue(bytes, baseTick);
+        connection.startSnapshot(snapshot.packets);
       }
       if (
         this.viewGeneration.get(ws) !== generation ||
@@ -187,7 +186,7 @@ export class GameServer {
         return;
       for (const frame of this.viewHistory)
         if (frame.tick > baseTick) connection.enqueue(frame.bytes, frame.tick);
-      this.viewConnections.set(ws, connection);
+      if (!connection.isClosed) this.viewConnections.set(ws, connection);
     } catch (error) {
       connection.stop();
       this.sendViewError(ws, String(error));

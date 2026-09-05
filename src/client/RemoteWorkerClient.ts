@@ -30,6 +30,10 @@ export class RemoteWorkerClient extends WorkerClient {
   >();
   private stopped = false;
   private identities: RemoteViewIdentity;
+
+  get isLoadingInitialView(): boolean {
+    return this.appliedTick === undefined;
+  }
   constructor(
     start: GameStartInfo,
     clientID: ClientID | undefined,

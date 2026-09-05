@@ -52,6 +52,7 @@ export enum GameMapType {
   Germany = "Germany", // map-generator/assets/maps/germany/info.json
   GiantWorldMap = "Giant World Map", // map-generator/assets/maps/giantworldmap/info.json
   ExpandedGiantWorld = "Expanded Earth", // map-generator/assets/maps/expandedgiantworld/info.json
+  ExpandedGiantWorldLarge = "Expanded Earth XL", // map-generator/assets/maps/expandedgiantworldlarge/info.json
   GreatLakes = "Great Lakes", // map-generator/assets/maps/greatlakes/info.json
   GulfOfGuinea = "Gulf Of Guinea", // map-generator/assets/maps/gulfofguinea/info.json
   GulfOfStLawrence = "Gulf of St. Lawrence", // map-generator/assets/maps/gulfofstlawrence/info.json
@@ -1006,6 +1007,13 @@ export const maps: readonly MapInfo[] = [
     id: "ExpandedGiantWorld",
     type: GameMapType.ExpandedGiantWorld,
     translationKey: "map.expandedgiantworld",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },
+  {
+    id: "ExpandedGiantWorldLarge",
+    type: GameMapType.ExpandedGiantWorldLarge,
+    translationKey: "map.expandedgiantworldlarge",
     categories: ["world"],
     multiplayerFrequency: 0,
   },

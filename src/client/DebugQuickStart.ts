@@ -1,6 +1,7 @@
 import type {
   PersistentWorldCard,
   PersistentWorldControllerSession,
+  PersistentWorldDuration,
   PersistentWorldLobbySnapshot,
 } from "../core/PersistentWorldSchemas";
 import { getPlayToken, setGuestPlayToken } from "./Auth";
@@ -102,6 +103,7 @@ function activeFirst(cards: PersistentWorldCard[]): PersistentWorldCard[] {
 
 export async function quickStartDebugGame(
   status: DebugQuickStartStatus = () => undefined,
+  duration: Extract<PersistentWorldDuration, "1h" | "1d"> = "1h",
 ): Promise<string> {
   if (!runtimeDebugEnabled()) throw new Error("Runtime debug mode is disabled");
   status("Binding the test identity…");
@@ -112,7 +114,7 @@ export async function quickStartDebugGame(
       hour: "2-digit",
       minute: "2-digit",
     })}`,
-    targetDuration: "1h",
+    targetDuration: duration,
     access: "public",
     mode: "ffa",
     maxHumans: 8,

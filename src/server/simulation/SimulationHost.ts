@@ -24,16 +24,18 @@ export class SimulationHost {
     }
   >();
   private stopped = false;
-  constructor(start: GameStartInfo, turns: Turn[] = []) {
+  constructor(start: GameStartInfo, turns: Turn[] = [], mapsDir?: string) {
     this.worker = new Worker(
       new NodeURL("./Simulation.worker.mjs", import.meta.url),
       {
         workerData: {
           start,
           turns,
-          mapsDir: fileURLToPath(
-            new NodeURL("../../../resources/maps/", import.meta.url),
-          ),
+          mapsDir:
+            mapsDir ??
+            fileURLToPath(
+              new NodeURL("../../../resources/maps/", import.meta.url),
+            ),
         },
       },
     );

@@ -27,6 +27,7 @@ const allMapKeys = Object.keys(GameMapType) as GameMapName[];
 const FREQUENCY_EXEMPTIONS: Set<GameMapName> = new Set([
   "GiantWorldMap",
   "ExpandedGiantWorld",
+  "ExpandedGiantWorldLarge",
   "Oceania",
   "BaikalNukeWars",
   "Tourney1",

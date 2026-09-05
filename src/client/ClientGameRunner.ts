@@ -36,6 +36,7 @@ import {
 } from "../core/game/UserSettings";
 import { WorkerClient } from "../core/worker/WorkerClient";
 import { getPersistentID } from "./Auth";
+import { CatchupCamera } from "./CatchupCamera";
 import { showInGameAlert } from "./InGameModal";
 import {
   AutoUpgradeEvent,
@@ -755,6 +756,7 @@ export class ClientGameRunner {
   private lastTickReceiveTime: number = 0;
   private currentTickDelay: number | undefined = undefined;
   private catchupControlAbort: AbortController | null = null;
+  private catchupCamera: CatchupCamera;
 
   constructor(
     private lobby: LobbyConfig,
@@ -772,6 +774,7 @@ export class ClientGameRunner {
     private disposeRenderer: (() => void) | null = null,
   ) {
     this.lastMessageTime = Date.now();
+    this.catchupCamera = new CatchupCamera(eventBus);
   }
 
   /**
@@ -887,6 +890,7 @@ export class ClientGameRunner {
         this.eventBus.emit(new SendHashEvent(hu.tick, hu.hash));
       });
       const mainThreadStartedAt = performance.now();
+      this.catchupCamera.update(gu.pendingTurns ?? 0);
       const viewUpdateStartedAt = mainThreadStartedAt;
       this.gameView.update(gu);
       const viewUpdateDuration = performance.now() - viewUpdateStartedAt;
@@ -931,6 +935,14 @@ export class ClientGameRunner {
 
         if (this.gameView.config().isRandomSpawn()) {
           const goToPlayer = () => {
+            if (
+              this.catchupCamera.active ||
+              (this.worker instanceof RemoteWorkerClient &&
+                this.worker.isLoadingInitialView)
+            ) {
+              this.goToPlayerTimeout = setTimeout(goToPlayer, 250);
+              return;
+            }
             const myPlayer = this.gameView.myPlayer();
 
             if (this.gameView.inSpawnPhase() && !myPlayer?.hasSpawned()) {
@@ -958,6 +970,7 @@ export class ClientGameRunner {
             this.eventBus.emit(new GoToPlayerEvent(myPlayer, 10));
           };
 
+          if (this.goToPlayerTimeout) clearTimeout(this.goToPlayerTimeout);
           goToPlayer();
         }
 
@@ -1012,6 +1025,7 @@ export class ClientGameRunner {
       if (message.type === "turn") {
         if (
           !this.gameView.inSpawnPhase() &&
+          !this.catchupCamera.active &&
           !hasGoneToPlayer &&
           this.gameView.myPlayer() &&
           this.userSettings.goToPlayer()

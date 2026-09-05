@@ -5,6 +5,7 @@ import { requestHaptic } from "../ui/Haptics";
 
 @customElement("idlefront-debug-quick-launch")
 export class DebugQuickLaunch extends LitElement {
+  @state() private longSession = false;
   @state() private action: "idle" | "starting" | "joining" = "idle";
   @state() private status = "Debug tools";
 
@@ -18,6 +19,14 @@ export class DebugQuickLaunch extends LitElement {
       font:
         600 12px/1.25 system-ui,
         sans-serif;
+    }
+    label {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-height: 44px;
+      padding: 4px;
     }
 
     .panel {
@@ -85,9 +94,12 @@ export class DebugQuickLaunch extends LitElement {
     this.action = action;
     this.status = action === "starting" ? "Preparing game…" : "Finding game…";
     try {
-      const quickAction =
-        action === "starting" ? quickStartDebugGame : quickJoinDebugGame;
-      await quickAction((message) => (this.status = message));
+      const status = (message: string) => (this.status = message);
+      if (action === "starting") {
+        await quickStartDebugGame(status, this.longSession ? "1d" : "1h");
+      } else {
+        await quickJoinDebugGame(status);
+      }
       requestHaptic("success");
     } catch (error) {
       this.status =
@@ -102,6 +114,17 @@ export class DebugQuickLaunch extends LitElement {
     return html`
       <aside class="panel" aria-label="Debug quick launch">
         <p role="status">${this.status}</p>
+        <label>
+          <input
+            type="checkbox"
+            .checked=${this.longSession}
+            ?disabled=${this.action !== "idle"}
+            @change=${(event: Event) => {
+              this.longSession = (event.target as HTMLInputElement).checked;
+            }}
+          />
+          Long session (up to 24h; normal victories still apply)
+        </label>
         <button
           type="button"
           ?disabled=${this.action !== "idle"}

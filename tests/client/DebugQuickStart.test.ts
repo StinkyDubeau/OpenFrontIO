@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { quickJoinDebugGame } from "../../src/client/DebugQuickStart";
+import {
+  quickJoinDebugGame,
+  quickStartDebugGame,
+} from "../../src/client/DebugQuickStart";
 import { persistentWorldApi } from "../../src/client/PersistentWorldApi";
 import type {
   PersistentWorldCard,
@@ -49,6 +52,27 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("quick join", () => {
+  it.each([undefined, "1d"] as const)(
+    "creates a %s test without changing the short-test default",
+    async (duration) => {
+      const create = vi
+        .spyOn(persistentWorldApi, "createWorld")
+        .mockResolvedValue({
+          snapshot: snapshot("newtest1"),
+        } as any);
+      const dispatch = vi.spyOn(document, "dispatchEvent");
+      expect(await quickStartDebugGame(undefined, duration)).toBe("newtest1");
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetDuration: duration ?? "1h",
+          maxHumans: 8,
+          access: "public",
+          mode: "ffa",
+        }),
+      );
+      expect(dispatch).toHaveBeenCalledOnce();
+    },
+  );
   it("skips eliminated seats and stale runtime IDs instead of joining a dead match", async () => {
     vi.mocked(persistentWorldApi.listMine).mockResolvedValue([
       card("eliminated", 30, true),

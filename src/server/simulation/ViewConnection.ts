@@ -12,10 +12,31 @@ export class ViewConnection {
   private acknowledged = 0;
   private closed = false;
   private ackTimeout: ReturnType<typeof setTimeout> | undefined;
+  private snapshot: Array<Uint8Array | undefined> | null = null;
+  private snapshotIndex = 0;
   constructor(
     private ws: WebSocket,
     private onSlow: () => void,
   ) {}
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
+  /**
+   * A snapshot is one immutable, finite map image, not a backlog of live ticks.
+   * Drain it through the same eight-frame ACK window without inserting all of
+   * its chunks into the bounded live queue. Release each consumed reference.
+   * This avoids rejecting healthy joins as soon as a larger map exceeds 1,024
+   * snapshot chunks. Live updates retain their existing bounds and deadline.
+   */
+  startSnapshot(packets: Uint8Array[]): void {
+    if (this.closed) return;
+    if (this.sequence !== 0 || this.snapshot !== null || this.queue.length)
+      throw new Error("Snapshot must be the first view on a fresh connection");
+    this.snapshot = packets;
+    this.snapshotIndex = 0;
+    this.pump();
+  }
   enqueue(bytes: Uint8Array, tick: number): void {
     if (this.closed) return;
     if (
@@ -39,13 +60,22 @@ export class ViewConnection {
   }
   private pump(): void {
     if (this.closed || this.ws.readyState !== WebSocket.OPEN) return;
-    while (this.sequence - this.acknowledged < 8 && this.queue.length) {
-      const frame = this.queue.shift()!;
-      this.queuedBytes -= frame.bytes.byteLength;
+    while (this.sequence - this.acknowledged < 8) {
+      let bytes: Uint8Array;
+      if (this.snapshot && this.snapshotIndex < this.snapshot.length) {
+        bytes = this.snapshot[this.snapshotIndex]!;
+        this.snapshot[this.snapshotIndex++] = undefined;
+        if (this.snapshotIndex === this.snapshot.length) this.snapshot = null;
+      } else {
+        const frame = this.queue.shift();
+        if (!frame) break;
+        bytes = frame.bytes;
+        this.queuedBytes -= bytes.byteLength;
+      }
       const header = Buffer.alloc(4);
       header.writeUInt32BE(++this.sequence);
       this.ws.send(
-        Buffer.concat([header, frame.bytes]),
+        Buffer.concat([header, bytes]),
         { binary: true },
         (error) => {
           if (error) {
@@ -54,6 +84,7 @@ export class ViewConnection {
           }
         },
       );
+      if (this.closed) return;
     }
     if (this.sequence > this.acknowledged && this.ackTimeout === undefined) {
       this.ackTimeout = setTimeout(() => {
@@ -68,5 +99,6 @@ export class ViewConnection {
     clearTimeout(this.ackTimeout);
     this.queue = [];
     this.queuedBytes = 0;
+    this.snapshot = null;
   }
 }

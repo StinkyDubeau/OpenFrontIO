@@ -26,6 +26,7 @@ describe("thin render client", () => {
     await client.initialize();
     client.start(update);
     client.subscribe();
+    expect(client.isLoadingInitialView).toBe(true);
     expect(send).toHaveBeenLastCalledWith({
       type: "view_subscribe",
       afterTick: undefined,
@@ -35,6 +36,7 @@ describe("thin render client", () => {
     expect(update).not.toHaveBeenCalled();
     await vi.runAllTimersAsync();
     expect(update).toHaveBeenCalledTimes(2);
+    expect(client.isLoadingInitialView).toBe(false);
     receive(3, { kind: "update", update: emptyView(5001) });
     await vi.runAllTimersAsync();
     expect(update).toHaveBeenCalledTimes(3);
