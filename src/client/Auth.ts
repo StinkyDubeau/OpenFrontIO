@@ -13,6 +13,7 @@ export type UserAuth = { jwt: string; claims: TokenPayload } | false;
 const PERSISTENT_ID_KEY = "player_persistent_id";
 
 let __jwt: string | null = null;
+let __guestPlayToken: string | null = null;
 let __refreshPromise: Promise<void> | null = null;
 let __expiresAt: number = 0;
 
@@ -108,6 +109,7 @@ export async function logOut(allSessions: boolean = false): Promise<boolean> {
 // session and cleared the refresh cookie, so /auth/logout must not be called.
 export function clearLocalSession(): void {
   __jwt = null;
+  __guestPlayToken = null;
   localStorage.removeItem(PERSISTENT_ID_KEY);
   // Switch cosmetics back to the logged-out scope. The player's own
   // selections stay stored under their publicId and are restored on the
@@ -363,9 +365,15 @@ export async function sendMagicLink(email: string): Promise<boolean> {
 
 // WARNING: DO NOT EXPOSE THIS ID
 export async function getPlayToken(): Promise<string> {
+  if (__guestPlayToken !== null) return __guestPlayToken;
   const result = await userAuth();
   if (result !== false) return result.jwt;
   return getPersistentIDFromLocalStorage();
+}
+
+/** Cache the worker credential returned by the guest persistent-world API. */
+export function setGuestPlayToken(token: string | null): void {
+  __guestPlayToken = token;
 }
 
 // WARNING: DO NOT EXPOSE THIS ID

@@ -18,6 +18,8 @@ import {
   PersistentWorldSessionRequestSchema,
   type NewPersistentWorldControllerSession,
 } from "../../core/PersistentWorldSchemas";
+import { PersistentIdSchema } from "../../core/Schemas";
+import { verifyGuestPlayToken } from "../GuestPlayToken";
 import {
   PersistentWorldService,
   persistentWorldServiceError,
@@ -55,6 +57,8 @@ export interface PersistentWorldRouterOptions {
    * stored in the persistent-world database.
    */
   gameplayIdentityVerifier?: (playToken: string) => string | Promise<string>;
+  /** Mints a short-lived worker-verifiable credential for guest playtesting. */
+  guestGameplayTokenFactory?: (identityId: string) => string;
 }
 
 function requireJson(req: Request): void {
@@ -185,6 +189,34 @@ export function createPersistentWorldRouter(
       requireNoQuery(req);
       requireJson(req);
       const { playToken } = GameplayIdentityBodySchema.parse(req.body);
+      const guestIdentityId = verifyGuestPlayToken(playToken);
+      if (guestIdentityId !== null) {
+        const session = service.resumeSession(bearerToken(req, true));
+        if (session.identity.id !== guestIdentityId) {
+          throw new PersistentWorldHttpError(
+            403,
+            "GUEST_GAMEPLAY_MISMATCH",
+            "The guest gameplay credential belongs to another world session",
+          );
+        }
+        res.json({ bound: true, playToken });
+        return;
+      }
+      if (PersistentIdSchema.safeParse(playToken).success) {
+        if (!options.guestGameplayTokenFactory) {
+          throw new PersistentWorldHttpError(
+            501,
+            "GUEST_GAMEPLAY_UNAVAILABLE",
+            "Guest gameplay is not configured",
+          );
+        }
+        const guestToken = service.bindGuestGameplayIdentity(
+          bearerToken(req, true),
+          options.guestGameplayTokenFactory,
+        );
+        res.json({ bound: true, playToken: guestToken });
+        return;
+      }
       if (!options.gameplayIdentityVerifier) {
         throw new PersistentWorldHttpError(
           501,

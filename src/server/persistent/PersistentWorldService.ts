@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import quickChatData from "resources/QuickChat.json";
 import { z } from "zod";
 import { inferredReminderLeadTimes } from "../../core/PersistentWorldReminders";
@@ -130,6 +130,28 @@ export class PersistentWorldService {
     )) {
       if (world.phase === "active") this.queueRuntime(world);
     }
+  }
+
+  /**
+   * Bind a guest world identity to the server-issued guest gameplay
+   * principal. The controller bearer token is the authentication boundary;
+   * callers never get to choose which identity is being bound.
+   */
+  bindGuestGameplayIdentity(
+    bearerToken: string,
+    issueToken: (identityId: string) => string,
+  ): string {
+    const session = this.resumeSession(bearerToken);
+    const gameplayHash = createHash("sha256")
+      .update(session.identity.id)
+      .digest("hex");
+    this.repository.bindGameplayIdentity(session.identity.id, gameplayHash);
+    for (const world of this.repository.listWorldsForIdentity(
+      session.identity.id,
+    )) {
+      if (world.phase === "active") this.queueRuntime(world);
+    }
+    return issueToken(session.identity.id);
   }
 
   createWorld(

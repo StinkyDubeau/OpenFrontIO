@@ -3,7 +3,7 @@ import type {
   PersistentWorldControllerSession,
   PersistentWorldLobbySnapshot,
 } from "../core/PersistentWorldSchemas";
-import { getPlayToken } from "./Auth";
+import { getPlayToken, setGuestPlayToken } from "./Auth";
 import type { JoinLobbyEvent } from "./Main";
 import {
   persistentWorldApi,
@@ -38,10 +38,14 @@ async function ensureSession(): Promise<PersistentWorldControllerSession> {
     }
   }
   if (!session) {
+    setGuestPlayToken(null);
     session = (await persistentWorldApi.createGuestSession(suggestedName()))
       .session;
   }
-  await persistentWorldApi.bindGameIdentity(await getPlayToken());
+  const guestPlayToken = await persistentWorldApi.bindGameIdentityWithToken(
+    await getPlayToken(),
+  );
+  if (guestPlayToken !== null) setGuestPlayToken(guestPlayToken);
   return session;
 }
 

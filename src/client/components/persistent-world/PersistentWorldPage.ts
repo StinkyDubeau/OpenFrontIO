@@ -7,7 +7,7 @@ import type {
   PersistentWorldControllerSession,
   PersistentWorldLobbySnapshot,
 } from "../../../core/PersistentWorldSchemas";
-import { getPlayToken } from "../../Auth";
+import { getPlayToken, setGuestPlayToken } from "../../Auth";
 import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import type { JoinLobbyEvent } from "../../Main";
 import {
@@ -738,7 +738,10 @@ export class PersistentWorldPage extends LitElement {
     if (this.session || !persistentWorldApi.sessionToken()) return;
     try {
       const session = await persistentWorldApi.resumeSession();
-      await persistentWorldApi.bindGameIdentity(await getPlayToken());
+      const guestPlayToken = await persistentWorldApi.bindGameIdentityWithToken(
+        await getPlayToken(),
+      );
+      if (guestPlayToken !== null) setGuestPlayToken(guestPlayToken);
       this.session = session;
     } catch (error) {
       if (error instanceof PersistentWorldApiError && error.status === 401) {
@@ -909,10 +912,16 @@ export class PersistentWorldPage extends LitElement {
     this.submitting = true;
     this.error = "";
     try {
+      // A new guest session must not reuse a credential issued to the prior
+      // session on this device.
+      setGuestPlayToken(null);
       const created = await persistentWorldApi.createGuestSession(
         this.identityName.trim(),
       );
-      await persistentWorldApi.bindGameIdentity(await getPlayToken());
+      const guestPlayToken = await persistentWorldApi.bindGameIdentityWithToken(
+        await getPlayToken(),
+      );
+      if (guestPlayToken !== null) setGuestPlayToken(guestPlayToken);
       this.session = created.session;
       if (this.identityContinuation === "create") {
         this.view = "wizard";

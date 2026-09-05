@@ -23,6 +23,13 @@ const CreatedPersistentWorldResponseSchema = z
   })
   .strict();
 
+const GameplayIdentityBindingResponseSchema = z
+  .object({
+    bound: z.literal(true),
+    playToken: z.string().min(1).optional(),
+  })
+  .strict();
+
 export interface CreatedPersistentWorldResponse {
   snapshot: PersistentWorldLobbySnapshot;
   invitationSecret: string | null;
@@ -152,11 +159,28 @@ export class PersistentWorldApi {
   }
 
   async bindGameIdentity(playToken: string): Promise<void> {
-    await this.requestWithoutResponse("/session/game-identity", {
-      method: "POST",
-      body: { playToken },
-      authenticated: true,
-    });
+    await this.bindGameIdentityResponse(playToken);
+  }
+
+  async bindGameIdentityWithToken(playToken: string): Promise<string | null> {
+    const result = await this.bindGameIdentityResponse(playToken);
+    return result.playToken ?? null;
+  }
+
+  private async bindGameIdentityResponse(playToken: string): Promise<{
+    bound: true;
+    playToken?: string;
+  }> {
+    const result = await this.request(
+      "/session/game-identity",
+      GameplayIdentityBindingResponseSchema,
+      {
+        method: "POST",
+        body: { playToken },
+        authenticated: true,
+      },
+    );
+    return result;
   }
 
   listPublic(): Promise<PersistentWorldCard[]> {

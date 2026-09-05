@@ -8,6 +8,7 @@ import {
 } from "../core/ApiSchemas";
 import { GameEnv } from "../core/configuration/Config";
 import { PersistentIdSchema } from "../core/Schemas";
+import { verifyGuestPlayToken } from "./GuestPlayToken";
 import { ServerEnv } from "./ServerEnv";
 
 type TokenVerificationResult =
@@ -21,6 +22,10 @@ type TokenVerificationResult =
 export async function verifyClientToken(
   token: string,
 ): Promise<TokenVerificationResult> {
+  const guestPersistentId = verifyGuestPlayToken(token);
+  if (guestPersistentId !== null) {
+    return { type: "success", persistentId: guestPersistentId, claims: null };
+  }
   if (PersistentIdSchema.safeParse(token).success) {
     if (ServerEnv.env() === GameEnv.Dev) {
       return { type: "success", persistentId: token, claims: null };

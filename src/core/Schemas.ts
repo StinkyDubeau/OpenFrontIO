@@ -406,14 +406,21 @@ export const SafeString = z
 
 export const PersistentIdSchema = z.uuid();
 const JwtTokenSchema = z.jwt();
+// Server-issued, HMAC-signed guest credentials used by persistent-world
+// playtests. The signature is verified at the worker boundary; this schema
+// only prevents malformed values from entering the transport envelope.
+const GuestPlayTokenSchema = z
+  .string()
+  .regex(/^guest_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$/);
 const TokenSchema = z
   .string()
   .refine(
     (v) =>
       PersistentIdSchema.safeParse(v).success ||
-      JwtTokenSchema.safeParse(v).success,
+      JwtTokenSchema.safeParse(v).success ||
+      GuestPlayTokenSchema.safeParse(v).success,
     {
-      message: "Token must be a valid UUID or JWT",
+      message: "Token must be a valid UUID, JWT, or guest credential",
     },
   );
 

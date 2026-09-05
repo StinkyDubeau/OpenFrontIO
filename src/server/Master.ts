@@ -14,6 +14,7 @@ import {
   removeDeploymentDrainStatus,
   writeDeploymentDrainStatus,
 } from "./DeploymentDrainStatusFile";
+import { issueGuestPlayToken } from "./GuestPlayToken";
 import { createIdleRouter, IdleService } from "./idle";
 import { verifyClientToken } from "./jwt";
 import { logger } from "./Logger";
@@ -302,6 +303,7 @@ export async function startMaster() {
         .update(verified.persistentId)
         .digest("hex");
     },
+    guestGameplayTokenFactory: (identityId) => issueGuestPlayToken(identityId),
   });
   process.once("exit", () => {
     if (persistentWorldNotificationTimer) {
