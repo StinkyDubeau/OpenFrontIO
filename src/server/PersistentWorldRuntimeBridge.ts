@@ -209,6 +209,7 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       // population. Every economy, AI, structure and combat rule continues
       // to come from the current OpenFront configuration.
       gameMap: GameMapType.ExpandedGiantWorld,
+      serverSimulation: process.env.IDLE_SERVER_SIMULATION !== "0",
       gameMapSize: GameMapSize.Normal,
       bots: 2000,
       nations: "default",

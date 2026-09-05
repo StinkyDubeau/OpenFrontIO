@@ -67,8 +67,7 @@ COPY --from=build /usr/src/app/static ./static
 
 COPY resources ./resources
 
-# Remove maps because they are not used by the server.
-RUN rm -rf ./resources/maps
+# Maps are required by the authoritative simulation workers.
 COPY tsconfig.json ./
 COPY src ./src
 

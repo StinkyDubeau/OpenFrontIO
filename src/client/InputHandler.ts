@@ -197,6 +197,7 @@ export class TickMetricsEvent implements GameEvent {
     public readonly viewUpdateDuration?: number,
     public readonly gpuUploadDuration?: number,
     public readonly mainThreadDuration?: number,
+    public readonly serverTickExecutionDuration?: number,
   ) {}
 }
 

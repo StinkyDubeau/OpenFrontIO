@@ -56,6 +56,13 @@ export async function startWorker() {
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
+    // Compress large view frames; clients negotiate support automatically.
+    perMessageDeflate: {
+      threshold: 1024,
+      serverNoContextTakeover: true,
+      clientNoContextTakeover: true,
+      concurrencyLimit: 4,
+    },
   });
 
   const buildHash = ServerEnv.gitCommit();

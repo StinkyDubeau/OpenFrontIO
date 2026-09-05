@@ -27,9 +27,12 @@ describe("persistent-world invitation capabilities", () => {
     const controllerToken = "session_this-is-a-long-controller-token";
     const playToken = "play_this-value-must-remain-in-the-request-body";
     localStorage.setItem("pressure-atlas.world-controller.v1", controllerToken);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ bound: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await new PersistentWorldApi().bindGameIdentity(playToken);

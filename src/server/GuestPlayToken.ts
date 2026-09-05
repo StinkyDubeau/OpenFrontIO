@@ -45,10 +45,13 @@ export function verifyGuestPlayToken(
   now: number = Date.now(),
 ): string | null {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
-  const parts = token.slice(TOKEN_PREFIX.length).split("_");
-  if (parts.length !== 2) return null;
-
-  const [payload, signature] = parts;
+  // Underscores are legal in both base64url fields. SHA-256's unpadded
+  // signature is always 43 characters, which makes the boundary unambiguous.
+  const parts = token
+    .slice(TOKEN_PREFIX.length)
+    .match(/^([A-Za-z0-9_-]+)_([A-Za-z0-9_-]{43})$/);
+  if (!parts) return null;
+  const [, payload, signature] = parts;
   let expected: string;
   try {
     expected = sign(payload);

@@ -40,6 +40,9 @@ export class PerformanceOverlay extends LitElement implements Controller {
   private tickExecutionAvg: number = 0;
 
   @state()
+  private serverSimulation = false;
+
+  @state()
   private tickExecutionMax: number = 0;
 
   @state()
@@ -541,8 +544,10 @@ export class PerformanceOverlay extends LitElement implements Controller {
   };
 
   private onTickMetricsEvent = (event: TickMetricsEvent) => {
+    if (event.serverTickExecutionDuration !== undefined)
+      this.serverSimulation = true;
     this.updateTickMetrics(
-      event.tickExecutionDuration,
+      event.serverTickExecutionDuration ?? event.tickExecutionDuration,
       event.tickDelay,
       event.pendingTurns,
       event.viewUpdateDuration,
@@ -1172,6 +1177,7 @@ export class PerformanceOverlay extends LitElement implements Controller {
         average60s: this.averageTPS,
       },
       ticks: {
+        executionLocation: this.serverSimulation ? "server" : "browser",
         executionAvgMs: this.tickExecutionAvg,
         executionMaxMs: this.tickExecutionMax,
         delayAvgMs: this.tickDelayAvg,
@@ -1356,7 +1362,7 @@ export class PerformanceOverlay extends LitElement implements Controller {
             <span>${this.averageTPS}</span>)
           </div>
           <div class="performance-line">
-            ${this.uiText.tickExec}
+            ${this.serverSimulation ? "Server simulation" : this.uiText.tickExec}
             <span>${this.tickExecutionAvg.toFixed(2)}ms</span>
             (${this.uiText.maxLabel} <span>${this.tickExecutionMax}ms</span>)
           </div>
@@ -1366,7 +1372,11 @@ export class PerformanceOverlay extends LitElement implements Controller {
             (${this.uiText.maxLabel} <span>${this.tickDelayMax}ms</span>)
           </div>
           <div class="performance-line">
-            Worker backlog <span>${this.pendingTurns}</span> turns
+            ${this.serverSimulation ? "Server view" : "Worker backlog"}
+            <span
+              >${this.serverSimulation ? (this.pendingTurns > 0 ? "Loading" : "Live") : this.pendingTurns}</span
+            >
+            ${this.serverSimulation ? "" : "turns"}
           </div>
           <div class="performance-line">
             Client view <span>${this.viewUpdateAvg.toFixed(2)}ms</span>
@@ -1417,34 +1427,35 @@ export class PerformanceOverlay extends LitElement implements Controller {
                             </span>
                           </div>
                           ${renderLayersToShow.map((layer) => {
-                          const width = Math.min(
-                            100,
-                            (layer.avg / maxLayerAvg) * 100 || 0,
-                          );
-                          const perTickRenderMs =
-                            this.renderLastTickLayerDurations[layer.name] ?? 0;
-                          const perTickRenderAvgMs =
-                            this.renderPerTickLayerStats.get(layer.name)?.avg ??
-                            0;
-                          const isInactive = perTickRenderMs <= 0.01;
-                          const title = `${layer.name} | last tick render: ${perTickRenderMs.toFixed(
-                            2,
-                          )}ms`;
-                          return html`<div
-                            class="layer-row ${isInactive ? "inactive" : ""}"
-                            style="--pct: ${width}%;"
-                            title=${title}
-                          >
-                            <span class="layer-name" title=${layer.name}
-                              >${layer.name}
-                            </span>
-                            <span class="layer-metrics">
-                              ${layer.avg.toFixed(2)} /
-                              ${layer.max.toFixed(2)}ms |
-                              ${perTickRenderAvgMs.toFixed(2)}ms
-                            </span>
-                          </div>`;
-                        })}`
+                            const width = Math.min(
+                              100,
+                              (layer.avg / maxLayerAvg) * 100 || 0,
+                            );
+                            const perTickRenderMs =
+                              this.renderLastTickLayerDurations[layer.name] ??
+                              0;
+                            const perTickRenderAvgMs =
+                              this.renderPerTickLayerStats.get(layer.name)
+                                ?.avg ?? 0;
+                            const isInactive = perTickRenderMs <= 0.01;
+                            const title = `${layer.name} | last tick render: ${perTickRenderMs.toFixed(
+                              2,
+                            )}ms`;
+                            return html`<div
+                              class="layer-row ${isInactive ? "inactive" : ""}"
+                              style="--pct: ${width}%;"
+                              title=${title}
+                            >
+                              <span class="layer-name" title=${layer.name}
+                                >${layer.name}
+                              </span>
+                              <span class="layer-metrics">
+                                ${layer.avg.toFixed(2)} /
+                                ${layer.max.toFixed(2)}ms |
+                                ${perTickRenderAvgMs.toFixed(2)}ms
+                              </span>
+                            </div>`;
+                          })}`
                       : html``
                   }
                 </div>`
@@ -1485,28 +1496,28 @@ export class PerformanceOverlay extends LitElement implements Controller {
                             </span>
                           </div>
                           ${tickLayersToShow.map((layer) => {
-                          const width = Math.min(
-                            100,
-                            (layer.avg / maxTickLayerAvg) * 100 || 0,
-                          );
-                          const lastTickMs =
-                            this.tickLayerLastDurations[layer.name] ?? 0;
-                          const isInactive = lastTickMs <= 0.01;
-                          const title = `${layer.name} | last tick: ${lastTickMs.toFixed(2)}ms`;
-                          return html`<div
-                            class="layer-row ${isInactive ? "inactive" : ""}"
-                            style="--pct: ${width}%;"
-                            title=${title}
-                          >
-                            <span class="layer-name" title=${layer.name}
-                              >${layer.name}</span
+                            const width = Math.min(
+                              100,
+                              (layer.avg / maxTickLayerAvg) * 100 || 0,
+                            );
+                            const lastTickMs =
+                              this.tickLayerLastDurations[layer.name] ?? 0;
+                            const isInactive = lastTickMs <= 0.01;
+                            const title = `${layer.name} | last tick: ${lastTickMs.toFixed(2)}ms`;
+                            return html`<div
+                              class="layer-row ${isInactive ? "inactive" : ""}"
+                              style="--pct: ${width}%;"
+                              title=${title}
                             >
-                            <span class="layer-metrics">
-                              ${layer.avg.toFixed(2)} /
-                              ${layer.max.toFixed(2)}ms
-                            </span>
-                          </div>`;
-                        })}`
+                              <span class="layer-name" title=${layer.name}
+                                >${layer.name}</span
+                              >
+                              <span class="layer-metrics">
+                                ${layer.avg.toFixed(2)} /
+                                ${layer.max.toFixed(2)}ms
+                              </span>
+                            </div>`;
+                          })}`
                       : html``
                   }
                 </div>`

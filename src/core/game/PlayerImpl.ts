@@ -225,7 +225,7 @@ export class PlayerImpl implements Player {
     return diffPlayerUpdate(prev, full);
   }
 
-  private toFullUpdate(): PlayerUpdate {
+  public toFullUpdate(): PlayerUpdate {
     // Empty collections reuse shared singletons (EMPTY_*) so
     // diffPlayerUpdate's reference fast paths hit and nothing is allocated.
     // This runs for every player every tick; most collections are empty for

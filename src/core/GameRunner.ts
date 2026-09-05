@@ -147,6 +147,10 @@ export class GameRunner {
       ...this.execManager.createExecs(this.turns[this.currTurn]),
     );
     this.currTurn++;
+    if (this.currTurn >= 1024) {
+      this.turns = this.turns.slice(this.currTurn);
+      this.currTurn = 0;
+    }
 
     const wasInSpawnPhase = this.game.inSpawnPhase();
     let updates: GameUpdates;

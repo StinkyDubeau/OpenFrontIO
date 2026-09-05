@@ -9,6 +9,7 @@ const getPlayTokenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/client/Auth", () => ({
   getPlayToken: getPlayTokenMock,
+  setGuestPlayToken: vi.fn(),
 }));
 
 import { persistentWorldApi } from "../../src/client/PersistentWorldApi";
@@ -118,17 +119,19 @@ describe("persistent-world game identity binding", () => {
       steps.push("play-token");
       return PLAY_TOKEN;
     });
-    vi.spyOn(persistentWorldApi, "bindGameIdentity").mockImplementation(
-      async () => {
-        steps.push("bind");
-      },
-    );
+    vi.spyOn(
+      persistentWorldApi,
+      "bindGameIdentityWithToken",
+    ).mockImplementation(async () => {
+      steps.push("bind");
+      return null;
+    });
     const page = pageInternals();
 
     await page.resumeIdentity();
 
     expect(steps).toEqual(["resume", "play-token", "bind"]);
-    expect(persistentWorldApi.bindGameIdentity).toHaveBeenCalledWith(
+    expect(persistentWorldApi.bindGameIdentityWithToken).toHaveBeenCalledWith(
       PLAY_TOKEN,
     );
     expect(page.session).toEqual(controllerSession());
@@ -146,11 +149,13 @@ describe("persistent-world game identity binding", () => {
       steps.push("play-token");
       return PLAY_TOKEN;
     });
-    vi.spyOn(persistentWorldApi, "bindGameIdentity").mockImplementation(
-      async () => {
-        steps.push("bind");
-      },
-    );
+    vi.spyOn(
+      persistentWorldApi,
+      "bindGameIdentityWithToken",
+    ).mockImplementation(async () => {
+      steps.push("bind");
+      return null;
+    });
     vi.spyOn(persistentWorldApi, "rsvp").mockImplementation(async () => {
       steps.push("rsvp");
       return lobbySnapshot();
@@ -163,7 +168,7 @@ describe("persistent-world game identity binding", () => {
     await page.createIdentity();
 
     expect(steps).toEqual(["create-session", "play-token", "bind", "rsvp"]);
-    expect(persistentWorldApi.bindGameIdentity).toHaveBeenCalledWith(
+    expect(persistentWorldApi.bindGameIdentityWithToken).toHaveBeenCalledWith(
       PLAY_TOKEN,
     );
   });

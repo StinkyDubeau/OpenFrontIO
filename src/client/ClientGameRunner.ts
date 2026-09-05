@@ -51,6 +51,7 @@ import {
   ToggleRenderDebugGuiEvent,
 } from "./InputHandler";
 import { endGame, startGame, startTime } from "./LocalPersistantStats";
+import { RemoteWorkerClient } from "./RemoteWorkerClient";
 import { terrainMapFileLoader } from "./TerrainMapFileLoader";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
@@ -548,7 +549,11 @@ async function createClientGame(
   // Kick off the font-atlas fetch so it overlaps with worker init; the
   // render passes need it parsed before createWebGLView runs.
   const atlasDataLoad = preloadAtlasData();
-  const worker = new WorkerClient(lobbyConfig.gameStartInfo, clientID);
+  const worker =
+    lobbyConfig.gameStartInfo.simulationMode === "server-v1" &&
+    !lobbyConfig.gameRecord
+      ? new RemoteWorkerClient(lobbyConfig.gameStartInfo, clientID, transport)
+      : new WorkerClient(lobbyConfig.gameStartInfo, clientID);
   await worker.initialize();
   await atlasDataLoad;
   const gameView = new GameView(
@@ -862,6 +867,7 @@ export class ClientGameRunner {
     this.renderer.initialize();
     this.input.initialize();
     this.worker.start((gu: GameUpdateViewData | ErrorUpdate) => {
+      this.lastMessageTime = Date.now();
       if (this.lobby.gameStartInfo === undefined) {
         throw new Error("missing gameStartInfo");
       }
@@ -899,6 +905,7 @@ export class ClientGameRunner {
           viewUpdateDuration,
           gpuUploadDuration,
           mainThreadDuration,
+          gu.serverTickExecutionDuration,
         ),
       );
 
@@ -920,6 +927,7 @@ export class ClientGameRunner {
       this.lastMessageTime = Date.now();
       if (message.type === "start") {
         console.log("starting game! in client game runner");
+        if (this.worker instanceof RemoteWorkerClient) this.worker.subscribe();
 
         if (this.gameView.config().isRandomSpawn()) {
           const goToPlayer = () => {
@@ -1417,7 +1425,10 @@ export class ClientGameRunner {
     }
     const now = Date.now();
     const timeSinceLastMessage = now - this.lastMessageTime;
-    if (timeSinceLastMessage > 5000) {
+    if (
+      timeSinceLastMessage >
+      (this.worker instanceof RemoteWorkerClient ? 15000 : 5000)
+    ) {
       console.log(
         `No message from server for ${timeSinceLastMessage} ms, reconnecting`,
       );

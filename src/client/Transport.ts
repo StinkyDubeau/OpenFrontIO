@@ -11,6 +11,11 @@ import {
 } from "../core/game/Game";
 import { TileRef } from "../core/game/GameMap";
 import {
+  decodeViewPacket,
+  type ClientViewMessage,
+  type ViewPacket,
+} from "../core/network/ViewProtocol";
+import {
   AllPlayersStats,
   ClientHashMessage,
   ClientIntentMessage,
@@ -194,6 +199,16 @@ export class SendToggleGameStartTimer implements GameEvent {
 }
 
 export class Transport {
+  private viewReceiver?: (sequence: number, packet: ViewPacket) => void;
+  setViewReceiver(
+    receiver: ((sequence: number, packet: ViewPacket) => void) | undefined,
+  ): void {
+    this.viewReceiver = receiver;
+  }
+  sendViewMessage(message: ClientViewMessage): void {
+    if (this.socket?.readyState === WebSocket.OPEN)
+      this.socket.send(JSON.stringify(message));
+  }
   private socket: WebSocket | null = null;
 
   private localServer: LocalServer;
@@ -353,6 +368,7 @@ export class Transport {
     // the desktop app://openfront origin), not window.location.host.
     const workerPath = ClientEnv.workerPath(this.lobbyConfig.gameID);
     this.socket = new WebSocket(`${ClientEnv.serverWsBase()}/${workerPath}`);
+    this.socket.binaryType = "arraybuffer";
     this.onconnect = onconnect;
     this.onmessage = onmessage;
     this.socket.onopen = () => {
@@ -374,6 +390,11 @@ export class Transport {
     };
     this.socket.onmessage = (event: MessageEvent) => {
       try {
+        if (event.data instanceof ArrayBuffer) {
+          const sequence = new DataView(event.data).getUint32(0);
+          this.viewReceiver?.(sequence, decodeViewPacket(event.data.slice(4)));
+          return;
+        }
         const parsed = JSON.parse(event.data);
         const result = ServerMessageSchema.safeParse(parsed);
         if (!result.success) {

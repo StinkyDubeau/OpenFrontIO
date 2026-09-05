@@ -8,6 +8,10 @@ import { isAdminRole } from "../core/ApiSchemas";
 import { GameEnv } from "../core/configuration/Config";
 import { GameMode, GameType, RankedType } from "../core/game/Game";
 import {
+  ClientViewMessageSchema,
+  encodeViewPacket,
+} from "../core/network/ViewProtocol";
+import {
   ClientID,
   ClientMessageSchema,
   ClientSendLiveStatsMessage,
@@ -44,6 +48,8 @@ import type {
   ManagedReservedSeat,
 } from "./IPCBridgeSchema";
 import { ServerEnv } from "./ServerEnv";
+import { SimulationHost, type TickResult } from "./simulation/SimulationHost";
+import { ViewConnection } from "./simulation/ViewConnection";
 import {
   noopMatchTelemetryEmitter,
   type MatchTelemetryEmitter,
@@ -106,6 +112,131 @@ function hostCheatsEnabled(hc: GameConfig["hostCheats"]): boolean {
 }
 
 export class GameServer {
+  private simulation: SimulationHost | undefined;
+  private simulationBusy = false;
+  private simulationDeadline = 0;
+  private simulationTimer: ReturnType<typeof setTimeout> | undefined;
+  private viewConnections = new Map<WebSocket, ViewConnection>();
+  private viewGeneration = new Map<WebSocket, number>();
+  private viewHistory: { tick: number; bytes: Uint8Array }[] = [];
+  private viewHistoryBytes = 0;
+
+  private get usesServerSimulation(): boolean {
+    // Per-viewer anonymized identities need their own projection before this
+    // optional mode can support anonymized matches.
+    return (
+      !!this.managedOptions &&
+      this.gameConfig.serverSimulation === true &&
+      !this.gameConfig.anonymizeNames
+    );
+  }
+
+  private sendViewError(
+    ws: WebSocket,
+    error: string,
+    id?: string,
+    reload = false,
+  ): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    ws.send(
+      Buffer.concat([
+        Buffer.alloc(4),
+        encodeViewPacket({ kind: "error", error, id, reload }),
+      ]),
+    );
+  }
+
+  private async subscribeView(
+    ws: WebSocket,
+    afterTick?: number,
+  ): Promise<void> {
+    if (!this.simulation) return;
+    // A reconnect gets a new socket; duplicate requests must not enqueue
+    // unbounded expensive snapshots for the same authenticated connection.
+    if (this.viewGeneration.has(ws)) return;
+    this.viewConnections.get(ws)?.stop();
+    this.viewConnections.delete(ws);
+    const generation = (this.viewGeneration.get(ws) ?? 0) + 1;
+    this.viewGeneration.set(ws, generation);
+    const connection = new ViewConnection(ws, () => {
+      this.viewConnections.delete(ws);
+      ws.close(1013, "View delivery timed out");
+    });
+    try {
+      let baseTick: number;
+      if (afterTick !== undefined) {
+        baseTick = afterTick;
+        if (
+          baseTick > this.turns.length ||
+          (baseTick < this.turns.length &&
+            (!this.viewHistory.length ||
+              baseTick < this.viewHistory[0].tick - 1))
+        ) {
+          this.sendViewError(ws, "Loading the current map", undefined, true);
+          return;
+        }
+      } else {
+        const snapshot = await this.simulation.snapshot();
+        baseTick = snapshot.tick;
+        if (
+          this.viewGeneration.get(ws) !== generation ||
+          ws.readyState !== WebSocket.OPEN
+        )
+          return;
+        for (const bytes of snapshot.packets)
+          connection.enqueue(bytes, baseTick);
+      }
+      if (
+        this.viewGeneration.get(ws) !== generation ||
+        ws.readyState !== WebSocket.OPEN
+      )
+        return;
+      for (const frame of this.viewHistory)
+        if (frame.tick > baseTick) connection.enqueue(frame.bytes, frame.tick);
+      this.viewConnections.set(ws, connection);
+    } catch (error) {
+      connection.stop();
+      this.sendViewError(ws, String(error));
+    }
+  }
+
+  private publishView(result: TickResult): void {
+    this.viewHistory.push({ tick: result.tick, bytes: result.bytes });
+    this.viewHistoryBytes += result.bytes.byteLength;
+    while (
+      this.viewHistory.length > 256 ||
+      this.viewHistoryBytes > 16 * 1024 * 1024
+    ) {
+      this.viewHistoryBytes -= this.viewHistory.shift()!.bytes.byteLength;
+    }
+    for (const connection of this.viewConnections.values())
+      connection.enqueue(result.bytes, result.tick);
+    if (result.stats) {
+      this.latestLiveStats = result.stats;
+      this.managedHooks?.onLiveStatsCommitted?.(result.stats);
+    }
+    if (result.win && this.winner === null) {
+      this.winner = { ...result.win, type: "winner" };
+      this.archiveGame();
+    }
+    if (result.tick % 100 === 0)
+      this.log.info("authoritative simulation", {
+        tick: result.tick,
+        simulationMs: result.duration,
+        frameBytes: result.bytes.byteLength,
+        views: this.viewConnections.size,
+        clockDebtMs: Math.max(0, performance.now() - this.simulationDeadline),
+      });
+  }
+
+  private scheduleSimulation(): void {
+    if (this._hasEnded) return;
+    clearTimeout(this.simulationTimer);
+    this.simulationTimer = setTimeout(
+      () => this.endTurn(),
+      Math.max(0, this.simulationDeadline - performance.now()),
+    );
+  }
   private sentDesyncMessageClients = new Set<ClientID>();
 
   private intentRateLimiter = new ClientMsgRateLimiter();
@@ -1013,6 +1144,41 @@ export class GameServer {
           this.kickClient(client.clientID, KICK_REASON_INVALID_MESSAGE);
           return;
         }
+        const viewMessage = ClientViewMessageSchema.safeParse(json);
+        if (viewMessage.success && this.simulation) {
+          const message = viewMessage.data;
+          if (message.type === "view_ack") {
+            this.viewConnections.get(client.ws)?.acknowledge(message.sequence);
+          } else if (message.type === "view_subscribe") {
+            await this.subscribeView(client.ws, message.afterTick);
+          } else {
+            // Bound expensive queries separately from gameplay intent budgets.
+            const now = Date.now();
+            const budget = this.viewQueryBudgets.get(client.clientID);
+            if (budget && now - budget.at < 1000 && budget.count >= 30) {
+              this.sendViewError(
+                client.ws,
+                "Too many action queries",
+                message.query.id,
+              );
+              return;
+            }
+            this.viewQueryBudgets.set(
+              client.clientID,
+              budget && now - budget.at < 1000
+                ? { at: budget.at, count: budget.count + 1 }
+                : { at: now, count: 1 },
+            );
+            try {
+              const result = await this.simulation.query(message.query);
+              if (client.ws.readyState === WebSocket.OPEN)
+                client.ws.send(Buffer.concat([Buffer.alloc(4), result.bytes]));
+            } catch (error) {
+              this.sendViewError(client.ws, String(error), message.query.id);
+            }
+          }
+          return;
+        }
         const parsed = ClientMessageSchema.safeParse(json);
         if (!parsed.success) {
           const reasonDetail = z.prettifyError(parsed.error);
@@ -1119,17 +1285,24 @@ export class GameServer {
           case "ping": {
             this.lastPingUpdate = Date.now();
             client.lastPing = Date.now();
+            // Keep the transport alive during a snapshot or server recovery;
+            // this is connection health, not evidence the simulation advanced.
+            if (this.simulation && client.ws.readyState === WebSocket.OPEN)
+              client.ws.send(JSON.stringify({ type: "ping" }));
             break;
           }
           case "hash": {
+            if (this.simulation) break;
             client.hashes.set(clientMsg.turnNumber, clientMsg.hash);
             break;
           }
           case "winner": {
+            if (this.simulation) break;
             this.handleWinner(client, clientMsg);
             break;
           }
           case "live_stats": {
+            if (this.simulation) break;
             this.handleLiveStats(client, clientMsg);
             break;
           }
@@ -1150,6 +1323,9 @@ export class GameServer {
       }
     });
     client.ws.on("close", () => {
+      this.viewConnections.get(client.ws)?.stop();
+      this.viewConnections.delete(client.ws);
+      this.viewGeneration.delete(client.ws);
       this.log.info("client disconnected", {
         clientID: client.clientID,
         persistentID: client.persistentID,
@@ -1473,10 +1649,33 @@ export class GameServer {
       );
     }
 
-    this.endTurnIntervalID = setInterval(
-      () => this.endTurn(),
-      ServerEnv.turnIntervalMs(),
-    );
+    if (this.usesServerSimulation) {
+      this.gameStartInfo.simulationMode = "server-v1";
+      this.wireGameStartInfo.simulationMode = "server-v1";
+      this.simulation = new SimulationHost(this.gameStartInfo, this.turns);
+      void this.simulation.ready
+        .then(() => {
+          this.simulationDeadline =
+            performance.now() + ServerEnv.turnIntervalMs();
+          this.scheduleSimulation();
+        })
+        .catch((error) => {
+          this.log.error("Simulation startup failed", {
+            error: String(error),
+            gameID: this.id,
+          });
+          for (const c of this.activeClients)
+            this.sendViewError(
+              c.ws,
+              "The server could not prepare this map. Please try another match.",
+            );
+        });
+    } else {
+      this.endTurnIntervalID = setInterval(
+        () => this.endTurn(),
+        ServerEnv.turnIntervalMs(),
+      );
+    }
     this.activeClients.forEach((c) => {
       this.log.info("sending start message", {
         clientID: c.clientID,
@@ -1572,7 +1771,7 @@ export class GameServer {
       ws.send(
         JSON.stringify({
           type: "start",
-          turns: this.turns.slice(lastTurn),
+          turns: this.simulation ? [] : this.turns.slice(lastTurn),
           gameStartInfo: this.startInfoFor(
             client.clientID,
             isAdminRole(client.role),
@@ -1592,15 +1791,54 @@ export class GameServer {
   private endTurn() {
     // Skip turn execution if game is paused
     if (this.isPaused) {
+      if (this.simulation) {
+        this.simulationDeadline =
+          performance.now() + ServerEnv.turnIntervalMs();
+        this.scheduleSimulation();
+      }
       return;
     }
+    if (this.simulationBusy || this._hasEnded) return;
 
     const pastTurn: Turn = {
       turnNumber: this.turns.length,
       intents: this.intents,
     };
-    this.turns.push(pastTurn);
     this.intents = [];
+    if (this.simulation) {
+      this.simulationBusy = true;
+      void this.simulation
+        .turn(pastTurn)
+        .then((result) => {
+          this.commitTurn(pastTurn);
+          this.publishView(result);
+          this.simulationDeadline += ServerEnv.turnIntervalMs();
+          this.simulationBusy = false;
+          this.scheduleSimulation();
+        })
+        .catch((error) => {
+          this.simulationBusy = false;
+          this.log.error("Authoritative simulation stopped", {
+            error: String(error),
+          });
+          for (const c of this.activeClients)
+            this.sendViewError(
+              c.ws,
+              "The simulation stopped. Your match needs server recovery.",
+            );
+        });
+      return;
+    }
+    this.commitTurn(pastTurn);
+  }
+
+  private readonly viewQueryBudgets = new Map<
+    ClientID,
+    { at: number; count: number }
+  >();
+
+  private commitTurn(pastTurn: Turn): void {
+    this.turns.push(pastTurn);
     const counts = this.telemetryTickCounts.get(pastTurn.turnNumber) ?? {
       observed: 0,
       enqueued: 0,
@@ -1617,9 +1855,11 @@ export class GameServer {
       this.turns.length,
     );
 
-    this.handleSynchronization();
+    if (!this.simulation) this.handleSynchronization();
     this.checkDisconnectedStatus();
     this.queueManagedTurn(pastTurn);
+
+    if (this.simulation) return;
 
     const msg = JSON.stringify({
       type: "turn",
@@ -1633,6 +1873,11 @@ export class GameServer {
   }
 
   async end() {
+    clearTimeout(this.simulationTimer);
+    this.simulation?.stop();
+    for (const connection of this.viewConnections.values()) connection.stop();
+    this.viewConnections.clear();
+    this.viewHistory = [];
     this._hasEnded = true;
     // Close all WebSocket connections
     if (this.endTurnIntervalID) {

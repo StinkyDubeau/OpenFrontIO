@@ -64,6 +64,8 @@ export interface GameUpdateViewData {
    */
   playerNameViewData?: Record<string, NameViewData>;
   tickExecutionDuration?: number;
+  /** Authoritative server CPU work; never charged to browser simulation. */
+  serverTickExecutionDuration?: number;
   pendingTurns?: number;
   /**
    * Packed tile refs that were inside a nuke blast radius this tick.

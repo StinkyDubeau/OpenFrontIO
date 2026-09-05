@@ -314,6 +314,8 @@ export const DoomsdayClockConfigSchema = z.object({
 });
 
 export const GameConfigSchema = z.object({
+  // Transport/runtime selection only; executions continue using the same rules.
+  serverSimulation: z.boolean().optional(),
   gameMap: z.enum(GameMapType),
   difficulty: z.enum(Difficulty),
   donateGold: z.boolean(), // Configures donations to humans only
@@ -746,6 +748,7 @@ export const TribeSchema = z
 export type Tribe = z.infer<typeof TribeSchema>;
 
 export const GameStartInfoSchema = z.object({
+  simulationMode: z.literal("server-v1").optional(),
   gameID: ID,
   lobbyCreatedAt: z.number(),
   visibleAt: z.number().optional(),

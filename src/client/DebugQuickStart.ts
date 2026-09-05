@@ -13,7 +13,7 @@ import { runtimeDebugEnabled } from "./RuntimeDebug";
 
 // Long enough for a second device to hit Quick join, short enough to stay a
 // one-action developer loop.
-const QUICK_START_DELAY_MS = 12_000;
+const QUICK_START_DELAY_MS = 60_000;
 const RUNTIME_WAIT_MS = 120_000;
 
 export type DebugQuickStartStatus = (message: string) => void;
@@ -22,7 +22,9 @@ function suggestedName(): string {
   const input = document.querySelector("username-input") as {
     getUsername?: () => string;
   } | null;
-  return input?.getUsername?.().trim() || "Playtester";
+  const name = input?.getUsername?.().trim();
+  if (!name) return "Playtester";
+  return name;
 }
 
 async function ensureSession(): Promise<PersistentWorldControllerSession> {
@@ -84,8 +86,8 @@ async function waitForRuntime(
 function activeFirst(cards: PersistentWorldCard[]): PersistentWorldCard[] {
   return [...cards].sort((a, b) => {
     const score = (card: PersistentWorldCard) => {
-      if (card.isViewerMember && card.world.phase === "active") return 0;
-      if (card.world.phase === "scheduled") return 1;
+      if (card.world.phase === "scheduled") return 0;
+      if (card.isViewerMember && card.world.phase === "active") return 1;
       return 2;
     };
     return score(a) - score(b) || b.world.createdAt - a.world.createdAt;
@@ -100,14 +102,14 @@ export async function quickStartDebugGame(
   await ensureSession();
   status("Creating a test world…");
   const created = await persistentWorldApi.createWorld({
-    name: `Expanded Earth test ${new Date().toLocaleTimeString([], {
+    name: `Server playtest ${new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     })}`,
     targetDuration: "1h",
     access: "public",
     mode: "ffa",
-    maxHumans: 2,
+    maxHumans: 8,
     startsAt: Date.now() + QUICK_START_DELAY_MS,
   });
   const ready = await waitForRuntime(created.snapshot.world.id, status);
@@ -130,7 +132,7 @@ export async function quickJoinDebugGame(
   const candidates = activeFirst([...mine, ...publicWorlds]).filter((card) => {
     if (
       seen.has(card.world.id) ||
-      !card.world.name.startsWith("Expanded Earth test ") ||
+      !card.world.name.startsWith("Server playtest ") ||
       (card.world.phase !== "active" && card.world.phase !== "scheduled")
     ) {
       return false;

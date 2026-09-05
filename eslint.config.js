@@ -73,6 +73,7 @@ export default [
       "scripts/idle-public-gateway.mjs",
       "scripts/idle-smoke.mjs",
       "scripts/idle-windows-launcher.mjs",
+      "src/server/simulation/Simulation.worker.mjs",
     ],
     languageOptions: { parserOptions: { projectService: false } },
     rules: { "@typescript-eslint/prefer-nullish-coalescing": "off" },
