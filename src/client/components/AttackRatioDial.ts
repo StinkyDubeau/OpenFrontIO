@@ -328,16 +328,8 @@ export class AttackRatioDial extends LitElement {
             >
           </span>
         </span>
-        <span
-          class="atlas-attack-dial__gesture-hint atlas-attack-dial__gesture-hint--touch"
-          aria-hidden="true"
-        >
-          <span>← ↓</span> drag <span>↑ →</span>
-        </span>
-        <span
-          class="atlas-attack-dial__gesture-hint atlas-attack-dial__gesture-hint--pointer"
-          aria-hidden="true"
-          >scroll · drag</span
+        <span class="atlas-attack-dial__ratio" aria-hidden="true" translate="no"
+          >${value}%</span
         >
       </div>
     `;

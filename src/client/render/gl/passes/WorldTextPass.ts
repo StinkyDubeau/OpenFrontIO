@@ -45,7 +45,7 @@ const GHOST_COST_OUTLINE_WIDTH = 1.4;
  * zoom each frame so the on-screen label size stays constant regardless of
  * how far the camera is zoomed.
  */
-const ATTACK_LABEL_SCREEN_SCALE = 17.0;
+const ATTACK_LABEL_SCREEN_SCALE = 19.0;
 const ATTACK_LABEL_OUTLINE_WIDTH = 1.2;
 
 // ---------------------------------------------------------------------------
@@ -571,9 +571,12 @@ export class WorldTextPass {
   // Draw
   // -------------------------------------------------------------------------
 
-  draw(cameraMatrix: Float32Array, zoom: number): void {
+  draw(cameraMatrix: Float32Array, zoom: number, lodZoom = zoom): void {
     if (!this.atlasReady || this.instanceCount === 0) return;
-    if (zoom < this.settings.bonusPopup.cullZoom) return;
+    // Expanded maps have a smaller raw camera zoom at the same geographic
+    // detail. Use normalized LOD only for visibility; retain raw zoom for the
+    // screen-space text size so front troop counts remain crisp and stable.
+    if (lodZoom < this.settings.bonusPopup.cullZoom) return;
 
     const gl = this.gl;
     gl.useProgram(this.program);

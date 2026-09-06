@@ -151,6 +151,7 @@ export class UnitView {
   update(data: UnitUpdate) {
     this.lastPos.push(data.pos);
     this._wasUpdated = true;
+    this.gameView.trackUpdatedUnit(this);
     const wasUnderConstruction = this.state.underConstruction;
     applyUpdateInPlace(this.state, data);
     this._warshipState = data.warshipState;
@@ -168,6 +169,7 @@ export class UnitView {
     const prev = this.state.pos;
     this.lastPos.push(pos);
     this._wasUpdated = true;
+    this.gameView.trackUpdatedUnit(this);
     this.state.lastPos = prev;
     this.state.pos = pos;
   }

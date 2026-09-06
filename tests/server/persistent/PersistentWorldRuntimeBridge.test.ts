@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Config } from "../../../src/core/configuration/Config";
 import {
   Difficulty,
   GameMapSize,
@@ -53,6 +54,7 @@ describe("persistent-world runtime bridge", () => {
   });
 
   afterEach(() => service.close());
+  afterEach(() => vi.useRealTimers());
   afterEach(() => vi.unstubAllEnvs());
 
   function setup() {
@@ -110,6 +112,33 @@ describe("persistent-world runtime bridge", () => {
     );
   });
 
+  it("selects the full-resolution ultra board for new scale-4 runtimes", async () => {
+    const { world } = setup();
+    const dispatch = vi.fn(
+      async (
+        command: MasterCreateManagedGame,
+      ): Promise<WorkerManagedGameReady> => ({
+        type: "managedGameReady",
+        requestId: command.requestId,
+        gameID: command.gameID,
+        workerId: 0,
+        outcome: "created",
+      }),
+    );
+    const playlist = {
+      gameConfig: async () => UPSTREAM_CONFIG,
+    } as unknown as MapPlaylist;
+    vi.stubEnv("IDLE_WORLD_MAP_SCALE", "4");
+    await new PersistentWorldRuntimeBridge(
+      repository,
+      playlist,
+      dispatch,
+    ).ensure(world);
+    expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
+      GameMapType.ExpandedGiantWorldUltra,
+    );
+  });
+
   it("freezes bound RSVP seats and exposes only an acknowledged runtime", async () => {
     const { host, gameplayHash, world } = setup();
     const gameConfig = vi.fn(async () => UPSTREAM_CONFIG);
@@ -148,11 +177,16 @@ describe("persistent-world runtime bridge", () => {
       gameMode: GameMode.FFA,
       gameMap: GameMapType.ExpandedGiantWorld,
       bots: 2000,
-      randomSpawn: true,
-      publicGameModifiers: expect.objectContaining({ isRandomSpawn: true }),
+      randomSpawn: false,
+      publicGameModifiers: expect.objectContaining({ isRandomSpawn: false }),
       liveStatsEnabled: true,
       disableForcedTimeLimit: true,
     });
+    const spawnConfig = new Config(runtime.gameConfig, null, false);
+    expect(spawnConfig.isRandomSpawn()).toBe(false);
+    expect(spawnConfig.numSpawnPhaseTurns() * spawnConfig.msPerTick()).toBe(
+      30_000,
+    );
     expect(commands).toHaveLength(1);
     expect(commands[0].initialTurns).toEqual([]);
     expect(commands[0].reservedSeats).toEqual([
@@ -278,6 +312,43 @@ describe("persistent-world runtime bridge", () => {
       gameConfig: runtime.gameConfig,
       initialTurns: turnMessage.turns,
     });
+  });
+
+  it("backs off a failed recovery instead of retrying every scheduler tick", async () => {
+    const { world } = setup();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    let shouldFail = true;
+    const dispatch = vi.fn(
+      async (
+        command: MasterCreateManagedGame,
+      ): Promise<WorkerManagedGameReady> => {
+        if (shouldFail) throw new Error("replay failed");
+        return {
+          type: "managedGameReady",
+          requestId: command.requestId,
+          gameID: command.gameID,
+          workerId: 0,
+          outcome: "created",
+        };
+      },
+    );
+    const bridge = new PersistentWorldRuntimeBridge(
+      repository,
+      { gameConfig: async () => UPSTREAM_CONFIG } as unknown as MapPlaylist,
+      dispatch,
+    );
+
+    await expect(bridge.ensure(world)).rejects.toThrow("replay failed");
+    await bridge.ensure(world);
+    await bridge.reconcile();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    shouldFail = false;
+    await vi.advanceTimersByTimeAsync(30_000);
+    await bridge.reconcile();
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(bridge.isRuntimeReady(world.id)).toBe(true);
   });
 
   it("waits rather than creating an unusable game when an RSVP is unbound", async () => {

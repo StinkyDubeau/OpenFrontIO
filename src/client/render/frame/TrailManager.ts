@@ -21,6 +21,7 @@
 
 import type { UnitState } from "../types";
 import { SMOOTHED_NUKE_TYPES } from "../types";
+import { TrailClaims } from "./TrailClaims";
 
 // Bit 12 of the trail texel flags a nuke trail (vs a boat trail); bits 0-11 are
 // the owner smallID. Must match the mask/shift in trail.frag.glsl (owner & 0xFFF,
@@ -36,9 +37,10 @@ interface UnitTrail {
 
 export class TrailManager {
   private readonly trailState: Uint16Array;
+  private readonly sparseTrailState: Map<number, number> | null;
   // Number of live trails claiming each tile — a texel is cleared only when
   // its count drops to zero.
-  private readonly trailCounts: Uint16Array;
+  private readonly trailCounts = new TrailClaims();
   private readonly unitTrails = new Map<number, UnitTrail>();
   private readonly mapW: number;
 
@@ -47,14 +49,21 @@ export class TrailManager {
   /** Exact changed texels for sparse GPU scatter uploads. */
   private readonly _dirtyTiles: number[] = [];
 
-  constructor(mapW: number, mapH: number) {
+  constructor(mapW: number, mapH: number, sparse = false) {
     this.mapW = mapW;
-    this.trailState = new Uint16Array(mapW * mapH);
-    this.trailCounts = new Uint16Array(mapW * mapH);
+    this.trailState = sparse
+      ? new Uint16Array(0)
+      : new Uint16Array(mapW * mapH);
+    this.sparseTrailState = sparse ? new Map() : null;
   }
 
   getTrailState(): Uint16Array {
     return this.trailState;
+  }
+
+  /** Live sparse state for page-backed worlds; null for ordinary maps. */
+  getSparseState(): ReadonlyMap<number, number> | null {
+    return this.sparseTrailState;
   }
 
   get dirtyRowMin(): number {
@@ -77,7 +86,8 @@ export class TrailManager {
   reset(): void {
     this.unitTrails.clear();
     this.trailState.fill(0);
-    this.trailCounts.fill(0);
+    this.sparseTrailState?.clear();
+    this.trailCounts.clear();
     this._dirtyRowMin = Infinity;
     this._dirtyRowMax = -1;
     this._dirtyTiles.length = 0;
@@ -122,7 +132,7 @@ export class TrailManager {
       // Release each tile: clear the texel only when the last claimant dies.
       // Tiles still claimed by a surviving trail keep their last-stamped value.
       for (const ref of trail.tiles) {
-        if (--this.trailCounts[ref] === 0) this.stamp(ref, 0);
+        if (this.trailCounts.release(ref)) this.stamp(ref, 0);
       }
     }
   }
@@ -131,14 +141,20 @@ export class TrailManager {
   private claim(ref: number, trail: UnitTrail): void {
     if (!trail.tiles.has(ref)) {
       trail.tiles.add(ref);
-      this.trailCounts[ref]++;
+      this.trailCounts.claim(ref);
     }
     this.stamp(ref, trail.value);
   }
 
   private stamp(ref: number, value: number): void {
-    if (this.trailState[ref] === value) return;
-    this.trailState[ref] = value;
+    const existing = this.sparseTrailState?.get(ref) ?? this.trailState[ref];
+    if ((existing ?? 0) === value) return;
+    if (this.sparseTrailState) {
+      if (value === 0) this.sparseTrailState.delete(ref);
+      else this.sparseTrailState.set(ref, value);
+    } else {
+      this.trailState[ref] = value;
+    }
     this._dirtyTiles.push(ref);
     const row = (ref / this.mapW) | 0;
     if (row < this._dirtyRowMin) this._dirtyRowMin = row;

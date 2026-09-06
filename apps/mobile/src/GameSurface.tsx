@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   AppState,
   BackHandler,
@@ -22,8 +22,10 @@ import {
   NATIVE_BRIDGE_BOOTSTRAP,
   safeAreaScript,
 } from "./config/game";
-
-type LoadState = "connecting" | "live" | "error";
+import {
+  sameOriginRecoveryUrl,
+  surfacePhaseAfter,
+} from "./GameSurfaceRecovery";
 
 type HapticPattern =
   | "selection"
@@ -75,7 +77,12 @@ function handleBridgeMessage(event: WebViewMessageEvent): void {
       pattern?: HapticPattern;
     };
     if (message.type === "idlefront:haptic" && message.pattern) {
-      void playHaptic(message.pattern);
+      void playHaptic(message.pattern).catch(() => {});
+    } else if (
+      message.type === "idlefront:webgl-lost" ||
+      message.type === "idlefront:webgl-restored"
+    ) {
+      console.warn(`[IdleFront] ${message.type}`);
     }
   } catch {
     // Ignore messages that do not belong to the small native bridge protocol.
@@ -84,10 +91,11 @@ function handleBridgeMessage(event: WebViewMessageEvent): void {
 
 export function GameSurface() {
   const webView = useRef<WebView>(null);
-  const loadFailed = useRef(false);
+  const currentUrl = useRef(GAME_URL);
   const insets = useSafeAreaInsets();
   const [canGoBack, setCanGoBack] = useState(false);
-  const [loadState, setLoadState] = useState<LoadState>("connecting");
+  const [loadState, dispatchLoad] = useReducer(surfacePhaseAfter, "connecting");
+  const [sourceUrl, setSourceUrl] = useState(GAME_URL);
   const [reloadKey, setReloadKey] = useState(0);
   const nativeBootstrap = useMemo(
     () =>
@@ -100,9 +108,19 @@ export function GameSurface() {
     [insets.bottom, insets.left, insets.right, insets.top],
   );
 
-  const hardReload = () => {
-    setLoadState("connecting");
+  const hardReload = (url = currentUrl.current) => {
+    setSourceUrl(sameOriginRecoveryUrl(url, GAME_URL));
+    dispatchLoad("retry");
     setReloadKey((current) => current + 1);
+  };
+
+  const rendererStopped = () => {
+    // Do not auto-reload a memory-heavy match in a crash loop. Unmount the
+    // dead view and keep recovery in native UI, outside the terminated process.
+    console.warn(
+      "[IdleFront] Web content process terminated; manual recovery available",
+    );
+    dispatchLoad("renderer-stopped");
   };
 
   useEffect(() => {
@@ -135,57 +153,59 @@ export function GameSurface() {
 
   const updateNavigation = (navigation: WebViewNavigation) => {
     setCanGoBack(navigation.canGoBack);
+    currentUrl.current = sameOriginRecoveryUrl(navigation.url, GAME_URL);
   };
 
   return (
     <View style={styles.root}>
-      <WebView
-        key={reloadKey}
-        ref={webView}
-        allowsBackForwardNavigationGestures
-        allowsInlineMediaPlayback
-        applicationNameForUserAgent="IdleFrontNative/0.1.0"
-        bounces={false}
-        cacheEnabled
-        contentInsetAdjustmentBehavior="never"
-        domStorageEnabled
-        injectedJavaScriptBeforeContentLoaded={nativeBootstrap}
-        javaScriptCanOpenWindowsAutomatically={false}
-        javaScriptEnabled
-        mediaPlaybackRequiresUserAction={false}
-        onError={() => {
-          loadFailed.current = true;
-          setLoadState("error");
-        }}
-        onHttpError={({ nativeEvent }) => {
-          if (nativeEvent.statusCode >= 400) {
-            loadFailed.current = true;
-            setLoadState("error");
-          }
-        }}
-        onLoadEnd={() => {
-          if (!loadFailed.current) setLoadState("live");
-        }}
-        onLoadStart={() => {
-          loadFailed.current = false;
-          setLoadState("connecting");
-        }}
-        onMessage={handleBridgeMessage}
-        onNavigationStateChange={updateNavigation}
-        originWhitelist={["http://*", "https://*"]}
-        overScrollMode="never"
-        pullToRefreshEnabled={false}
-        scalesPageToFit={false}
-        setBuiltInZoomControls={false}
-        setDisplayZoomControls={false}
-        setSupportMultipleWindows={false}
-        sharedCookiesEnabled
-        source={{ uri: GAME_URL }}
-        startInLoadingState={false}
-        style={styles.webView}
-        textZoom={100}
-        thirdPartyCookiesEnabled
-      />
+      {loadState !== "renderer-stopped" ? (
+        <WebView
+          key={reloadKey}
+          ref={webView}
+          allowsBackForwardNavigationGestures
+          allowsInlineMediaPlayback
+          applicationNameForUserAgent="IdleFrontNative/0.1.0"
+          bounces={false}
+          cacheEnabled
+          contentInsetAdjustmentBehavior="never"
+          domStorageEnabled
+          injectedJavaScriptBeforeContentLoaded={nativeBootstrap}
+          javaScriptCanOpenWindowsAutomatically={false}
+          javaScriptEnabled
+          mediaPlaybackRequiresUserAction={false}
+          onContentProcessDidTerminate={rendererStopped}
+          onRenderProcessGone={rendererStopped}
+          onError={() => {
+            dispatchLoad("network-error");
+          }}
+          onHttpError={({ nativeEvent }) => {
+            if (nativeEvent.statusCode >= 400) {
+              dispatchLoad("network-error");
+            }
+          }}
+          onLoadEnd={() => {
+            dispatchLoad("load-end");
+          }}
+          onLoadStart={() => {
+            dispatchLoad("load-start");
+          }}
+          onMessage={handleBridgeMessage}
+          onNavigationStateChange={updateNavigation}
+          originWhitelist={["http://*", "https://*"]}
+          overScrollMode="never"
+          pullToRefreshEnabled={false}
+          scalesPageToFit={false}
+          setBuiltInZoomControls={false}
+          setDisplayZoomControls={false}
+          setSupportMultipleWindows={false}
+          sharedCookiesEnabled
+          source={{ uri: sourceUrl }}
+          startInLoadingState={false}
+          style={styles.webView}
+          textZoom={100}
+          thirdPartyCookiesEnabled
+        />
+      ) : null}
 
       {loadState === "connecting" ? (
         <View
@@ -202,23 +222,37 @@ export function GameSurface() {
         </View>
       ) : null}
 
-      {loadState === "error" ? (
-        <View style={styles.errorWrap}>
+      {loadState === "network-error" || loadState === "renderer-stopped" ? (
+        <View
+          style={[
+            styles.errorWrap,
+            { paddingTop: insets.top + 22, paddingBottom: insets.bottom + 22 },
+          ]}
+        >
           <LinearGradient
             colors={["#543921", "#211711", "#0f0d0b"]}
             style={styles.errorPanel}
           >
-            <Text style={styles.errorEyebrow}>STATUS LABEL</Text>
-            <Text style={styles.errorTitle}>Connection error header</Text>
+            <Text style={styles.errorTitle}>
+              {loadState === "renderer-stopped"
+                ? "Map view stopped"
+                : "Connection interrupted"}
+            </Text>
             <Text style={styles.errorCopy}>
-              Connection recovery instructions
+              {loadState === "renderer-stopped"
+                ? "Your phone stopped the game view. This can happen when a map uses too much memory. Try again, or return to the menu."
+                : "Check your connection, then try again."}
             </Text>
             <AtlasButton
-              detail="Recovery action description"
               glyph="↻"
               label="Try again"
-              onPress={hardReload}
+              onPress={() => hardReload()}
               tone="amber"
+            />
+            <AtlasButton
+              glyph="‹"
+              label="Main menu"
+              onPress={() => hardReload(new URL("/worlds", GAME_URL).href)}
             />
           </LinearGradient>
         </View>

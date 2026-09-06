@@ -123,6 +123,10 @@ export class GameServer {
   private viewConnections = new Map<WebSocket, ViewConnection>();
   private viewGeneration = new Map<WebSocket, number>();
   private viewHistory: { tick: number; bytes: Uint8Array }[] = [];
+  private readonly startupReady: Promise<void>;
+  private resolveStartupReady!: () => void;
+  private rejectStartupReady!: (error: Error) => void;
+  private startupState: "pending" | "ready" | "failed" = "pending";
   private viewHistoryBytes = 0;
 
   private sendViewError(
@@ -350,6 +354,13 @@ export class GameServer {
     private readonly managedOptions?: ManagedGameOptions,
     private readonly managedHooks?: ManagedGameHooks,
   ) {
+    this.startupReady = new Promise<void>((resolve, reject) => {
+      this.resolveStartupReady = resolve;
+      this.rejectStartupReady = reject;
+    });
+    // Managed-game creation observes this promise. The catch also prevents an
+    // ordinary malformed lobby from producing an unhandled rejection.
+    void this.startupReady.catch(() => undefined);
     this.log = log_.child({ gameID: id });
     this.turns = [...(managedOptions?.initialTurns ?? [])];
     for (const seat of managedOptions?.reservedSeats ?? []) {
@@ -369,6 +380,28 @@ export class GameServer {
       workerId: ServerEnv.workerId(),
       turnIntervalMs: ServerEnv.turnIntervalMs(),
     });
+  }
+
+  public whenSimulationReady(): Promise<void> {
+    return this.startupReady;
+  }
+
+  public simulationStartupState(): "pending" | "ready" | "failed" {
+    return this.startupState;
+  }
+
+  private markSimulationReady(): void {
+    if (this.startupState !== "pending") return;
+    this.startupState = "ready";
+    this.resolveStartupReady();
+  }
+
+  private markSimulationFailed(error: unknown): void {
+    if (this.startupState !== "pending") return;
+    this.startupState = "failed";
+    this.rejectStartupReady(
+      error instanceof Error ? error : new Error(String(error)),
+    );
   }
 
   private emitTelemetry<K extends MatchTelemetryType>(
@@ -1140,6 +1173,12 @@ export class GameServer {
         const viewMessage = ClientViewMessageSchema.safeParse(json);
         if (viewMessage.success && this.simulation) {
           const message = viewMessage.data;
+          // View acknowledgements and queries prove the connection is alive as
+          // surely as a timer ping. During a large reconnect snapshot the main
+          // thread is intentionally busy applying bounded chunks, and browser
+          // timers may be throttled; never evict an actively-acking viewer.
+          this.lastPingUpdate = Date.now();
+          client.lastPing = Date.now();
           if (message.type === "view_ack") {
             this.viewConnections.get(client.ws)?.acknowledge(message.sequence);
           } else if (message.type === "view_subscribe") {
@@ -1605,6 +1644,7 @@ export class GameServer {
     if (!result.success) {
       const error = z.prettifyError(result.error);
       this.log.error("Error parsing game start info", { message: error });
+      this.markSimulationFailed(new Error(error));
       return;
     }
     this.gameStartInfo = result.data satisfies GameStartInfo;
@@ -1651,11 +1691,13 @@ export class GameServer {
       );
       void this.simulation.ready
         .then(() => {
+          this.markSimulationReady();
           this.simulationDeadline =
             performance.now() + ServerEnv.turnIntervalMs();
           this.scheduleSimulation();
         })
         .catch((error) => {
+          this.markSimulationFailed(error);
           this.log.error("Simulation startup failed", {
             error: String(error),
             gameID: this.id,
@@ -1671,6 +1713,7 @@ export class GameServer {
         () => this.endTurn(),
         ServerEnv.turnIntervalMs(),
       );
+      this.markSimulationReady();
     }
     this.activeClients.forEach((c) => {
       this.log.info("sending start message", {

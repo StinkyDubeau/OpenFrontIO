@@ -622,6 +622,7 @@ export class PersistentWorldList extends LitElement {
   @property() heading = "Worlds";
   @property() eyebrow = "";
   @property({ attribute: false }) worlds: PersistentWorldCard[] = [];
+  @property() emptyHeading = "Nothing on the table.";
   @property() emptyMessage = "No worlds are waiting yet.";
 
   createRenderRoot() {
@@ -642,7 +643,7 @@ export class PersistentWorldList extends LitElement {
           ${
             this.worlds.length === 0
               ? html`<div class="pw-empty-state">
-                  <strong>Nothing on the table.</strong
+                  <strong>${this.emptyHeading}</strong
                   ><span>${this.emptyMessage}</span>
                 </div>`
               : this.worlds.map((card) => this.renderCard(card))

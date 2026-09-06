@@ -505,6 +505,22 @@ describe("GameView.update — units", () => {
   });
 });
 
+describe("GameView renderer unit partitions", () => {
+  it("keeps accumulated structures out of the per-tick mobile upload", () => {
+    const game = makeGameView();
+    const update = makeEmptyGu(1);
+    update.updates[GameUpdateType.Unit] = [
+      makeUnitUpdate({ id: 1, unitType: UnitType.City }),
+      makeUnitUpdate({ id: 2, unitType: UnitType.Factory }),
+      makeUnitUpdate({ id: 3, unitType: UnitType.TransportShip }),
+    ];
+    game.update(update);
+
+    expect([...game.frameData().structures.keys()]).toEqual([1, 2]);
+    expect([...game.frameData().mobileUnits.keys()]).toEqual([3]);
+  });
+});
+
 describe("GameView.update — tile deltas", () => {
   it("recentlyUpdatedTiles() reflects refs in packedTileUpdates", () => {
     const game = makeGameView({ width: 4, height: 4 });

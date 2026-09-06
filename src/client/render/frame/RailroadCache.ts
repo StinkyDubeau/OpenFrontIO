@@ -125,6 +125,15 @@ export class RailroadCache {
 
   /** Per-tile railroad state (0=none, 1-6 = RailType+1). Ready for GPU upload. */
   readonly railroadState: Uint8Array;
+  private readonly sparseRailroadState: Map<number, number> | null;
+
+  /**
+   * Live sparse state for page-backed maps. Dense maps return null and retain
+   * the legacy Uint8Array upload path.
+   */
+  getSparseState(): ReadonlyMap<number, number> | null {
+    return this.sparseRailroadState;
+  }
 
   /** True if railroadState changed this tick. */
   railroadDirty = false;
@@ -135,9 +144,12 @@ export class RailroadCache {
   /** Tile refs revealed by animation this tick (for dust FX). */
   readonly revealedRailTiles: number[] = [];
 
-  constructor(mapW: number, mapH: number) {
+  constructor(mapW: number, mapH: number, sparse = false) {
     this.mapW = mapW;
-    this.railroadState = new Uint8Array(mapW * mapH);
+    this.railroadState = sparse
+      ? new Uint8Array(0)
+      : new Uint8Array(mapW * mapH);
+    this.sparseRailroadState = sparse ? new Map() : null;
   }
 
   /**
@@ -196,6 +208,7 @@ export class RailroadCache {
     this.anims.clear();
     this.tileRefCount.clear();
     this.railroadState.fill(0);
+    this.sparseRailroadState?.clear();
     this.railroadDirty = false;
     this.dirtyTiles.length = 0;
   }
@@ -273,8 +286,15 @@ export class RailroadCache {
   }
 
   private setTile(ref: number, value: number): void {
-    if (this.railroadState[ref] === value) return;
-    this.railroadState[ref] = value;
+    const existing =
+      this.sparseRailroadState?.get(ref) ?? this.railroadState[ref] ?? 0;
+    if (existing === value) return;
+    if (this.sparseRailroadState) {
+      if (value === 0) this.sparseRailroadState.delete(ref);
+      else this.sparseRailroadState.set(ref, value);
+    } else {
+      this.railroadState[ref] = value;
+    }
     this.dirtyTiles.push(ref);
     this.railroadDirty = true;
   }

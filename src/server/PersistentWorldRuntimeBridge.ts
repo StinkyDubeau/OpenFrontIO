@@ -40,6 +40,10 @@ export type ManagedGameDispatcher = (
 export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoordinator {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly attached = new Set<string>();
+  private readonly retryState = new Map<
+    string,
+    { failures: number; retryAt: number }
+  >();
 
   constructor(
     private readonly repository: PersistentWorldRepository,
@@ -50,11 +54,29 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
   ensure(world: PersistentWorld): Promise<void> {
     const existing = this.inFlight.get(world.id);
     if (existing) return existing;
-    const operation = this.ensureOnce(world).finally(() => {
-      if (this.inFlight.get(world.id) === operation) {
-        this.inFlight.delete(world.id);
-      }
-    });
+    const retry = this.retryState.get(world.id);
+    if (retry && retry.retryAt > Date.now()) return Promise.resolve();
+    const operation = this.ensureOnce(world)
+      .then(() => {
+        this.retryState.delete(world.id);
+      })
+      .catch((error) => {
+        const failures = (this.retryState.get(world.id)?.failures ?? 0) + 1;
+        // A failed expanded-world replay is expensive. Back off rather than
+        // letting the one-second reconciliation scheduler launch a CPU- and
+        // log-saturating recovery storm.
+        const delay = Math.min(15 * 60_000, 30_000 * 2 ** (failures - 1));
+        this.retryState.set(world.id, {
+          failures,
+          retryAt: Date.now() + delay,
+        });
+        throw error;
+      })
+      .finally(() => {
+        if (this.inFlight.get(world.id) === operation) {
+          this.inFlight.delete(world.id);
+        }
+      });
     this.inFlight.set(world.id, operation);
     return operation;
   }
@@ -89,6 +111,10 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
   /** Reattach every ready runtime, used when worker membership changes. */
   invalidateAll(): void {
     this.attached.clear();
+  }
+
+  isRuntimeReady(worldId: string): boolean {
+    return this.attached.has(worldId);
   }
 
   /**
@@ -197,6 +223,7 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       runtime.gameId,
     );
     this.attached.add(world.id);
+    this.retryState.delete(world.id);
   }
 
   private async createGameConfig(world: PersistentWorld) {
@@ -211,9 +238,11 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       // Operator-selected for NEW worlds only; persisted runtimes retain their
       // original map/config. Never swap terrain beneath an existing session.
       gameMap:
-        process.env.IDLE_WORLD_MAP_SCALE === "3"
-          ? GameMapType.ExpandedGiantWorldLarge
-          : GameMapType.ExpandedGiantWorld,
+        process.env.IDLE_WORLD_MAP_SCALE === "4"
+          ? GameMapType.ExpandedGiantWorldUltra
+          : process.env.IDLE_WORLD_MAP_SCALE === "3"
+            ? GameMapType.ExpandedGiantWorldLarge
+            : GameMapType.ExpandedGiantWorld,
       serverSimulation: process.env.IDLE_SERVER_SIMULATION !== "0",
       // User-approved lifecycle exception for long playtests. Normal conquest,
       // economy, AI, combat, structures and explicit timers remain unchanged.
@@ -225,15 +254,13 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       gameType: GameType.Private,
       gameMode: world.mode === "ffa" ? GameMode.FFA : GameMode.Team,
       maxPlayers: world.maxHumans,
-      // Managed worlds begin on schedule even when every human is offline.
-      // Use OpenFront's existing random-spawn rule so each frozen RSVP seat
-      // owns a viable nation from tick zero and can be claimed hours later.
-      // Without it, a player's first connection after the normal 30-second
-      // spawn phase could replay the map but could never enter the match.
-      randomSpawn: true,
+      // Use the existing manual placement rules and their 300-tick (30s)
+      // opening phase. Players must join at the start to choose their spawn;
+      // persisted runtimes keep whichever mode they originally started with.
+      randomSpawn: false,
       publicGameModifiers: {
         ...upstream.publicGameModifiers,
-        isRandomSpawn: true,
+        isRandomSpawn: false,
       },
       // In-sync clients vote on deterministic player state. The master stores
       // the agreed result so elimination survives worker and web restarts.

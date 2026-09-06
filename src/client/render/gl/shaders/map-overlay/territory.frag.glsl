@@ -24,7 +24,7 @@ uniform uint uHighlightOwner;      // 0 = no highlight; otherwise smallID of hov
 uniform float uHighlightBrighten;  // hover contrast boost strength; 0 = disabled
 uniform sampler2D uDefenseCoverageTex; // R8 — 1.0 = tile defended by same-owner post
 uniform float uDefenseDarken;      // multiplier applied to fill on defended tiles
-uniform sampler2D uBorderTex;      // RGBA8 — border flags; R > 0.25 = border tile
+uniform sampler2D uBorderTex;      // RG8 — border flags; R > 0.25 = border tile
 uniform float uSaturation;         // 1 = full color, 0 = grayscale
 uniform float uTerritoryAlpha;     // absolute fill opacity; 1 = fully opaque
 

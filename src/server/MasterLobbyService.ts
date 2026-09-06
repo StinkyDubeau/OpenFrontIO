@@ -258,12 +258,19 @@ export class MasterLobbyService {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
+    // The worker owns the authoritative initialization deadline. The master
+    // keeps a slightly wider IPC envelope so its request cannot expire first
+    // while a large durable journal is still reconstructing.
+    const recoveryTimeoutMs = Math.min(
+      61 * 60_000,
+      Math.max(210_000, (command.initialTurns?.length ?? 0) * 20 + 30_000),
+    );
     const timeout = setTimeout(() => {
       this.rejectManagedGame(
         command.requestId,
         new Error(`Timed out creating managed game ${command.gameID}`),
       );
-    }, 10_000);
+    }, recoveryTimeoutMs);
     timeout.unref?.();
     this.pendingManagedGames.set(command.requestId, {
       gameID: command.gameID,
@@ -320,6 +327,15 @@ export class MasterLobbyService {
       this.rejectManagedGame(
         message.requestId,
         new Error(`Game ID ${message.gameID} is already owned by another game`),
+      );
+      return;
+    }
+    if (message.outcome === "failed") {
+      this.rejectManagedGame(
+        message.requestId,
+        new Error(
+          message.error ?? `Managed game ${message.gameID} failed to start`,
+        ),
       );
       return;
     }
@@ -572,7 +588,13 @@ export class MasterLobbyService {
   }
 
   private async maybeScheduleLobby() {
-    if (this.deploymentDraining) return;
+    // Dedicated persistent-world development should not spend simulation CPU
+    // continuously creating empty rolling public matches beside a playtest.
+    if (
+      this.deploymentDraining ||
+      process.env.IDLE_DISABLE_PUBLIC_LOBBIES === "1"
+    )
+      return;
     const lobbiesByType = this.getAllLobbies().games;
 
     // Scheduled types only: hosted lobbies are started by their host, never

@@ -20,6 +20,7 @@ export interface FrameUploadTarget {
   uploadTileAndTrailState(
     tileState: Uint16Array,
     trailState: Uint16Array,
+    trailSparseState?: ReadonlyMap<number, number> | null,
   ): void;
   uploadLiveDelta(
     tileState: Uint16Array,
@@ -28,9 +29,14 @@ export interface FrameUploadTarget {
   uploadLiveTrailDelta(
     trailState: Uint16Array,
     dirtyTiles: readonly number[],
+    trailSparseState?: ReadonlyMap<number, number> | null,
   ): void;
   updateSpiralRibbons(ribbons: readonly SpiralRibbon[]): void;
-  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void;
+  uploadRailroadState(
+    data: Uint8Array,
+    dirtyTiles: readonly number[],
+    sparseState?: ReadonlyMap<number, number> | null,
+  ): void;
   applyRailroadDust(tileRefs: number[]): void;
   updateUnits(units: ReadonlyMap<number, UnitState>, gameTick: number): void;
   updateStructures(units: ReadonlyMap<number, UnitState>): void;
@@ -68,10 +74,18 @@ export function uploadFrameData(
     }
     // Trail dirty texels come from TrailManager, independent of tile deltas.
     if (frame.trailDirtyTiles.length > 0) {
-      view.uploadLiveTrailDelta(frame.trailState, frame.trailDirtyTiles);
+      view.uploadLiveTrailDelta(
+        frame.trailState,
+        frame.trailDirtyTiles,
+        frame.trailSparseState,
+      );
     }
   } else {
-    view.uploadTileAndTrailState(frame.tileState, frame.trailState);
+    view.uploadTileAndTrailState(
+      frame.tileState,
+      frame.trailState,
+      frame.trailSparseState,
+    );
   }
   // Live refs into SpiralTrails; streams only newly appended samples, and a
   // no-op while no spiral nuke is in flight.
@@ -79,16 +93,20 @@ export function uploadFrameData(
 
   // --- Railroads ---
   if (frame.railroadDirty) {
-    view.uploadRailroadState(frame.railroadState, frame.railroadDirtyTiles);
+    view.uploadRailroadState(
+      frame.railroadState,
+      frame.railroadDirtyTiles,
+      frame.railroadSparseState,
+    );
     if (frame.revealedRailTiles.length > 0) {
       view.applyRailroadDust(frame.revealedRailTiles);
     }
   }
 
   // --- Units + structures ---
-  view.updateUnits(frame.units, frame.tick);
+  view.updateUnits(frame.mobileUnits, frame.tick);
   if (frame.structuresDirty) {
-    view.updateStructures(frame.units);
+    view.updateStructures(frame.structures);
   }
 
   // --- Ephemeral effects ---

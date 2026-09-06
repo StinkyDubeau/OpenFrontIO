@@ -80,12 +80,16 @@ export async function startWorker() {
   // Initialize lobby service (handles WebSocket upgrade routing)
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);
 
-  setTimeout(
-    () => {
-      startMatchmakingPolling(gm);
-    },
-    1000 + Math.random() * 2000,
-  );
+  if (process.env.IDLE_DISABLE_PUBLIC_LOBBIES !== "1") {
+    setTimeout(
+      () => {
+        startMatchmakingPolling(gm);
+      },
+      1000 + Math.random() * 2000,
+    );
+  } else {
+    log.info("Public matchmaking polling disabled for dedicated world host");
+  }
 
   if (ServerEnv.otelEnabled()) {
     initWorkerMetrics(gm);

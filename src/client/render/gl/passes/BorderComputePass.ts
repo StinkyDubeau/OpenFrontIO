@@ -2,10 +2,9 @@
  * BorderComputePass — tile-resolution pass that computes per-tile border flags.
  *
  * Runs a fullscreen quad at tile resolution (mapW × mapH) and writes to an
- * RGBA8 texture:
+ * RG8 texture (the other two channels used to be allocated but never read):
  *   R = border type: 0 = interior, 0.5 = normal border, 1.0 = highlight border
- *   G = unused (was ember intensity — moved to FalloutBloomPass/FalloutLightPass)
- *   B = unused (was defense proximity — now computed per-tile by DefenseCoveragePass)
+ *   G = relation: 0 = neutral, 0.5 = friendly, 1 = embargo
  *
  * Both MapOverlayPass (daytime) and the night stamp overlay read this buffer
  * instead of independently computing neighbor checks. Border thickening is
@@ -104,13 +103,13 @@ export class BorderComputePass {
       filter: gl.NEAREST,
     });
 
-    // --- RGBA8 border buffer at tile resolution ---
-    // R = border type, G = unused, B = defense proximity flag
+    // R = border type, G = relation. Exactly the same precision, half the
+    // allocation: saves 144 MB on the 72-million-tile XL world.
     this.borderTex = createTexture2D(gl, {
       width: mapW,
       height: mapH,
-      internalFormat: gl.RGBA8,
-      format: gl.RGBA,
+      internalFormat: gl.RG8,
+      format: gl.RG,
       type: gl.UNSIGNED_BYTE,
       data: null,
       filter: gl.NEAREST,

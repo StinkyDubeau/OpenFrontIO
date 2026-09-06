@@ -212,47 +212,7 @@ body.atlas-ui-lab-stone-active atlas-ui-lab {
   width: 100%;
 }
 
-.atlas-texture-demo__button[data-stone="quartz"] {
-  --atlas-demo-stone-texture: url("/images/ui/materials/stones/quartz.webp");
-}
-
-.atlas-texture-demo__button[data-stone="obsidian"] {
-  --atlas-demo-stone-texture: url("/images/ui/materials/stones/obsidian.webp");
-}
-
-.atlas-texture-demo__button[data-stone="amethyst"] {
-  --atlas-demo-stone-texture: url("/images/ui/materials/stones/amethyst.webp");
-}
-
-.atlas-texture-demo__button[data-stone="ruby"] {
-  --atlas-demo-stone-texture: url("/images/ui/materials/stones/ruby.webp");
-}
-
-.atlas-texture-demo__button[data-stone="emerald"] {
-  --atlas-demo-stone-texture: url("/images/ui/materials/stones/emerald.webp");
-}
-
-.atlas-texture-demo__button[data-stone]::before {
-  inset: 1px 2px 28%;
-}
-
-/*
- * This is the complete visual delta from the proven control. The face,
- * glare, hit area, transition, hover and native :active rules remain owned by
- * .atlas-war-button in war-room.css.
- */
-.atlas-texture-demo__button[data-stone]::after {
-  background-image:
-    var(--atlas-demo-stone-texture), var(--war-control-inclusions),
-    var(--war-leather-texture);
-  background-position: center;
-  background-size:
-    cover,
-    auto,
-    184px 184px;
-  background-blend-mode: normal, screen, soft-light;
-  opacity: 0.46;
-}
+/* Material skins are shared with production in stone-controls.css. */
 
 .atlas-texture-demo__note {
   position: relative;

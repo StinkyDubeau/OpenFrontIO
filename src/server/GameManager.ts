@@ -36,6 +36,11 @@ export class GameManager {
     return this.games.get(id) ?? null;
   }
 
+  /** Drop only the exact failed startup instance; a retry may then recreate it. */
+  public discardGame(id: GameID, expected: GameServer): void {
+    if (this.games.get(id) === expected) this.games.delete(id);
+  }
+
   public publicLobbies(): GameServer[] {
     return Array.from(this.games.values()).filter(
       (g) => g.phase() === GamePhase.Lobby && g.isPublic(),

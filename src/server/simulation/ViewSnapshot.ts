@@ -8,6 +8,13 @@ import { PlayerImpl } from "../../core/game/PlayerImpl";
 import type { GameRunner } from "../../core/GameRunner";
 import { encodeViewPacket } from "../../core/network/ViewProtocol";
 
+// A packet expands to at most this many client-side tile writes. Keeping the
+// work bounded gives mobile Safari/Expo a regular event-loop yield for input,
+// paint and heartbeats while the whole-world overview paints top-to-bottom.
+const MAX_TILES_PER_RUN_PACKET = 262_144;
+const MAX_RUNS_PER_PACKET = 16_384;
+const MAX_TERRAIN_PAIRS_PER_PACKET = 16_384;
+
 export function emptyView(tick: number): GameUpdateViewData {
   const updates = {} as GameUpdates;
   for (const value of Object.values(GameUpdateType))
@@ -88,49 +95,90 @@ export class ViewSnapshot {
     const packets = [
       encodeViewPacket({ kind: "update", snapshot: "begin", update: begin }),
     ];
-    let pairs: number[] = [];
-    const flush = () => {
-      if (!pairs.length) return;
+    let runs: number[] = [];
+    let expandedTiles = 0;
+    const flushRuns = () => {
+      if (!runs.length) return;
       const part = emptyView(tick);
       part.pendingTurns = 2;
-      part.packedTileUpdates = Uint32Array.from(pairs);
+      part.packedTileRuns = Uint32Array.from(runs);
       packets.push(
         encodeViewPacket({ kind: "update", snapshot: "part", update: part }),
       );
-      pairs = [];
+      runs = [];
+      expandedTiles = 0;
+    };
+    const appendRun = (start: number, length: number, state: number) => {
+      let cursor = start;
+      let remaining = length;
+      while (remaining > 0) {
+        if (
+          expandedTiles >= MAX_TILES_PER_RUN_PACKET ||
+          runs.length / 3 >= MAX_RUNS_PER_PACKET
+        ) {
+          flushRuns();
+        }
+        const room = MAX_TILES_PER_RUN_PACKET - expandedTiles;
+        const take = Math.min(remaining, room);
+        runs.push(cursor, take, state);
+        cursor += take;
+        remaining -= take;
+        expandedTiles += take;
+      }
     };
     const map = game.map();
+    let runStart = -1;
+    let runLength = 0;
+    let runState = 0;
+    const finishRun = () => {
+      if (runLength > 0) appendRun(runStart, runLength, runState);
+      runStart = -1;
+      runLength = 0;
+    };
     for (let word = 0; word < this.changed.length; word++) {
       let bits = this.changed[word];
       while (bits !== 0) {
         const bit = 31 - Math.clz32(bits & -bits);
         const tile = word * 32 + bit;
-        pairs.push(tile, map.tileState(tile) | (map.terrainByte(tile) << 16));
+        const state = map.tileState(tile);
+        if (runLength > 0 && tile === runStart + runLength && state === runState) {
+          runLength++;
+        } else {
+          finishRun();
+          runStart = tile;
+          runLength = 1;
+          runState = state;
+        }
         bits = (bits & (bits - 1)) >>> 0;
-        if (pairs.length >= 32_768) flush();
       }
     }
-    flush();
+    finishRun();
+    flushRuns();
     // Nukeable visual layers must remain destroyed for returning viewers,
     // even though past blast animations and notifications are not replayed.
     if (this.destroyedLayerTiles) {
       let impacts: number[] = [];
+      let terrain: number[] = [];
       const flushImpacts = () => {
         if (!impacts.length) return;
         const part = emptyView(tick);
         part.pendingTurns = 2;
         part.packedNukeImpacts = Uint32Array.from(impacts);
+        part.packedTerrainUpdates = Uint32Array.from(terrain);
         packets.push(
           encodeViewPacket({ kind: "update", snapshot: "part", update: part }),
         );
         impacts = [];
+        terrain = [];
       };
       for (let word = 0; word < this.destroyedLayerTiles.length; word++) {
         let bits = this.destroyedLayerTiles[word];
         while (bits !== 0) {
-          impacts.push(word * 32 + 31 - Math.clz32(bits & -bits));
+          const tile = word * 32 + 31 - Math.clz32(bits & -bits);
+          impacts.push(tile);
+          terrain.push(tile, map.terrainByte(tile));
           bits = (bits & (bits - 1)) >>> 0;
-          if (impacts.length >= 32_768) flushImpacts();
+          if (impacts.length >= MAX_TERRAIN_PAIRS_PER_PACKET) flushImpacts();
         }
       }
       flushImpacts();

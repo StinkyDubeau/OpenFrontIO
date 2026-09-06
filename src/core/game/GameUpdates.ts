@@ -28,6 +28,17 @@ export interface GameUpdateViewData {
    */
   packedTileUpdates: Uint32Array;
   /**
+   * Snapshot-only row-major runs encoded as `[startRef, length, tileState]`.
+   *
+   * The terrain map is already present on every client, so a reconnect only
+   * needs the mutable 16-bit state for ordinary tiles. Contiguous ownership
+   * compresses extremely well and keeps large-world catch-up bounded by the
+   * number of territorial runs instead of the number of conquered tiles.
+   */
+  packedTileRuns?: Uint32Array;
+  /** Snapshot-only terrain mutations encoded as `[tileRef, terrainByte]`. */
+  packedTerrainUpdates?: Uint32Array;
+  /**
    * Optional packed motion plan records.
    *
    * When present, this buffer is expected to be transferred worker -> main

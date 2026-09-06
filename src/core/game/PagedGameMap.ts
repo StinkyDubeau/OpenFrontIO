@@ -9,6 +9,19 @@ export interface TerrainPageInput {
   readonly terrain: Uint8Array;
 }
 
+interface InternalTilePage {
+  readonly index: number;
+  readonly pageX: number;
+  readonly pageY: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly width: number;
+  readonly height: number;
+  readonly terrain: Uint8Array;
+  state: Uint16Array | null;
+  publicPage: GameMapTilePage;
+}
+
 /**
  * Page-backed implementation of the stock GameMap contract.
  *
@@ -26,7 +39,8 @@ export class PagedGameMap implements GameMap {
   private static readonly FALLOUT_BIT = 13;
   private static readonly DEFENSE_BONUS_BIT = 14;
 
-  private readonly pages: GameMapTilePage[];
+  private readonly pages: InternalTilePage[];
+  private readonly publicPages: GameMapTilePage[];
   private readonly pagesWide: number;
   private readonly pagesHigh: number;
   /** Tiny coordinate tables avoid page-grid division in every hot tile read. */
@@ -115,13 +129,14 @@ export class PagedGameMap implements GameMap {
       inputByIndex.set(index, page);
     }
 
-    this.pages = new Array<GameMapTilePage>(expectedCount);
+    this.pages = new Array<InternalTilePage>(expectedCount);
+    this.publicPages = new Array<GameMapTilePage>(expectedCount);
     for (let pageY = 0; pageY < this.pagesHigh; pageY++) {
       for (let pageX = 0; pageX < this.pagesWide; pageX++) {
         const index = pageY * this.pagesWide + pageX;
         const input = inputByIndex.get(index);
         if (!input) throw new Error(`Missing page ${pageX},${pageY}`);
-        this.pages[index] = {
+        const internal = {
           index,
           pageX,
           pageY,
@@ -130,8 +145,26 @@ export class PagedGameMap implements GameMap {
           width: input.width,
           height: input.height,
           terrain: input.terrain,
-          state: new Uint16Array(input.width * input.height),
-        };
+          state: null,
+        } as InternalTilePage;
+        const publicPage = {
+          index,
+          pageX,
+          pageY,
+          originX: pageX * pageSize_,
+          originY: pageY * pageSize_,
+          width: input.width,
+          height: input.height,
+          terrain: input.terrain,
+          get state() {
+            return (internal.state ??= new Uint16Array(
+              input.width * input.height,
+            ));
+          },
+        } satisfies GameMapTilePage;
+        internal.publicPage = publicPage;
+        this.pages[index] = internal;
+        this.publicPages[index] = publicPage;
       }
     }
   }
@@ -233,7 +266,7 @@ export class PagedGameMap implements GameMap {
   }
 
   tilePages(): readonly GameMapTilePage[] {
-    return this.pages;
+    return this.publicPages;
   }
 
   tilePageLocation(ref: TileRef) {
@@ -245,7 +278,7 @@ export class PagedGameMap implements GameMap {
     return true;
   }
 
-  private location(ref: TileRef): { page: GameMapTilePage; offset: number } {
+  private location(ref: TileRef): { page: InternalTilePage; offset: number } {
     if (!this.isValidRef(ref)) throw new Error(`Invalid tile ref ${ref}`);
     const x = ref % this.width_;
     const y = (ref - x) / this.width_;
@@ -274,12 +307,15 @@ export class PagedGameMap implements GameMap {
     const x = ref % this.width_;
     const y = (ref - x) / this.width_;
     const page = this.pages[this.pageRowBaseByY[y] + this.pageColumnByX[x]];
-    return page.state[this.localYByY[y] * page.width + this.localXByX[x]];
+    return (
+      page.state?.[this.localYByY[y] * page.width + this.localXByX[x]] ?? 0
+    );
   }
 
   private setTileState(ref: TileRef, value: number): void {
     const { page, offset } = this.location(ref);
-    page.state[offset] = value;
+    if (value === 0 && page.state === null) return;
+    (page.state ??= new Uint16Array(page.width * page.height))[offset] = value;
   }
 
   isLand(ref: TileRef): boolean {
@@ -366,8 +402,9 @@ export class PagedGameMap implements GameMap {
       );
     }
     const { page, offset } = this.location(ref);
-    page.state[offset] =
-      (page.state[offset] & ~PagedGameMap.PLAYER_ID_MASK) | playerId;
+    if (playerId === 0 && page.state === null) return;
+    const state = (page.state ??= new Uint16Array(page.width * page.height));
+    state[offset] = (state[offset] & ~PagedGameMap.PLAYER_ID_MASK) | playerId;
   }
 
   hasFallout(ref: TileRef): boolean {
@@ -377,12 +414,13 @@ export class PagedGameMap implements GameMap {
   setFallout(ref: TileRef, value: boolean): void {
     const { page, offset } = this.location(ref);
     const existing = Boolean(
-      page.state[offset] & (1 << PagedGameMap.FALLOUT_BIT),
+      (page.state?.[offset] ?? 0) & (1 << PagedGameMap.FALLOUT_BIT),
     );
     if (existing === value) return;
-    page.state[offset] = value
-      ? page.state[offset] | (1 << PagedGameMap.FALLOUT_BIT)
-      : page.state[offset] & ~(1 << PagedGameMap.FALLOUT_BIT);
+    const state = (page.state ??= new Uint16Array(page.width * page.height));
+    state[offset] = value
+      ? state[offset] | (1 << PagedGameMap.FALLOUT_BIT)
+      : state[offset] & ~(1 << PagedGameMap.FALLOUT_BIT);
     this.falloutTiles += value ? 1 : -1;
   }
 
@@ -392,9 +430,11 @@ export class PagedGameMap implements GameMap {
 
   setDefenseBonus(ref: TileRef, value: boolean): void {
     const { page, offset } = this.location(ref);
-    page.state[offset] = value
-      ? page.state[offset] | (1 << PagedGameMap.DEFENSE_BONUS_BIT)
-      : page.state[offset] & ~(1 << PagedGameMap.DEFENSE_BONUS_BIT);
+    if (!value && page.state === null) return;
+    const state = (page.state ??= new Uint16Array(page.width * page.height));
+    state[offset] = value
+      ? state[offset] | (1 << PagedGameMap.DEFENSE_BONUS_BIT)
+      : state[offset] & ~(1 << PagedGameMap.DEFENSE_BONUS_BIT);
   }
 
   isOnEdgeOfMap(ref: TileRef): boolean {
@@ -554,11 +594,13 @@ export class PagedGameMap implements GameMap {
     const state = packed & 0xffff;
     const terrain = (packed >>> 16) & 0xff;
     const { page, offset } = this.location(ref);
-    const existingState = page.state[offset];
+    const existingState = page.state?.[offset] ?? 0;
     const existingFallout = Boolean(
       existingState & (1 << PagedGameMap.FALLOUT_BIT),
     );
-    page.state[offset] = state;
+    if (state !== 0 || page.state !== null) {
+      (page.state ??= new Uint16Array(page.width * page.height))[offset] = state;
+    }
     const newFallout = Boolean(state & (1 << PagedGameMap.FALLOUT_BIT));
     if (existingFallout !== newFallout)
       this.falloutTiles += newFallout ? 1 : -1;

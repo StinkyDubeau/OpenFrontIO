@@ -78,6 +78,7 @@ export class StructurePass {
   private uLocalPlayerID: WebGLUniformLocation;
   private uCamera: WebGLUniformLocation;
   private uZoom: WebGLUniformLocation;
+  private uLodZoom: WebGLUniformLocation;
   private uIconSize: WebGLUniformLocation;
   private uDotsThreshold: WebGLUniformLocation;
   private uDotScale: WebGLUniformLocation;
@@ -167,6 +168,7 @@ export class StructurePass {
     )!;
     this.uCamera = gl.getUniformLocation(this.program, "uCamera")!;
     this.uZoom = gl.getUniformLocation(this.program, "uZoom")!;
+    this.uLodZoom = gl.getUniformLocation(this.program, "uLodZoom")!;
     this.uIconSize = gl.getUniformLocation(this.program, "uIconSize")!;
     this.uDotScale = gl.getUniformLocation(this.program, "uDotScale")!;
     this.uDotsThreshold = gl.getUniformLocation(
@@ -366,7 +368,7 @@ export class StructurePass {
     this.affiliationTex = tex;
   }
 
-  draw(cameraMatrix: Float32Array, zoom: number): void {
+  draw(cameraMatrix: Float32Array, zoom: number, lodZoom = zoom): void {
     const hasGhost =
       this.ghost !== null && this.typeToAtlasCol.has(this.ghost.ghostType);
     if (this.instanceCount === 0 && !hasGhost) return;
@@ -378,6 +380,7 @@ export class StructurePass {
     gl.uniformMatrix3fv(this.uCamera, false, cameraMatrix);
     gl.uniform1f(this.uLocalPlayerID, this.localPlayerID);
     gl.uniform1f(this.uZoom, zoom);
+    gl.uniform1f(this.uLodZoom, lodZoom);
     gl.uniform1f(this.uIconSize, ss.iconSize);
     gl.uniform1f(this.uDotsThreshold, ss.dotsZoomThreshold);
     gl.uniform1f(this.uDotScale, ss.dotScale);

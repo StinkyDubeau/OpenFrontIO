@@ -20,3 +20,33 @@ export function extractAttackRings(
   }
   return rings;
 }
+
+/** Targeted variant for live clients that maintain transport-ship IDs. */
+export function extractAttackRingsFromIds(
+  transportIds: Iterable<number>,
+  units: ReadonlyMap<number, UnitState>,
+  mapW: number,
+  owner: number,
+): AttackRingInput[] {
+  const rings: AttackRingInput[] = [];
+  for (const id of transportIds) {
+    const u = units.get(id);
+    if (
+      !u ||
+      u.unitType !== UT_TRANSPORT ||
+      u.targetTile === null ||
+      !u.isActive ||
+      u.retreating ||
+      u.ownerID !== owner
+    ) {
+      continue;
+    }
+    const target = u.targetTile;
+    rings.push({
+      x: target % mapW,
+      y: (target - (target % mapW)) / mapW,
+      unitId: u.id,
+    });
+  }
+  return rings;
+}

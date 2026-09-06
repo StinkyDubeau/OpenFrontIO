@@ -367,7 +367,7 @@ export class GPURenderer {
     //    borderTex placeholder — we'll get it from borderPass
     //    First create a dummy, then replace after borderPass is created.
 
-    // Actually: borderPass creates its own internal borderTex (RGBA8).
+    // Actually: borderPass creates its own internal borderTex (RG8).
     // We need tileTex to exist before borderPass. So:
     //   a) Create shared resources (tileTex, trailTex, heatA/B)
     //   b) Create borderPass with tileTex → gives us borderTex
@@ -676,6 +676,7 @@ export class GPURenderer {
   uploadTileAndTrailState(
     tileState: Uint16Array,
     trailState: Uint16Array,
+    _trailSparseState?: ReadonlyMap<number, number> | null,
   ): void {
     this.territoryPass.setLiveRef(tileState);
     this.trailPass.setLiveRef(trailState);
@@ -691,6 +692,7 @@ export class GPURenderer {
   uploadLiveTrailDelta(
     trailState: Uint16Array,
     dirtyTiles: readonly number[],
+    _trailSparseState?: ReadonlyMap<number, number> | null,
   ): void {
     this.trailPass.applyLiveDelta(trailState, dirtyTiles);
   }
@@ -857,7 +859,11 @@ export class GPURenderer {
     );
   }
 
-  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void {
+  uploadRailroadState(
+    data: Uint8Array,
+    dirtyTiles: readonly number[],
+    _sparseState?: ReadonlyMap<number, number> | null,
+  ): void {
     this.railroadPass.uploadRailroadState(data, dirtyTiles);
   }
 

@@ -215,10 +215,10 @@ export class SettingsModal extends LitElement implements Controller {
         @contextmenu=${(e: Event) => e.preventDefault()}
       >
         <div
-          class="bg-slate-800 border border-slate-600 rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto"
+          class="atlas-settings-modal bg-slate-800 border border-slate-600 rounded-lg max-w-md w-full max-h-[80vh] overflow-y-auto"
         >
           <div
-            class="flex items-center justify-between p-4 border-b border-slate-600"
+            class="atlas-settings-header flex items-center justify-between p-4 border-b border-slate-600"
           >
             <div class="flex items-center gap-2">
               <img
@@ -240,7 +240,7 @@ export class SettingsModal extends LitElement implements Controller {
             </button>
           </div>
 
-          <div class="p-4 flex flex-col gap-3">
+          <div class="atlas-settings-list p-4 flex flex-col gap-3">
             <button
               class="flex gap-3 items-center w-full text-left p-3 hover:bg-slate-700 rounded-sm text-white transition-colors"
               @click="${this.onGraphicsSettingsButtonClick}"
@@ -324,9 +324,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.alternateView
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.alternateView
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -344,9 +346,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.emojis()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.emojis()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -364,9 +368,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.alertFrame()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.alertFrame()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -405,9 +411,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.helpMessages()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.helpMessages()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -427,9 +435,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.attackingTroopsOverlay()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.attackingTroopsOverlay()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -452,9 +462,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.cursorCostLabel()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.cursorCostLabel()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -472,9 +484,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.anonymousNames()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.anonymousNames()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -492,9 +506,11 @@ export class SettingsModal extends LitElement implements Controller {
                 </div>
               </div>
               <div class="text-sm text-slate-400">
-                ${this.userSettings.leftClickOpensMenu()
-                  ? translateText("user_setting.on")
-                  : translateText("user_setting.off")}
+                ${
+                  this.userSettings.leftClickOpensMenu()
+                    ? translateText("user_setting.on")
+                    : translateText("user_setting.off")
+                }
               </div>
             </button>
 
@@ -524,9 +540,11 @@ export class SettingsModal extends LitElement implements Controller {
                   </div>
                 </div>
                 <div class="text-sm text-slate-400">
-                  ${this.userSettings.performanceOverlay()
-                    ? translateText("user_setting.on")
-                    : translateText("user_setting.off")}
+                  ${
+                    this.userSettings.performanceOverlay()
+                      ? translateText("user_setting.on")
+                      : translateText("user_setting.off")
+                  }
                 </div>
               </button>
 

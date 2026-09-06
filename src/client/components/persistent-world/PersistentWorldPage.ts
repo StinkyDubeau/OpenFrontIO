@@ -246,6 +246,7 @@ export class PersistentWorldPage extends LitElement {
                     <persistent-world-list
                       heading=${placeholderCopy.worlds.playerListHeading}
                       eyebrow=${placeholderCopy.worlds.playerListEyebrow}
+                      emptyHeading=${placeholderCopy.worlds.playerListEmptyHeading}
                       emptyMessage=${placeholderCopy.worlds.playerListEmpty}
                       .worlds=${this.myWorlds}
                       @world-open=${this.openWorldEvent}

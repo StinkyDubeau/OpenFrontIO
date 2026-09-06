@@ -314,12 +314,12 @@ export class ActionableEvents extends LitElement implements Controller {
 
     return html`
       <div
-        class="flex flex-col gap-2 w-full min-[1200px]:w-96 pointer-events-auto mt-2"
+        class="atlas-action-notices flex flex-col gap-2 w-full min-[1200px]:w-96 pointer-events-auto mt-2"
       >
         ${sorted.map(
           (event) => html`
             <div
-              class="bg-gray-800/92 backdrop-blur-sm rounded-lg shadow-lg border-l-4 border-yellow-400 p-3 lg:p-4 text-white"
+              class="atlas-action-notice bg-gray-800/92 backdrop-blur-sm rounded-lg shadow-lg border-l-4 border-yellow-400 p-3 lg:p-4 text-white"
             >
               <button
                 class="text-left text-sm lg:text-base font-semibold w-full cursor-pointer ${getMessageTypeClasses(
@@ -329,16 +329,15 @@ export class ActionableEvents extends LitElement implements Controller {
               >
                 ${event.description}
               </button>
-              <div class="flex flex-wrap gap-1.5 mt-2">
+              <div
+                class="atlas-action-notice__actions flex flex-wrap gap-1.5 mt-2"
+              >
                 ${event.buttons.map(
                   (btn) => html`
                     <button
-                      class="inline-block px-3 py-1 text-white rounded-sm text-xs lg:text-sm cursor-pointer transition-colors duration-300
-                        ${btn.className.includes("btn-info")
-                        ? "bg-blue-500 hover:bg-blue-600"
-                        : btn.className.includes("btn-gray")
-                          ? "bg-gray-500 hover:bg-gray-600"
-                          : "bg-green-600 hover:bg-green-700"}"
+                      type="button"
+                      class=${btn.className === "btn" ? "atlas-war-button atlas-war-button--secondary" : "atlas-hud-button atlas-hud-button--text"}
+                      data-stone=${btn.className === "btn" ? "quartz" : "none"}
                       @click=${() => {
                         btn.action();
                         if (!btn.preventClose) {
@@ -350,7 +349,7 @@ export class ActionableEvents extends LitElement implements Controller {
                         this.requestUpdate();
                       }}
                     >
-                      ${btn.text}
+                      <span>${btn.text}</span>
                     </button>
                   `,
                 )}

@@ -25,13 +25,26 @@ function integerArg(name, fallback) {
 }
 
 const largeVariant = process.argv.includes("--variant=large");
-const scale = integerArg("scale", largeVariant ? 3 : 2);
+const ultraVariant = process.argv.includes("--variant=ultra");
+if (largeVariant && ultraVariant)
+  throw new Error("Choose only one versioned expanded-Earth variant");
+const scale = integerArg("scale", ultraVariant ? 4 : largeVariant ? 3 : 2);
 if (largeVariant && scale !== 3)
   throw new Error("The versioned large variant must remain scale=3");
+if (ultraVariant && scale !== 4)
+  throw new Error("The versioned ultra variant must remain scale=4");
 const pageSize = integerArg("page-size", 1024);
 const sourceName = "giantworldmap";
-const mapId = largeVariant ? "ExpandedGiantWorldLarge" : "ExpandedGiantWorld";
-const mapName = largeVariant ? "Expanded Earth XL" : "Expanded Earth";
+const mapId = ultraVariant
+  ? "ExpandedGiantWorldUltra"
+  : largeVariant
+    ? "ExpandedGiantWorldLarge"
+    : "ExpandedGiantWorld";
+const mapName = ultraVariant
+  ? "Expanded Earth Ultra"
+  : largeVariant
+    ? "Expanded Earth XL"
+    : "Expanded Earth";
 const outputName = mapId.toLowerCase();
 const sourceDir = join(repo, "resources", "maps", sourceName);
 // Experimental assets must never replace maps used by running games.
@@ -50,7 +63,7 @@ if (
 ) {
   throw new Error("Output root must be a directory inside this repository");
 }
-if (scale !== 2 && !largeVariant && !outputArg)
+if (scale !== 2 && !largeVariant && !ultraVariant && !outputArg)
   throw new Error("Non-default scales require an isolated --output-root");
 const outputDir = join(outputRoot, outputName);
 if (outputArg && existsSync(outputDir))
@@ -96,6 +109,109 @@ const pagesHigh = Math.ceil(height / pageSize);
 
 mkdirSync(pagesDir, { recursive: true });
 
+/**
+ * XL used nearest-neighbour tile replication. Ultra instead builds the
+ * land/water decision at final resolution using a continuous four-sample
+ * field, then preserves narrow one-source-tile waterways as a controlled
+ * two-tile channel. This removes blocky 4x4 coasts and over-wide rivers while
+ * keeping the upstream terrain semantics and projection.
+ */
+function generateFullResolutionTerrain() {
+  const output = Buffer.allocUnsafe(width * height);
+  const x0 = new Uint32Array(width);
+  const x1 = new Uint32Array(width);
+  const xf = new Float32Array(width);
+  const nearestX = new Uint32Array(width);
+  const localX = new Float32Array(width);
+  for (let x = 0; x < width; x++) {
+    const continuous = (x + 0.5) / scale - 0.5;
+    const left = Math.max(0, Math.min(sourceWidth - 1, Math.floor(continuous)));
+    x0[x] = left;
+    x1[x] = Math.min(sourceWidth - 1, left + 1);
+    xf[x] = Math.max(0, Math.min(1, continuous - Math.floor(continuous)));
+    nearestX[x] = Math.min(sourceWidth - 1, Math.floor((x + 0.5) / scale));
+    localX[x] = ((x + 0.5) % scale) / scale;
+  }
+  const isLand = (value) => (value & 128) !== 0;
+  let landTiles = 0;
+  for (let y = 0; y < height; y++) {
+    const continuousY = (y + 0.5) / scale - 0.5;
+    const top = Math.max(
+      0,
+      Math.min(sourceHeight - 1, Math.floor(continuousY)),
+    );
+    const bottom = Math.min(sourceHeight - 1, top + 1);
+    const fy = Math.max(
+      0,
+      Math.min(1, continuousY - Math.floor(continuousY)),
+    );
+    const nearestY = Math.min(
+      sourceHeight - 1,
+      Math.floor((y + 0.5) / scale),
+    );
+    const sourceRow = nearestY * sourceWidth;
+    const localY = ((y + 0.5) % scale) / scale;
+    const outputRow = y * width;
+    for (let x = 0; x < width; x++) {
+      const a = isLand(source[top * sourceWidth + x0[x]]) ? 1 : 0;
+      const b = isLand(source[top * sourceWidth + x1[x]]) ? 1 : 0;
+      const c = isLand(source[bottom * sourceWidth + x0[x]]) ? 1 : 0;
+      const d = isLand(source[bottom * sourceWidth + x1[x]]) ? 1 : 0;
+      const upper = a + (b - a) * xf[x];
+      const lower = c + (d - c) * xf[x];
+      let land = upper + (lower - upper) * fy >= 0.5;
+      const sourceIndex = sourceRow + nearestX[x];
+      const center = source[sourceIndex];
+
+      // A one-pixel river in the source must remain navigable, but it should
+      // not become a four-pixel slab. Detect land banks across the source tile
+      // and retain a two-pixel-wide centre channel at 4x.
+      if (!isLand(center)) {
+        const sx = nearestX[x];
+        const sy = nearestY;
+        const landLeft = sx > 0 && isLand(source[sourceIndex - 1]);
+        const landRight =
+          sx + 1 < sourceWidth && isLand(source[sourceIndex + 1]);
+        const landUp = sy > 0 && isLand(source[sourceIndex - sourceWidth]);
+        const landDown =
+          sy + 1 < sourceHeight &&
+          isLand(source[sourceIndex + sourceWidth]);
+        if (landLeft && landRight) land = Math.abs(localX[x] - 0.5) > 0.26;
+        if (landUp && landDown) land = Math.abs(localY - 0.5) > 0.26;
+      }
+
+      let value;
+      if (land) {
+        const magnitude = center & 31;
+        value = 128 | magnitude;
+      } else {
+        value = center & 63;
+      }
+      output[outputRow + x] = value;
+      if (land && (value & 31) !== 31) landTiles++;
+    }
+  }
+
+  // Recompute shorelines from the final-resolution topology. Boat placement,
+  // ports and pathfinding now see the same exact coast that players see.
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      const index = row + x;
+      const land = isLand(output[index]);
+      const touchesOther =
+        (x > 0 && isLand(output[index - 1]) !== land) ||
+        (x + 1 < width && isLand(output[index + 1]) !== land) ||
+        (y > 0 && isLand(output[index - width]) !== land) ||
+        (y + 1 < height && isLand(output[index + width]) !== land);
+      if (touchesOther) output[index] |= 64;
+    }
+  }
+  return { output, landTiles };
+}
+
+const fullResolution = ultraVariant ? generateFullResolutionTerrain() : null;
+
 const pages = [];
 for (let pageY = 0; pageY < pagesHigh; pageY++) {
   for (let pageX = 0; pageX < pagesWide; pageX++) {
@@ -106,12 +222,24 @@ for (let pageY = 0; pageY < pagesHigh; pageY++) {
     const originY = pageY * pageSize;
 
     for (let localY = 0; localY < pageHeight; localY++) {
-      const sourceY = Math.floor((originY + localY) / scale);
-      const sourceRow = sourceY * sourceWidth;
+      const worldY = originY + localY;
       const outputRow = localY * pageWidth;
-      for (let localX = 0; localX < pageWidth; localX++) {
-        const sourceX = Math.floor((originX + localX) / scale);
-        page[outputRow + localX] = source[sourceRow + sourceX];
+      if (fullResolution) {
+        const sourceOffset = worldY * width + originX;
+        page.set(
+          fullResolution.output.subarray(
+            sourceOffset,
+            sourceOffset + pageWidth,
+          ),
+          outputRow,
+        );
+      } else {
+        const sourceY = Math.floor(worldY / scale);
+        const sourceRow = sourceY * sourceWidth;
+        for (let localX = 0; localX < pageWidth; localX++) {
+          const sourceX = Math.floor((originX + localX) / scale);
+          page[outputRow + localX] = source[sourceRow + sourceX];
+        }
       }
     }
 
@@ -196,7 +324,9 @@ let lod4, lod16;
 if (scale !== 2) {
   lod4 = halfMap(
     (x, y) =>
-      source[Math.floor(y / scale) * sourceWidth + Math.floor(x / scale)],
+      fullResolution
+        ? fullResolution.output[y * width + x]
+        : source[Math.floor(y / scale) * sourceWidth + Math.floor(x / scale)],
     width,
     height,
   );
@@ -217,7 +347,9 @@ const manifest = {
     format: "paged-v1",
     width,
     height,
-    num_land_tiles: sourceManifest.map.num_land_tiles * scale * scale,
+    num_land_tiles:
+      fullResolution?.landTiles ??
+      sourceManifest.map.num_land_tiles * scale * scale,
     page_size: pageSize,
     pages_wide: pagesWide,
     pages_high: pagesHigh,

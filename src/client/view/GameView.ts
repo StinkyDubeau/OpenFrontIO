@@ -29,8 +29,8 @@ import { ClientID, GameID, Player, PlayerCosmetics } from "../../core/Schemas";
 import { formatPlayerDisplayName } from "../../core/Util";
 import { WorkerClient } from "../../core/worker/WorkerClient";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
-import { extractAttackRings } from "../render/frame/derive/AttackRings";
-import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
+import { extractAttackRingsFromIds } from "../render/frame/derive/AttackRings";
+import { extractNukeTelegraphsFromIds } from "../render/frame/derive/NukeTelegraphs";
 import { computePlayerStatus } from "../render/frame/derive/PlayerStatus";
 import { buildRelationMatrix } from "../render/frame/derive/RelationMatrix";
 import { RailroadCache } from "../render/frame/RailroadCache";
@@ -44,6 +44,12 @@ import { UnitView } from "./UnitView";
 
 const TRAIL_TYPES: ReadonlySet<UnitType> = new Set<UnitType>([
   UnitType.TransportShip,
+  UnitType.AtomBomb,
+  UnitType.HydrogenBomb,
+  UnitType.MIRV,
+  UnitType.MIRVWarhead,
+]);
+const NUKE_TYPES: ReadonlySet<UnitType> = new Set<UnitType>([
   UnitType.AtomBomb,
   UnitType.HydrogenBomb,
   UnitType.MIRV,
@@ -70,6 +76,8 @@ export class GameView implements GameMap {
   private smallIDToID = new Map<number, PlayerID>();
   private _players = new Map<PlayerID, PlayerView>();
   private _units = new Map<number, UnitView>();
+  /** Units touched last tick; bounds reset/trim work to actual deltas. */
+  private readonly _updatedUnits = new Set<UnitView>();
   /**
    * Long-lived state maps (renderer's plain-object shape). Each entry shares
    * its identity with the corresponding PlayerView.state / UnitView.state, so
@@ -80,6 +88,17 @@ export class GameView implements GameMap {
     import("../render/types").PlayerState
   >();
   private _unitStates = new Map<number, import("../render/types").UnitState>();
+  private _mobileUnitStates = new Map<
+    number,
+    import("../render/types").UnitState
+  >();
+  private _structureUnitStates = new Map<
+    number,
+    import("../render/types").UnitState
+  >();
+  private readonly _trailUnitIds = new Set<number>();
+  private readonly _nukeUnitIds = new Set<number>();
+  private readonly _transportUnitIds = new Set<number>();
   /** smallID → team, for the renderer's relation matrix (team games). */
   private _teams = new Map<number, string>();
   private updatedTiles: TileRef[] = [];
@@ -160,8 +179,11 @@ export class GameView implements GameMap {
     humans: Player[],
   ) {
     this._map = this._mapData.gameMap;
+    // Page-backed maps feed the fixed-budget overview/detail renderer directly
+    // from GameMap pages. Keeping a second world-sized compatibility mirror was
+    // one of the dominant causes of iOS WebContent termination.
     this.renderTileState = this._map.isPaged()
-      ? new Uint16Array(this._map.width() * this._map.height())
+      ? new Uint16Array(0)
       : this._map.tileStateBuffer();
     this.lastUpdate = null;
     this.unitGrid = new UnitGrid(this._map);
@@ -185,9 +207,9 @@ export class GameView implements GameMap {
 
     const mapW = this._map.width();
     const mapH = this._map.height();
-    this.trailManager = new TrailManager(mapW, mapH);
+    this.trailManager = new TrailManager(mapW, mapH, this._map.isPaged());
     this.spiralTrails = new SpiralTrails(mapW);
-    this.railroadCache = new RailroadCache(mapW, mapH);
+    this.railroadCache = new RailroadCache(mapW, mapH, this._map.isPaged());
 
     // Long-lived FrameData. Most fields are mutable references to long-lived
     // buffers (tileState, trailState, etc.); changedTiles points at this
@@ -199,9 +221,13 @@ export class GameView implements GameMap {
       inSpawnPhase: true,
       tileState: this.renderTileState,
       trailState: this.trailManager.getTrailState(),
+      trailSparseState: this.trailManager.getSparseState(),
       spiralRibbons: this.spiralTrails.getRibbons(),
       railroadState: this.railroadCache.railroadState,
+      railroadSparseState: this.railroadCache.getSparseState(),
       units: this._unitStates,
+      mobileUnits: this._mobileUnitStates,
+      structures: this._structureUnitStates,
       players: this._playerStates,
       names: this._names,
       events: {
@@ -285,12 +311,15 @@ export class GameView implements GameMap {
   }
 
   public update(gu: GameUpdateViewData) {
-    // Unit set/ownership changes below; rebuild the owner index on demand.
-    this._unitsByOwnerStale = true;
-
     this.toDelete.forEach((id) => {
       this._units.delete(id);
       this._unitStates.delete(id);
+      this._mobileUnitStates.delete(id);
+      this._structureUnitStates.delete(id);
+      this._trailUnitIds.delete(id);
+      this._nukeUnitIds.delete(id);
+      this._transportUnitIds.delete(id);
+      this._unitsByOwnerStale = true;
     });
     this.toDelete.clear();
 
@@ -306,6 +335,34 @@ export class GameView implements GameMap {
       this.updatedTiles.push(tile);
       if (terrainChanged) {
         this.updatedTerrainTiles.push(tile);
+      }
+    }
+
+    // Authoritative reconnect snapshots use compact row-major ownership runs.
+    // Preserve the terrain byte already loaded from the map asset; rare terrain
+    // mutations (nukes) follow in packedTerrainUpdates below.
+    const runs = this.lastUpdate.packedTileRuns;
+    if (runs !== undefined) {
+      for (let i = 0; i + 2 < runs.length; i += 3) {
+        const start = runs[i];
+        const end = start + runs[i + 1];
+        const tileState = runs[i + 2] & 0xffff;
+        for (let tile = start; tile < end; tile++) {
+          const state = tileState | (this._map.terrainByte(tile) << 16);
+          this.updateTile(tile, state);
+          this.updatedTiles.push(tile);
+        }
+      }
+    }
+
+    const terrain = this.lastUpdate.packedTerrainUpdates;
+    if (terrain !== undefined) {
+      for (let i = 0; i + 1 < terrain.length; i += 2) {
+        const tile = terrain[i];
+        const state =
+          this._map.tileState(tile) | ((terrain[i + 1] & 0xff) << 16);
+        if (this.updateTile(tile, state)) this.updatedTerrainTiles.push(tile);
+        this.updatedTiles.push(tile);
       }
     }
 
@@ -470,7 +527,7 @@ export class GameView implements GameMap {
       this._myPlayer ??= this.playerByClientID(this._myClientID);
     }
 
-    for (const unit of this._units.values()) {
+    for (const unit of this._updatedUnits) {
       unit._wasUpdated = false;
       // Only trim when a move appended a position — slicing a ≤1-element
       // array would allocate an identical array per unit per tick, and most
@@ -479,6 +536,7 @@ export class GameView implements GameMap {
         unit.lastPos = unit.lastPos.slice(-1);
       }
     }
+    this._updatedUnits.clear();
     gu.updates[GameUpdateType.Unit].forEach((update) => {
       let unit = this._units.get(update.id);
       const isStructure = STRUCTURE_TYPES.has(update.unitType);
@@ -497,9 +555,14 @@ export class GameView implements GameMap {
           this._structuresDirty = true;
         }
         const hasMotionPlan = this.unitMotionPlans.has(update.id);
+        const oldOwnerID = unit.state.ownerID;
+        const wasActive = unit.state.isActive;
         const oldPos = unit.state.pos;
         const oldLastPos = unit.state.lastPos;
         unit.update(update);
+        if (oldOwnerID !== update.ownerID || wasActive !== update.isActive) {
+          this._unitsByOwnerStale = true;
+        }
         if (hasMotionPlan) {
           unit.state.pos = oldPos;
           unit.state.lastPos = oldLastPos;
@@ -507,9 +570,18 @@ export class GameView implements GameMap {
         }
       } else {
         unit = new UnitView(this, update);
+        this._updatedUnits.add(unit);
         this._units.set(update.id, unit);
         this._unitStates.set(update.id, unit.state);
+        if (isStructure) this._structureUnitStates.set(update.id, unit.state);
+        else this._mobileUnitStates.set(update.id, unit.state);
+        if (TRAIL_TYPES.has(update.unitType)) this._trailUnitIds.add(update.id);
+        if (NUKE_TYPES.has(update.unitType)) this._nukeUnitIds.add(update.id);
+        if (update.unitType === UnitType.TransportShip) {
+          this._transportUnitIds.add(update.id);
+        }
         this.unitGrid.addUnit(unit);
+        this._unitsByOwnerStale = true;
         if (isStructure) this._structuresDirty = true;
       }
       if (!update.isActive) {
@@ -545,16 +617,17 @@ export class GameView implements GameMap {
     // below repaints rows and re-sets these as it goes.
     this.trailManager.clearDirtyRows();
 
+    // FrameData borrows the cache's dirtyTiles array. Keep it populated until
+    // the renderer consumes this update; reset only before the next apply.
+    this.railroadCache.clearDirty();
     // Railroad events accumulate into the cache; revealedRailTiles is cleared
     // at the start of apply().
     this.railroadCache.apply(gu);
 
     // Trail update: walk active trail-type units and stamp/decay.
     this._trailIdsScratch.length = 0;
-    for (const u of this._units.values()) {
-      if (u.isActive() && TRAIL_TYPES.has(u.type())) {
-        this._trailIdsScratch.push(u.id());
-      }
+    for (const id of this._trailUnitIds) {
+      if (this._unitStates.get(id)?.isActive) this._trailIdsScratch.push(id);
     }
     this.trailManager.update(
       this._unitStates as Map<number, import("../render/types").UnitState>,
@@ -600,6 +673,7 @@ export class GameView implements GameMap {
     f.trailDirtyTiles = this.trailManager.dirtyTiles;
 
     f.playerStatus = computePlayerStatus(this._playerStates, this._unitStates, {
+      nukeUnitIds: this._nukeUnitIds,
       localPlayerSmallID: this._myPlayer?.smallID() ?? 0,
       localPlayerID: this._myPlayer?.id() ?? "",
       tileState: this.renderTileState,
@@ -630,7 +704,8 @@ export class GameView implements GameMap {
       this._clustersDirty = false;
       f.allianceClusters = computeAllianceClusters(this._playerStates);
     }
-    f.nukeTelegraphs = extractNukeTelegraphs(
+    f.nukeTelegraphs = extractNukeTelegraphsFromIds(
+      this._nukeUnitIds,
       this._unitStates,
       this._map.width(),
       this._myPlayer?.smallID() ?? 0,
@@ -642,7 +717,8 @@ export class GameView implements GameMap {
       gu.tick,
     );
     f.attackRings = this._myPlayer
-      ? extractAttackRings(
+      ? extractAttackRingsFromIds(
+          this._transportUnitIds,
           this._unitStates,
           this._map.width(),
           this._myPlayer.smallID(),
@@ -664,7 +740,6 @@ export class GameView implements GameMap {
     }
 
     // Reset transient flags for next tick.
-    this.railroadCache.clearDirty();
     this._structuresDirty = false;
   }
 
@@ -1149,6 +1224,9 @@ export class GameView implements GameMap {
   unit(id: number): UnitView | undefined {
     return this._units.get(id);
   }
+  trackUpdatedUnit(unit: UnitView): void {
+    this._updatedUnits.add(unit);
+  }
   unitInfo(type: UnitType): UnitInfo {
     return this._config.unitInfo(type);
   }
@@ -1326,7 +1404,9 @@ export class GameView implements GameMap {
   }
   updateTile(tile: TileRef, state: number): boolean {
     const terrainChanged = this._map.updateTile(tile, state);
-    this.renderTileState[tile] = this._map.tileState(tile);
+    if (this.renderTileState.length > 0) {
+      this.renderTileState[tile] = this._map.tileState(tile);
+    }
     return terrainChanged;
   }
   numTilesWithFallout(): number {

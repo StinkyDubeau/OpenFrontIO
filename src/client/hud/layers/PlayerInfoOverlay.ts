@@ -224,7 +224,8 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   private displayUnitCount(player: PlayerView, type: UnitType, icon: string) {
     return !this.game.config().isUnitDisabled(type)
       ? html`<div
-          class="flex items-center justify-center gap-0.5 lg:gap-1 p-0.5 lg:p-1 border rounded-md border-gray-500 text-[10px] lg:text-xs w-9 lg:w-12 h-6 lg:h-7"
+          class="atlas-player-structure flex items-center justify-center gap-0.5 lg:gap-1 p-0.5 lg:p-1 text-[10px] lg:text-xs"
+          title=${type}
           translate="no"
         >
           <img
@@ -450,9 +451,9 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     }
 
     return html`
-      <div class="flex items-start gap-1 lg:gap-2 p-1 lg:p-1.5">
+      <div class="atlas-player-details">
         <!-- Left: Gold & Troop bar -->
-        <div class="flex flex-col gap-1 shrink-0 w-28 md:w-36">
+        <div class="atlas-player-resources flex flex-col gap-1 shrink-0">
           <div class="flex items-center gap-1">
             <div
               class="flex items-center justify-center px-1 py-0.5 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm lg:gap-1"
@@ -482,16 +483,14 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
               >
             </div>
           </div>
-          <div class="w-28 md:w-36" translate="no">
+          <div class="w-full" translate="no">
             ${this.renderTroopBar(totalTroops, attackingTroops, maxTroops)}
           </div>
         </div>
         <!-- Right: Player identity + Units below -->
-        <div
-          class="flex flex-col justify-between self-stretch w-[100%] flex-grow-1"
-        >
+        <div class="atlas-player-identity">
           <div
-            class="flex items-center gap-1 pr-7 lg:gap-2 font-bold text-sm lg:text-lg ${this.getPlayerNameColor(
+            class="atlas-player-name flex items-center gap-1 lg:gap-2 font-bold text-sm lg:text-lg ${this.getPlayerNameColor(
               isFriendly ?? false,
             )}"
           >
@@ -505,7 +504,8 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
             }
             <div class="shrink min-w-0">
               <span
-                class="font-mono inline-block leading-[1.2] wrap-anywhere"
+                class="atlas-player-name__text"
+                title=${player.displayName()}
                 style="font-size: ${fontSize}"
                 >${player.displayName()}</span
               >
@@ -534,7 +534,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
             ${this.renderPlayerNameIcons(playerIcons)} ${betrayalHtml ?? ""}
             ${allianceHtml ?? ""}
           </div>
-          <div class="flex gap-0.5 lg:gap-1 items-center mt-0.5">
+          <div class="atlas-player-structures">
             ${this.displayUnitCount(player, UnitType.City, cityIcon)}
             ${this.displayUnitCount(player, UnitType.Factory, factoryIcon)}
             ${this.displayUnitCount(player, UnitType.Port, portIcon)}

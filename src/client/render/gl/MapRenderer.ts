@@ -12,6 +12,7 @@
  */
 
 import type { Config } from "../../../core/configuration/Config";
+import type { GameMap } from "../../../core/game/GameMap";
 import type { MapLayer } from "../../../core/game/TerrainMapLoader";
 import type { SpiralRibbon } from "../frame/SpiralTrails";
 import type {
@@ -32,10 +33,11 @@ import type {
 import type { SpawnCenter } from "./passes/SpawnOverlayPass";
 import type { AttackTroopLabel } from "./passes/WorldTextPass";
 import { GPURenderer } from "./Renderer";
+import { PagedRenderer } from "./PagedRenderer";
 import type { RenderSettings } from "./RenderSettings";
 
 export class MapRenderer {
-  private renderer: GPURenderer | null = null;
+  private renderer: GPURenderer | PagedRenderer | null = null;
   private resizeObs: ResizeObserver | null = null;
   // Stored layer data for context-restore re-creation.
   private storedLayers: MapLayer[] = [];
@@ -66,6 +68,7 @@ export class MapRenderer {
     private settings: RenderSettings,
     private raf?: typeof requestAnimationFrame,
     private caf?: typeof cancelAnimationFrame,
+    private pagedMap?: GameMap,
   ) {
     this.initRenderer();
 
@@ -86,16 +89,27 @@ export class MapRenderer {
   }
 
   private initRenderer = () => {
-    this.renderer = new GPURenderer(
-      this.canvas,
-      this.header,
-      this.terrainSource,
-      this.paletteData,
-      this.config,
-      this.settings,
-      this.raf,
-      this.caf,
-    );
+    this.renderer = this.pagedMap
+      ? new PagedRenderer(
+          this.canvas,
+          this.header,
+          this.pagedMap,
+          this.paletteData,
+          this.config,
+          this.settings,
+          this.raf,
+          this.caf,
+        )
+      : new GPURenderer(
+          this.canvas,
+          this.header,
+          this.terrainSource,
+          this.paletteData,
+          this.config,
+          this.settings,
+          this.raf,
+          this.caf,
+        );
 
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width > 0) this.renderer.resize(rect.width, rect.height);
@@ -152,15 +166,25 @@ export class MapRenderer {
   uploadLiveTrailDelta(
     trailState: Uint16Array,
     dirtyTiles: readonly number[],
+    trailSparseState?: ReadonlyMap<number, number> | null,
   ): void {
-    this.renderer?.uploadLiveTrailDelta(trailState, dirtyTiles);
+    this.renderer?.uploadLiveTrailDelta(
+      trailState,
+      dirtyTiles,
+      trailSparseState,
+    );
   }
   /** Upload full tile + trail state without resetting bloom (for live play). */
   uploadTileAndTrailState(
     tileState: Uint16Array,
     trailState: Uint16Array,
+    trailSparseState?: ReadonlyMap<number, number> | null,
   ): void {
-    this.renderer?.uploadTileAndTrailState(tileState, trailState);
+    this.renderer?.uploadTileAndTrailState(
+      tileState,
+      trailState,
+      trailSparseState,
+    );
   }
   updateSpiralRibbons(ribbons: readonly SpiralRibbon[]): void {
     this.renderer?.updateSpiralRibbons(ribbons);
@@ -188,8 +212,12 @@ export class MapRenderer {
   setPlayerSpawn(smallID: number, x: number, y: number): void {
     this.renderer?.setPlayerSpawn(smallID, x, y);
   }
-  uploadRailroadState(data: Uint8Array, dirtyTiles: readonly number[]): void {
-    this.renderer?.uploadRailroadState(data, dirtyTiles);
+  uploadRailroadState(
+    data: Uint8Array,
+    dirtyTiles: readonly number[],
+    sparseState?: ReadonlyMap<number, number> | null,
+  ): void {
+    this.renderer?.uploadRailroadState(data, dirtyTiles, sparseState);
   }
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {
     this.renderer?.updateUnits(units, gameTick);
@@ -283,6 +311,7 @@ export class MapRenderer {
 
   /** Batch-mark tiles as destroyed for a nukeable layer. */
   markLayerTilesDestroyed(layerId: string, tileIndices: number[]): void {
+    if (this.pagedMap) return;
     // Accumulate into the CPU-side mask for context-restore.
     let mask = this.layerDestroyedMasks.get(layerId);
     if (!mask) {
@@ -297,6 +326,7 @@ export class MapRenderer {
 
   /** Bulk-update the destroyed mask for a nukeable layer. */
   setLayerDestroyedMask(layerId: string, mask: Uint8Array): void {
+    if (this.pagedMap) return;
     this.layerDestroyedMasks.set(layerId, new Uint8Array(mask));
     this.renderer?.setLayerDestroyedMask(layerId, mask);
   }

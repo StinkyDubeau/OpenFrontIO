@@ -67,6 +67,8 @@ export interface PersistentWorldServiceOptions {
 export interface PersistentWorldRuntimeCoordinator {
   ensure(world: PersistentWorld): Promise<void>;
   reconcile(): Promise<void>;
+  /** True only while this process has a fully reconstructed authoritative game. */
+  isRuntimeReady?(worldId: string): boolean;
 }
 
 export interface CreatedPersistentWorld {
@@ -454,6 +456,7 @@ export class PersistentWorldService {
       runtimeGameId:
         viewerRsvp &&
         runtime?.state === "ready" &&
+        (this.runtimeCoordinator?.isRuntimeReady?.(world.id) ?? true) &&
         this.repository.gameplayIdentityHash(viewerRsvp.identity.id)
           ? runtime.gameId
           : null,

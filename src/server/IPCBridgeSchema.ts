@@ -137,7 +137,8 @@ const WorkerManagedGameReadySchema = z
     requestId: ManagedRequestIdSchema,
     gameID: ID,
     workerId: z.number().int().nonnegative(),
-    outcome: z.enum(["created", "exists", "conflict"]),
+    outcome: z.enum(["created", "exists", "conflict", "failed"]),
+    error: z.string().max(500).optional(),
   })
   .strict();
 

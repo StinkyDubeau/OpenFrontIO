@@ -342,10 +342,22 @@ export class Config {
     tradeShipSpawnRejections: number,
     numTradeShips: number,
   ): number {
-    const decayRate = Math.LN2 / 50;
+    // Trade density is an upstream rule expressed for the 1× world. Expanded
+    // worlds have proportionally more ocean, ports and travel distance, so a
+    // fixed global midpoint makes their seas almost empty. Scale the entire
+    // sigmoid (not just its midpoint) by map area to preserve the same ships
+    // per geographic area and the same-shaped saturation curve.
+    const tradeScale =
+      this._gameConfig.gameMap === "Expanded Earth Ultra"
+        ? 16
+        : this._gameConfig.gameMap === "Expanded Earth XL"
+          ? 4
+          : 1;
+    const decayRate = Math.LN2 / (50 * tradeScale);
 
     // Approaches 0 as numTradeShips increase
-    const baseSpawnRate = 1 - sigmoid(numTradeShips, decayRate, 400);
+    const baseSpawnRate =
+      1 - sigmoid(numTradeShips, decayRate, 400 * tradeScale);
 
     // Pity timer: increases spawn chance after consecutive rejections
     const rejectionModifier = 1 / (tradeShipSpawnRejections + 1);

@@ -6,7 +6,6 @@ import type { EventBus } from "../../../core/EventBus";
 import { GameMode, type Team } from "../../../core/game/Game";
 import { recordDeveloperMenuLogoTap } from "../../components/DeveloperMenu";
 import type { Controller } from "../../Controller";
-import { Platform } from "../../Platform";
 import { themeProvider } from "../../theme/ThemeProvider";
 import { getTranslatedPlayerTeamLabel, translateText } from "../../Utils";
 import type { GameView } from "../../view";
@@ -45,7 +44,6 @@ export class GameLeftSidebar extends LitElement implements Controller {
   @property({ attribute: false }) public eventBus: EventBus | null = null;
   @query("player-stats") private playerStats?: PlayerStats;
   @query("team-stats") private teamStats?: TeamStats;
-  private showPlayerStatsAfterSpawn = false;
 
   createRenderRoot() {
     return this;
@@ -62,10 +60,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
     if (this.isTeamGame) {
       this.isPlayerTeamLabelVisible = true;
     }
-    // Make it visible by default on large screens
-    if (Platform.isDesktopWidth) {
-      this.showPlayerStatsAfterSpawn = true;
-    }
+    // The map leads on every screen; standings open only on request.
   }
 
   getTickIntervalMs() {
@@ -79,11 +74,6 @@ export class GameLeftSidebar extends LitElement implements Controller {
     if (this.playerTeam === null && team !== null && team !== undefined) {
       this.playerTeam = team;
       this.playerColor = themeProvider.current().teamColor(team);
-    }
-
-    if (this.showPlayerStatsAfterSpawn && !this.game.inSpawnPhase()) {
-      this.showPlayerStatsAfterSpawn = false;
-      this.isPlayerStatsShown = true;
     }
 
     if (!this.game.inSpawnPhase() && this.isPlayerTeamLabelVisible) {
@@ -125,7 +115,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
         }`}
         style="margin-top: ${this.barOffset}px;"
       >
-        <div class="flex items-center gap-4 xl:gap-6 text-white">
+        <div class="atlas-overview-actions flex items-center text-white">
           <div
             class="atlas-map-brand-mark"
             aria-hidden="true"
@@ -143,17 +133,11 @@ export class GameLeftSidebar extends LitElement implements Controller {
               ></circle>
             </svg>
           </div>
-          <div
-            class="cursor-pointer p-0.5 bg-gray-700/50 hover:bg-gray-600 border rounded-md border-slate-500 transition-colors"
+          <button
+            class="atlas-hud-button"
+            type="button"
+            aria-expanded=${this.isPlayerStatsShown}
             @click=${this.togglePlayerStats}
-            role="button"
-            tabindex="0"
-            @keydown=${(e: KeyboardEvent) => {
-              if (e.key === "Enter" || e.key === " " || e.code === "Space") {
-                e.preventDefault();
-                this.togglePlayerStats();
-              }
-            }}
           >
             <img
               src=${
@@ -168,25 +152,15 @@ export class GameLeftSidebar extends LitElement implements Controller {
               width="20"
               height="20"
             />
-          </div>
+          </button>
           ${
             this.isTeamGame
               ? html`
-                  <div
-                    class="cursor-pointer p-0.5 bg-gray-700/50 hover:bg-gray-600 border rounded-md border-slate-500 transition-colors"
+                  <button
+                    class="atlas-hud-button"
+                    type="button"
+                    aria-expanded=${this.isTeamStatsShown}
                     @click=${this.toggleTeamStats}
-                    role="button"
-                    tabindex="0"
-                    @keydown=${(e: KeyboardEvent) => {
-                      if (
-                        e.key === "Enter" ||
-                        e.key === " " ||
-                        e.code === "Space"
-                      ) {
-                        e.preventDefault();
-                        this.toggleTeamStats();
-                      }
-                    }}
                   >
                     <img
                       src=${
@@ -201,7 +175,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
                       width="20"
                       height="20"
                     />
-                  </div>
+                  </button>
                 `
               : null
           }

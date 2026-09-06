@@ -13,6 +13,7 @@ import type { GameStartInfo, Turn } from "../../core/Schemas";
 import type { WorkerMessage } from "../../core/worker/WorkerMessages";
 import { NodeGameMapLoader } from "./NodeGameMapLoader";
 import { ViewSnapshot } from "./ViewSnapshot";
+import { MovingUnitTracker } from "./MovingUnitTracker";
 
 const port = parentPort!;
 console.debug = () => {};
@@ -37,7 +38,7 @@ function tick(turn: Turn) {
   snapshot.record(latest);
 }
 for (const turn of workerData.turns as Turn[]) tick(turn);
-let lastUnitPositions = new Map<number, number>();
+const movingUnits = new MovingUnitTracker();
 
 function query(q: ViewQuery): WorkerMessage {
   const game = runner.game;
@@ -103,17 +104,13 @@ port.on("message", (command) => {
       // Render clients receive current positions. Original motion executions
       // still run in the core; no per-client path execution is required.
       latest.packedMotionPlans = undefined;
-      const positions = new Map<number, number>();
-      for (const unit of runner.game.units()) {
-        positions.set(unit.id(), unit.tile());
-        // The core already emits state changes for structures and units.
-        // Only movement bypasses that path when clients run motion plans.
-        // Append the final position even if an earlier update was emitted
-        // before this unit moved. Never resend every stationary structure.
-        if (lastUnitPositions.get(unit.id()) !== unit.tile())
-          latest.updates[GameUpdateType.Unit].push(unit.toUpdate());
-      }
-      lastUnitPositions = positions;
+      // The core already emits state changes for structures and units. Only
+      // movement bypasses that path when clients run motion plans. Structures
+      // can never move, so do not rescan them as the world builds up.
+      movingUnits.appendChangedPositions(
+        runner.game,
+        latest.updates[GameUpdateType.Unit],
+      );
       latest.pendingTurns = 0;
       latest.serverTickExecutionDuration = performance.now() - started;
       const bytes = encodeViewPacket({ kind: "update", update: latest });

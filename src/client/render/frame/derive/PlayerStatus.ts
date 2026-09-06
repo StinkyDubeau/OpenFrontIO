@@ -10,6 +10,8 @@ const NUKE_ACTIVE_TYPES: ReadonlySet<string> = new Set([
 const OWNER_MASK = 0xfff;
 
 export interface ComputePlayerStatusOptions {
+  /** Optional pre-classified IDs avoids scanning stationary structures. */
+  nukeUnitIds?: Iterable<number>;
   /**
    * Local player smallID for computing relative flags. Omit (or set to 0)
    * for replay mode — relative flags will all be false.
@@ -85,7 +87,15 @@ export function computePlayerStatus(
   // Shown during replay too, except the nukeTargetsMe flag.
   const nukeActiveOwners = new Set<number>();
   const nukeTargetsMeOwners = new Set<number>();
-  for (const u of units.values()) {
+  const statusUnits = opts.nukeUnitIds
+    ? (function* () {
+        for (const id of opts.nukeUnitIds!) {
+          const unit = units.get(id);
+          if (unit) yield unit;
+        }
+      })()
+    : units.values();
+  for (const u of statusUnits) {
     if (!u.isActive || !NUKE_ACTIVE_TYPES.has(u.unitType)) continue;
     nukeActiveOwners.add(u.ownerID);
     if (

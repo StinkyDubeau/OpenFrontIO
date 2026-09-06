@@ -200,6 +200,12 @@ export class AtlasUiLab extends LitElement {
 
 export function mountAtlasUiLab(): boolean {
   const lab = new URLSearchParams(location.search).get("ui-lab");
+  if (lab === "hud") {
+    void import("./AtlasHudReference").then(({ mountHudReference }) =>
+      mountHudReference(),
+    );
+    return true;
+  }
   if (lab !== "1" && lab !== STONE_BUTTON_LAB) return false;
   document.body.classList.add("atlas-ui-lab-active");
   document.body.classList.toggle("in-game", lab === "1");

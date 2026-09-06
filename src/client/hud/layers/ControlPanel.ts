@@ -3,7 +3,7 @@ import { customElement, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 import { Config } from "../../../core/configuration/Config";
 import { EventBus } from "../../../core/EventBus";
-import { GameMode, GameType, Gold, Structures } from "../../../core/game/Game";
+import { GameMode, GameType, Gold } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
 import { UserSettings } from "../../../core/game/UserSettings";
@@ -20,7 +20,7 @@ import {
 } from "../../Utils";
 import { GameView } from "../../view";
 import { PlayerView } from "../../view/PlayerView";
-import { cityIcon, goldCoinIcon, soldierIcon } from "../HotbarIcons";
+import { goldCoinIcon, soldierIcon } from "../HotbarIcons";
 
 @customElement("control-panel")
 export class ControlPanel extends LitElement implements Controller {
@@ -54,9 +54,6 @@ export class ControlPanel extends LitElement implements Controller {
 
   @state()
   private _attackingTroops: number = 0;
-
-  @state()
-  private _structures: number = 0;
 
   @state()
   private _goldGain: bigint | null = null;
@@ -122,7 +119,6 @@ export class ControlPanel extends LitElement implements Controller {
       .outgoingAttacks()
       .map((a) => a.troops)
       .reduce((a, b) => a + b, 0);
-    this._structures = player.units(...Structures.types).length;
     this.troopRate = config.troopIncreaseRate(player) * 10;
 
     const helpEnabled = new UserSettings().helpMessages();
@@ -368,25 +364,14 @@ export class ControlPanel extends LitElement implements Controller {
             >${renderTroops(this._maxTroops)}</span
           >
         </div>
-        <div
-          class="absolute inset-0 flex items-center justify-center gap-0.5 pointer-events-none"
-          translate="no"
-        >
-          <img
-            src=${soldierIcon}
-            alt=""
-            aria-hidden="true"
-            width="12"
-            height="12"
-            class="brightness-0 invert drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]"
-          />
-          <span
-            class="text-[10px] font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] ${
-              this._troopRateIsIncreasing ? "text-green-400" : "text-orange-400"
-            }"
-            >+${renderTroops(this.troopRate)}/s</span
-          >
-        </div>
+        <img
+          src=${soldierIcon}
+          alt=""
+          aria-hidden="true"
+          width="14"
+          height="14"
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 brightness-0 invert pointer-events-none"
+        />
       </div>
     `;
   }
@@ -462,75 +447,67 @@ export class ControlPanel extends LitElement implements Controller {
 
   private renderDesktop() {
     return html`
-      ${this.renderNotification()}
-      <!-- Row 1: troop rate | troop bar | gold -->
-      <div class="atlas-resource-row flex gap-1.5 items-center mb-1">
-        <!-- Troop rate -->
-        <div
-          class="atlas-instrument-readout atlas-instrument-readout--rate flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${
-            this._troopRateIsIncreasing
-              ? "border-green-400"
-              : "border-orange-400"
-          }"
-          translate="no"
-        >
-          <img
-            src=${soldierIcon}
-            alt=""
-            aria-hidden="true"
-            width="13"
-            height="13"
-            class="shrink-0"
-            style="filter: ${
+      <div class="atlas-desktop-control-layout">
+        <!-- Row 1: troop rate | troop bar | gold -->
+        <div class="atlas-resource-row flex gap-1.5 items-center mb-1">
+          <!-- Troop rate -->
+          <div
+            class="atlas-instrument-readout atlas-instrument-readout--rate flex items-center gap-1 shrink-0 border rounded-md font-bold text-sm py-0.5 px-1 w-[5.5rem] ${
               this._troopRateIsIncreasing
-                ? "brightness(0) saturate(100%) invert(74%) sepia(44%) saturate(500%) hue-rotate(83deg) brightness(103%)"
-                : "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(105%)"
+                ? "border-green-400"
+                : "border-orange-400"
             }"
-          />
-          <span
-            class="text-sm font-bold tabular-nums ${
-              this._troopRateIsIncreasing ? "text-green-400" : "text-orange-400"
-            }"
-            >+${renderTroops(this.troopRate)}/s</span
+            translate="no"
           >
-        </div>
-        <!-- Troop bar -->
-        <div class="flex-1">${this.renderDesktopTroopBar()}</div>
-        <!-- Gold -->
-        <div
-          class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center gap-1 shrink-0 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm py-0.5 px-1 min-w-[4.5rem] relative"
-          translate="no"
-        >
-          ${
-            this._goldGain !== null
-              ? keyed(
-                  this._goldGainPulseId,
-                  html`<span
-                    class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-sm font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
-                    >+${renderNumber(this._goldGain)}</span
-                  >`,
-                )
-              : ""
-          }
-          <img src=${goldCoinIcon} width="13" height="13" class="shrink-0" />
-          <span class="tabular-nums">${renderNumber(this._gold)}</span>
-        </div>
-      </div>
-      <!-- Row 2: structure ledger | tactile ratio dial -->
-      <div class="atlas-attack-console atlas-desktop-attack-row" translate="no">
-        <div class="atlas-instrument-readout atlas-structure-count">
-          <img
-            src=${cityIcon}
-            alt=""
-            aria-hidden="true"
-            width="14"
-            height="14"
-          />
-          <span>${translateText("effects.type.structures")}</span>
-          <strong>${this._structures}</strong>
+            <img
+              src=${soldierIcon}
+              alt=""
+              aria-hidden="true"
+              width="13"
+              height="13"
+              class="shrink-0"
+              style="filter: ${
+                this._troopRateIsIncreasing
+                  ? "brightness(0) saturate(100%) invert(74%) sepia(44%) saturate(500%) hue-rotate(83deg) brightness(103%)"
+                  : "brightness(0) saturate(100%) invert(65%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(105%)"
+              }"
+            />
+            <span
+              class="text-sm font-bold tabular-nums ${
+                this._troopRateIsIncreasing
+                  ? "text-green-400"
+                  : "text-orange-400"
+              }"
+              >+${renderTroops(this.troopRate)}/s</span
+            >
+          </div>
+          <!-- Troop bar -->
+          <div class="atlas-resource-troops flex-1">
+            ${this.renderDesktopTroopBar()}
+          </div>
+          <!-- Gold -->
+          <div
+            class="atlas-instrument-readout atlas-instrument-readout--gold flex items-center gap-1 shrink-0 border rounded-md border-yellow-400 font-bold text-yellow-400 text-sm py-0.5 px-1 min-w-[4.5rem] relative"
+            translate="no"
+          >
+            ${
+              this._goldGain !== null
+                ? keyed(
+                    this._goldGainPulseId,
+                    html`<span
+                      class="gold-gain-pop absolute -top-5 right-[5px] min-[1015px]:right-[9px] text-green-400 text-sm font-extrabold tabular-nums whitespace-nowrap pointer-events-none drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
+                      >+${renderNumber(this._goldGain)}</span
+                    >`,
+                  )
+                : ""
+            }
+            <img src=${goldCoinIcon} width="13" height="13" class="shrink-0" />
+            <span class="tabular-nums">${renderNumber(this._gold)}</span>
+          </div>
         </div>
         <attack-ratio-dial
           class="atlas-attack-dial--desktop"
+          translate="no"
           .value=${Math.round(this.attackRatio * 100)}
           .step=${this.userSettings.attackRatioIncrement()}
           .label=${translateText("user_setting.attack_ratio_label")}
@@ -545,7 +522,6 @@ export class ControlPanel extends LitElement implements Controller {
 
   private renderMobile() {
     return html`
-      ${this.renderNotification()}
       <div class="atlas-mobile-control-layout">
         <div class="atlas-mobile-control-ledger">
           <div class="atlas-mobile-ledger-row">
@@ -585,20 +561,6 @@ export class ControlPanel extends LitElement implements Controller {
           <div class="atlas-mobile-troop-row">
             ${this.renderMobileTroopBar()}
           </div>
-          <div
-            class="atlas-instrument-readout atlas-structure-count"
-            translate="no"
-          >
-            <img
-              src=${cityIcon}
-              alt=""
-              aria-hidden="true"
-              width="14"
-              height="14"
-            />
-            <span>${translateText("effects.type.structures")}</span>
-            <strong>${this._structures}</strong>
-          </div>
         </div>
         <attack-ratio-dial
           class="atlas-attack-dial--mobile"
@@ -637,6 +599,7 @@ export class ControlPanel extends LitElement implements Controller {
         }"
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
+        ${this.renderNotification()}
         <div class="lg:hidden">${this.renderMobile()}</div>
         <div class="hidden lg:block">${this.renderDesktop()}</div>
       </div>

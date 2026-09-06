@@ -9,6 +9,7 @@ layout(location = 2) in vec2 aInst1; // atlasIdx, markedForDeletion
 
 uniform mat3  uCamera;
 uniform float uZoom;
+uniform float uLodZoom;
 
 uniform float uIconSize;
 uniform float uDotsThreshold;
@@ -33,19 +34,19 @@ void main() {
   vOwnerID = aInst0.z;
   vUnderConstruction = aInst0.w;
   vMarkedForDeletion = aInst1.y;
-  vZoom = uZoom;
+  vZoom = uLodZoom;
   vAtlasIdx = aInst1.x;
 
   float iconScale;
-  if (uZoom <= uDotsThreshold) {
+  if (uLodZoom <= uDotsThreshold) {
     iconScale = uDotScale;
-  } else if (uZoom >= uIconGrowZoom) {
+  } else if (uLodZoom >= uIconGrowZoom) {
     // World-anchored: grow proportionally to zoom so the structure covers a
     // fixed area of the map. Past this zoom, structures should feel like
     // they're "on" the canvas rather than overlaid at constant pixel size.
-    iconScale = uZoom / uIconGrowZoom;
+    iconScale = uLodZoom / uIconGrowZoom;
   } else {
-    iconScale = min(1.0, uZoom / uScaleFactor);
+    iconScale = min(1.0, uLodZoom / uScaleFactor);
   }
 
   int shapeIdx = int(aInst1.x);

@@ -397,13 +397,21 @@ describe("managed-game master/worker bridge", () => {
     expect(statusHandler).toHaveBeenCalled();
   });
 
-  it("creates a managed GameServer once and acknowledges an idempotent replay", () => {
-    const created = { managedRequestId: () => managedCommand.requestId };
+  it("creates a managed GameServer once and acknowledges only after simulation recovery", async () => {
+    let resolveReady!: () => void;
+    const recovered = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    const created = {
+      managedRequestId: () => managedCommand.requestId,
+      whenSimulationReady: () => recovered,
+    };
     const gm = {
       game: vi.fn().mockReturnValueOnce(null).mockReturnValue(created),
       createGame: vi.fn().mockReturnValue(created),
       publicLobbies: vi.fn().mockReturnValue([]),
       listedLobbies: vi.fn().mockReturnValue([]),
+      discardGame: vi.fn(),
     };
     const server = new EventEmitter();
     const worker = new WorkerLobbyService(
@@ -434,6 +442,15 @@ describe("managed-game master/worker bridge", () => {
         onLiveStatsCommitted: expect.any(Function),
       }),
     );
+    expect(sendToMaster).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "managedGameReady",
+        outcome: "created",
+      }),
+    );
+    resolveReady();
+    await recovered;
+    await Promise.resolve();
     expect(sendToMaster).toHaveBeenLastCalledWith(
       expect.objectContaining({
         type: "managedGameReady",
@@ -442,6 +459,7 @@ describe("managed-game master/worker bridge", () => {
     );
 
     (worker as any).handleMasterMessage(managedCommand);
+    await Promise.resolve();
     expect(gm.createGame).toHaveBeenCalledOnce();
     expect(sendToMaster).toHaveBeenLastCalledWith(
       expect.objectContaining({

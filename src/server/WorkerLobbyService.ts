@@ -116,12 +116,31 @@ export class WorkerLobbyService {
       }
       case "createManagedGame": {
         const existing = this.gm.game(msg.gameID);
-        let outcome: WorkerManagedGameReady["outcome"];
+        const acknowledge = (
+          outcome: WorkerManagedGameReady["outcome"],
+          error?: string,
+        ) =>
+          this.sendToMaster({
+            type: "managedGameReady",
+            requestId: msg.requestId,
+            gameID: msg.gameID,
+            workerId: ServerEnv.workerId() ?? 0,
+            outcome,
+            ...(error ? { error: error.slice(0, 500) } : {}),
+          } satisfies WorkerManagedGameReady);
         if (existing !== null) {
-          outcome =
-            existing.managedRequestId() === msg.requestId
-              ? "exists"
-              : "conflict";
+          if (existing.managedRequestId() !== msg.requestId) {
+            acknowledge("conflict");
+          } else {
+            void existing.whenSimulationReady().then(
+              () => acknowledge("exists"),
+              (error) =>
+                acknowledge(
+                  "failed",
+                  error instanceof Error ? error.message : String(error),
+                ),
+            );
+          }
         } else {
           const game = this.gm.createGame(
             msg.gameID,
@@ -155,15 +174,21 @@ export class WorkerLobbyService {
                 } satisfies WorkerManagedGameStats),
             },
           );
-          outcome = game === null ? "conflict" : "created";
+          if (game === null) {
+            acknowledge("conflict");
+          } else {
+            void game.whenSimulationReady().then(
+              () => acknowledge("created"),
+              (error) => {
+                this.gm.discardGame(msg.gameID, game);
+                acknowledge(
+                  "failed",
+                  error instanceof Error ? error.message : String(error),
+                );
+              },
+            );
+          }
         }
-        this.sendToMaster({
-          type: "managedGameReady",
-          requestId: msg.requestId,
-          gameID: msg.gameID,
-          workerId: ServerEnv.workerId() ?? 0,
-          outcome,
-        } satisfies WorkerManagedGameReady);
         break;
       }
       case "updateLobby": {

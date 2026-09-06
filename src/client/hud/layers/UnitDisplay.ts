@@ -121,7 +121,7 @@ export class UnitDisplay extends LitElement implements Controller {
 
     return html`
       <div class="border-t border-white/10 p-0.5 w-full">
-        <div class="grid grid-rows-1 grid-flow-col gap-0.5 w-fit mx-auto">
+        <div class="atlas-build-controls">
           ${this.renderUnitItem(
             cityIcon,
             this._cities,
@@ -226,41 +226,45 @@ export class UnitDisplay extends LitElement implements Controller {
           this.requestUpdate();
         }}
       >
-        ${hovered
-          ? html`
-              <div
-                class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 text-gray-200 text-center w-max text-xs bg-gray-800/90 backdrop-blur-xs rounded-sm p-1 z-[100] shadow-lg pointer-events-none"
-              >
-                <div class="font-bold text-sm mb-1">
-                  ${translateText(
+        ${
+          hovered
+            ? html`
+                <div
+                  class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 text-gray-200 text-center w-max text-xs bg-gray-800/90 backdrop-blur-xs rounded-sm p-1 z-[100] shadow-lg pointer-events-none"
+                >
+                  <div class="font-bold text-sm mb-1">
+                    ${translateText(
                     "unit_type." + structureKey,
                   )}${` [${displayHotkey}]`}
-                </div>
-                <div class="p-2">
-                  ${translateText("build_menu.desc." + structureKey)}
-                </div>
-                ${unitType === UnitType.Warship
-                  ? html`<div
-                      class="mt-1 px-2 py-1 text-[10px] text-cyan-300 border-t border-white/10"
+                  </div>
+                  <div class="p-2">
+                    ${translateText("build_menu.desc." + structureKey)}
+                  </div>
+                  ${
+                  unitType === UnitType.Warship
+                    ? html`<div
+                        class="mt-1 px-2 py-1 text-[10px] text-cyan-300 border-t border-white/10"
+                      >
+                        ⇧ ${translateText("build_menu.warship_shift_hint")}
+                      </div>`
+                    : null
+                }
+                  <div class="flex items-center justify-center gap-1">
+                    <img src=${goldCoinIcon} width="13" height="13" />
+                    <span class="text-yellow-300"
+                      >${renderNumber(this.cost(unitType))}</span
                     >
-                      ⇧ ${translateText("build_menu.warship_shift_hint")}
-                    </div>`
-                  : null}
-                <div class="flex items-center justify-center gap-1">
-                  <img src=${goldCoinIcon} width="13" height="13" />
-                  <span class="text-yellow-300"
-                    >${renderNumber(this.cost(unitType))}</span
-                  >
+                  </div>
                 </div>
-              </div>
-            `
-          : null}
-        <div
-          class="${this.canBuild(unitType)
-            ? ""
-            : "opacity-40"} border border-slate-500 rounded-sm px-0.5 pb-0.5 flex items-center gap-0.5 cursor-pointer
-             ${selected ? "hover:bg-gray-400/10" : "hover:bg-gray-800"}
-             rounded-sm text-white ${selected ? "bg-slate-400/20" : ""}"
+              `
+            : null
+        }
+        <button
+          class="atlas-hud-button atlas-build-control"
+          type="button"
+          aria-label=${translateText("unit_type." + structureKey)}
+          aria-pressed=${selected}
+          aria-disabled=${!selected && !this.canBuild(unitType)}
           @click=${() => {
             if (selected) {
               this.uiState.ghostStructure = null;
@@ -290,16 +294,18 @@ export class UnitDisplay extends LitElement implements Controller {
           @mouseleave=${() =>
             this.eventBus?.emit(new ToggleStructureEvent(null))}
         >
-          ${html`<div class="ml-0.5 text-[10px] relative -top-1 text-gray-400">
+          ${html`<span class="atlas-build-control__key" aria-hidden="true">
             ${displayHotkey}
-          </div>`}
+          </span>`}
           <div class="flex items-center gap-0.5 pt-0.5">
             <img src=${icon} alt=${structureKey} class="align-middle size-5" />
-            ${number !== null
-              ? html`<span class="text-xs">${renderNumber(number)}</span>`
-              : null}
+            ${
+              number !== null
+                ? html`<span class="text-xs">${renderNumber(number)}</span>`
+                : null
+            }
           </div>
-        </div>
+        </button>
       </div>
     `;
   }

@@ -80,7 +80,7 @@ export function extractNukeTelegraphs(
  * Used by the live path where UnitClassifier maintains the nuke ID set.
  */
 export function extractNukeTelegraphsFromIds(
-  nukeIds: readonly number[],
+  nukeIds: Iterable<number>,
   units: ReadonlyMap<number, UnitState>,
   mapW: number,
   localPlayerID = 0,

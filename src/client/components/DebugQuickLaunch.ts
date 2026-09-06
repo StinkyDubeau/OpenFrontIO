@@ -5,6 +5,7 @@ import { requestHaptic } from "../ui/Haptics";
 
 @customElement("idlefront-debug-quick-launch")
 export class DebugQuickLaunch extends LitElement {
+  @state() private expanded = false;
   @state() private longSession = false;
   @state() private action: "idle" | "starting" | "joining" = "idle";
   @state() private status = "Debug tools";
@@ -36,7 +37,11 @@ export class DebugQuickLaunch extends LitElement {
       padding: 8px;
       border: 1px solid rgb(255 213 100 / 55%);
       border-radius: 15px;
-      background: rgb(14 22 22 / 86%);
+      background:
+        linear-gradient(180deg, rgb(255 255 255 / 8%), transparent 42%),
+        var(--war-felt-texture),
+        rgb(7 28 22 / 94%);
+      background-size: auto, 256px 256px, auto;
       box-shadow:
         0 10px 32px rgb(0 0 0 / 45%),
         inset 0 1px rgb(255 255 255 / 16%);
@@ -49,6 +54,76 @@ export class DebugQuickLaunch extends LitElement {
       margin: 0 4px 1px;
       overflow-wrap: anywhere;
       color: rgb(246 241 223 / 78%);
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .disclosure {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      min-height: 36px;
+      padding: 0 9px;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      color: #f6f1df;
+      text-align: left;
+    }
+
+    .disclosure:active {
+      translate: 0;
+      box-shadow: none;
+    }
+
+    .disclosure span:last-child {
+      transition: transform 220ms ease;
+    }
+
+    .disclosure[aria-expanded="true"] span:last-child {
+      transform: rotate(180deg);
+    }
+
+    .tools {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      animation: reveal 260ms cubic-bezier(0.22, 0.72, 0.18, 1) both;
+    }
+
+    .tools label,
+    .tools header {
+      grid-column: 1 / -1;
+    }
+
+    @keyframes reveal {
+      from {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      min-height: 44px;
+      padding-inline: 8px;
+      color: #f6f1df;
+      text-underline-offset: 3px;
     }
 
     button {
@@ -113,32 +188,44 @@ export class DebugQuickLaunch extends LitElement {
   render() {
     return html`
       <aside class="panel" aria-label="Debug quick launch">
-        <p role="status">${this.status}</p>
-        <label>
-          <input
-            type="checkbox"
-            .checked=${this.longSession}
-            ?disabled=${this.action !== "idle"}
-            @change=${(event: Event) => {
-              this.longSession = (event.target as HTMLInputElement).checked;
-            }}
-          />
-          Long session (up to 24h; normal victories still apply)
-        </label>
         <button
+          class="disclosure"
           type="button"
-          ?disabled=${this.action !== "idle"}
-          @click=${() => this.run("starting")}
+          aria-expanded=${this.expanded}
+          @click=${() => (this.expanded = !this.expanded)}
         >
-          ${this.action === "starting" ? "Starting…" : "Quick start"}
+          <span>${this.status}</span><span aria-hidden="true">⌄</span>
         </button>
-        <button
-          type="button"
-          ?disabled=${this.action !== "idle"}
-          @click=${() => this.run("joining")}
-        >
-          ${this.action === "joining" ? "Joining…" : "Quick join"}
-        </button>
+        ${this.expanded
+          ? html`<div class="tools">
+              <header><p>Test controls</p><a href="/?ui-lab=hud">HUD preview</a></header>
+              <label>
+                <input
+                  type="checkbox"
+                  .checked=${this.longSession}
+                  ?disabled=${this.action !== "idle"}
+                  @change=${(event: Event) => {
+                    this.longSession = (event.target as HTMLInputElement).checked;
+                  }}
+                />
+                Long session (up to 24h; normal victories still apply)
+              </label>
+              <button
+                type="button"
+                ?disabled=${this.action !== "idle"}
+                @click=${() => this.run("starting")}
+              >
+                ${this.action === "starting" ? "Starting…" : "Quick start"}
+              </button>
+              <button
+                type="button"
+                ?disabled=${this.action !== "idle"}
+                @click=${() => this.run("joining")}
+              >
+                ${this.action === "joining" ? "Joining…" : "Quick join"}
+              </button>
+            </div>`
+          : null}
       </aside>
     `;
   }

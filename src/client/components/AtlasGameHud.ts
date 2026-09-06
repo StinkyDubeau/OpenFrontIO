@@ -38,11 +38,10 @@ export class AtlasGameHud extends LitElement {
   render() {
     return html`
       <div
-        class="atlas-hud-dock fixed bottom-0 left-0 w-full z-[200] flex flex-col pointer-events-none sm:flex-row sm:items-end lg:grid lg:grid-cols-[1fr_500px_1fr] lg:items-end min-[1200px]:px-4"
-        style="padding-bottom: env(safe-area-inset-bottom); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);"
+        class="atlas-hud-dock fixed bottom-0 left-0 w-full z-[200] flex flex-col pointer-events-none sm:flex-row sm:items-end lg:grid lg:grid-cols-[1fr_500px_1fr] lg:items-end"
       >
         <div
-          class="contents sm:flex sm:flex-col sm:pointer-events-none w-full sm:w-[500px] lg:col-start-2 sm:z-10"
+          class="atlas-hud-controls contents sm:flex sm:flex-col sm:pointer-events-none w-full sm:w-[500px] lg:col-start-2 sm:z-10"
         >
           <attacks-display
             class="w-full pointer-events-auto order-1 sm:order-none"
@@ -56,7 +55,7 @@ export class AtlasGameHud extends LitElement {
         </div>
 
         <div
-          class="flex flex-col pointer-events-none items-end order-2 sm:order-none sm:flex-1 lg:col-start-3 lg:self-end lg:justify-end"
+          class="atlas-hud-notices flex flex-col pointer-events-none items-end order-2 sm:order-none sm:flex-1 lg:col-start-3 lg:self-end lg:justify-end"
         >
           <chat-display
             class="w-full sm:w-auto pointer-events-auto"

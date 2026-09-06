@@ -160,6 +160,7 @@ export function joinLobby(
         message.gameMapSize,
         terrainMapFileLoader,
         false, // Layer images loaded off the critical path after game start.
+        false, // The view never simulates; avoid a second coarse-map copy.
       );
       resolvePrestart();
     }
@@ -371,6 +372,7 @@ function createWebGLView(
       settings,
       captureRaf,
       captureCaf,
+      gameMap.isPaged() ? gameMap : undefined,
     );
   } catch (e) {
     if (e instanceof GLUnavailableError) {
@@ -493,22 +495,29 @@ function mountWebGLFrameLoop(
     builder.clearCaches();
 
     // Full upload of terrain, territory & trail state
-    const mapSize = mapWidth * mapHeight;
-    const allRefs = new Array(mapSize);
-    const allTerrain = new Uint8Array(mapSize);
-    for (let i = 0; i < mapSize; i++) {
-      allRefs[i] = i;
-      allTerrain[i] = gameView.terrainByte(i);
+    let allRefs: number[] = [];
+    if (!gameMap.isPaged()) {
+      const mapSize = mapWidth * mapHeight;
+      allRefs = new Array(mapSize);
+      const allTerrain = new Uint8Array(mapSize);
+      for (let i = 0; i < mapSize; i++) {
+        allRefs[i] = i;
+        allTerrain[i] = gameView.terrainByte(i);
+      }
+      view.applyTerrainDelta(allRefs, allTerrain);
     }
-    view.applyTerrainDelta(allRefs, allTerrain);
 
     const frameData = gameView.frameData();
     view.uploadTileAndTrailState(frameData.tileState, frameData.trailState);
 
     // Structures, railroads and relations normally skip GPU upload unless
     // marked dirty, now force
-    view.updateStructures(frameData.units as Map<number, UnitState>);
-    view.uploadRailroadState(frameData.railroadState, allRefs);
+    view.updateStructures(frameData.structures as Map<number, UnitState>);
+    view.uploadRailroadState(
+      frameData.railroadState,
+      allRefs,
+      frameData.railroadSparseState,
+    );
     view.updateRelations(frameData.relationMatrix, frameData.relationSize);
 
     builder.update(gameView);
@@ -545,6 +554,7 @@ async function createClientGame(
       lobbyConfig.gameStartInfo.config.gameMapSize,
       mapLoader,
       false, // Layer images loaded off the critical path after game start.
+      false, // GameView uses the exact map only; worker/server owns simulation.
     );
   }
   // Kick off the font-atlas fetch so it overlaps with worker init; the

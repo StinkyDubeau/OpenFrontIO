@@ -28,6 +28,7 @@ const FREQUENCY_EXEMPTIONS: Set<GameMapName> = new Set([
   "GiantWorldMap",
   "ExpandedGiantWorld",
   "ExpandedGiantWorldLarge",
+  "ExpandedGiantWorldUltra",
   "Oceania",
   "BaikalNukeWars",
   "Tourney1",

@@ -357,7 +357,7 @@ export class GameRightSidebar extends LitElement implements Controller {
         }
       </style>
       <aside
-        class=${`atlas-game-actions w-fit flex flex-row items-center gap-3 py-2 px-3 bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg rounded-bl-lg transition-transform duration-300 ease-out transform text-white ${shouldFlashSidebar ? "game-end-timer-sidebar-flash" : ""} ${
+        class=${`atlas-match-actions w-fit flex flex-row items-center gap-3 py-2 px-3 bg-gray-800/92 backdrop-blur-sm shadow-xs min-[1200px]:rounded-lg rounded-bl-lg transition-transform duration-300 ease-out transform text-white ${shouldFlashSidebar ? "game-end-timer-sidebar-flash" : ""} ${
           this._isVisible ? "translate-x-0" : "translate-x-full"
         }`}
         @contextmenu=${(e: Event) => e.preventDefault()}
@@ -370,33 +370,42 @@ export class GameRightSidebar extends LitElement implements Controller {
         <!-- Buttons -->
         ${this.maybeRenderReplayButtons()}
 
-        <div class="cursor-pointer" @click=${this.onSettingsButtonClick}>
+        <button
+          class="atlas-hud-button"
+          type="button"
+          @click=${this.onSettingsButtonClick}
+        >
           <img src=${settingsIcon} alt="settings" width="20" height="20" />
-        </div>
+        </button>
 
         ${
           document.fullscreenEnabled && !this.onCrazyGames
-            ? html`<div
-                class="cursor-pointer"
+            ? html`<button
+                class="atlas-hud-button"
+                type="button"
                 @click=${this.onFullscreenButtonClick}
               >
                 <img
                   src=${this.isFullscreen ? exitFullscreenIcon : fullscreenIcon}
                   alt=${
-                  this.isFullscreen
-                    ? translateText("fullscreen.exit")
-                    : translateText("fullscreen.enter")
-                }
+                    this.isFullscreen
+                      ? translateText("fullscreen.exit")
+                      : translateText("fullscreen.enter")
+                  }
                   width="20"
                   height="20"
                 />
-              </div>`
+              </button>`
             : ""
         }
 
-        <div class="cursor-pointer" @click=${this.onExitButtonClick}>
+        <button
+          class="atlas-hud-button"
+          type="button"
+          @click=${this.onExitButtonClick}
+        >
           <img src=${exitIcon} alt="exit" width="20" height="20" />
-        </div>
+        </button>
       </aside>
       <doomsday-clock-panel
         .game=${this.game}
@@ -420,38 +429,47 @@ export class GameRightSidebar extends LitElement implements Controller {
       ${
         isReplayOrSingleplayer
           ? html`
-              <div class="cursor-pointer" @click=${this.toggleReplayPanel}>
+              <button
+                class="atlas-hud-button"
+                type="button"
+                @click=${this.toggleReplayPanel}
+              >
                 <img
                   src=${FastForwardIconSolid}
                   alt="replay"
                   width="20"
                   height="20"
                 />
-              </div>
+              </button>
             `
           : ""
       }
       ${
         showPauseButton
           ? html`
-              <div class="cursor-pointer" @click=${this.onPauseButtonClick}>
+              <button
+                class="atlas-hud-button"
+                type="button"
+                aria-pressed=${this.isPaused}
+                @click=${this.onPauseButtonClick}
+              >
                 <img
                   src=${this.isPaused ? playIcon : pauseIcon}
                   alt="play/pause"
                   width="20"
                   height="20"
                 />
-              </div>
+              </button>
             `
           : ""
       }
       ${
         showNewLobbyButton
           ? html`
-              <div
-                class="cursor-pointer ${
-                this.newLobbyRequested ? "opacity-50 pointer-events-none" : ""
-              }"
+              <button
+                class="atlas-hud-button"
+                type="button"
+                ?disabled=${this.newLobbyRequested}
                 @click=${this.onNewLobbyButtonClick}
                 title=${translateText("win_modal.new_lobby")}
               >
@@ -461,7 +479,7 @@ export class GameRightSidebar extends LitElement implements Controller {
                   width="20"
                   height="20"
                 />
-              </div>
+              </button>
             `
           : ""
       }

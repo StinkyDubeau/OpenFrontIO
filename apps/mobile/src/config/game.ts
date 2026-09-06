@@ -31,6 +31,17 @@ export const NATIVE_BRIDGE_BOOTSTRAP = `
     lockViewport();
     document.addEventListener("DOMContentLoaded", lockViewport, { once: true });
 
+    // WebGL events do not bubble. Capture them at the document so the native
+    // console can distinguish GPU-context loss from a terminated WebContent
+    // process. No URL, player identity, or gameplay data crosses this bridge.
+    ["webglcontextlost", "webglcontextrestored"].forEach(function (name) {
+      document.addEventListener(name, function () {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: name === "webglcontextlost" ? "idlefront:webgl-lost" : "idlefront:webgl-restored"
+        }));
+      }, true);
+    });
+
     var detail = {
       platform: ${JSON.stringify(Platform.OS)},
       shellVersion: "0.1.0",

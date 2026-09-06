@@ -215,6 +215,16 @@ export class IdleFrontDeveloperMenu extends LitElement {
             </a>
             <a
               class="atlas-war-button atlas-war-button--secondary"
+              href="/?ui-lab=hud"
+            >
+              <span
+                ><strong>HUD reference</strong
+                ><small>Review the in-game UI</small></span
+              >
+              <b aria-hidden="true">›</b>
+            </a>
+            <a
+              class="atlas-war-button atlas-war-button--secondary"
               href="/worlds"
             >
               <span
@@ -261,10 +271,10 @@ export class IdleFrontDeveloperMenu extends LitElement {
                       >
                     </button>
                     ${
-                    this.gameStatus
-                      ? html`<p role="status">${this.gameStatus}</p>`
-                      : null
-                  }
+                      this.gameStatus
+                        ? html`<p role="status">${this.gameStatus}</p>`
+                        : null
+                    }
                   `
                 : null
             }

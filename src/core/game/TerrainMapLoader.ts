@@ -94,6 +94,13 @@ export async function loadTerrainMap(
   /** Whether to load layer PNG images inline. The Web Worker path should
    *  pass false — it never renders layers and should not retain ImageBitmaps. */
   loadImages: boolean = true,
+  /**
+   * Whether to load the coarse simulation map. Rendering clients never read
+   * it: only GameRunner uses it for simulation searches. Skipping it on the
+   * browser's view copy saves 96 MB on Expanded Earth Ultra while the server
+   * (and legacy local worker) retain the exact same simulation data.
+   */
+  loadSimulationMiniMap: boolean = true,
 ): Promise<TerrainMapData> {
   // GameMap contains mutable ownership/fallout state. Reusing it across games
   // also reused the previous world's territory (and made parallel views alias
@@ -117,13 +124,11 @@ export async function loadTerrainMap(
         ? await genTerrainFromBin(manifest.map, await mapFiles.mapBin())
         : await genTerrainFromBin(manifest.map4x, await mapFiles.map4xBin());
 
-  const miniMap =
-    mapSize === GameMapSize.Normal
-      ? await genTerrainFromBin(
-          mapSize === GameMapSize.Normal ? manifest.map4x : manifest.map16x,
-          await mapFiles.map4xBin(),
-        )
-      : await genTerrainFromBin(manifest.map16x, await mapFiles.map16xBin());
+  const miniMap = loadSimulationMiniMap
+    ? mapSize === GameMapSize.Normal
+      ? await genTerrainFromBin(manifest.map4x, await mapFiles.map4xBin())
+      : await genTerrainFromBin(manifest.map16x, await mapFiles.map16xBin())
+    : new GameMapImpl(1, 1, new Uint8Array(1), 0);
 
   if (mapSize === GameMapSize.Compact) {
     manifest.nations.forEach((nation) => {

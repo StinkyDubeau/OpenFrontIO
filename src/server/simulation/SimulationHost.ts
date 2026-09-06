@@ -11,6 +11,24 @@ export interface TickResult {
   stats?: LiveStats;
   win?: WinUpdate;
 }
+
+// Replaying a durable, week-scale world is real simulation work rather than a
+// normal worker boot. Keep a firm upper bound, but size it from the journal so
+// a healthy large recovery is not killed by the old three-minute constant.
+export function simulationInitializationTimeout(turnCount: number): number {
+  const BASE_TIMEOUT_MS = 180_000;
+  // Expanded-world replay currently costs about 15 ms/turn on the reference
+  // host once structures and fleets are established. Leave headroom for GC,
+  // map construction, and a concurrently connected client instead of killing
+  // a healthy recovery just as it reaches the journal head.
+  const RECOVERY_BUDGET_PER_TURN_MS = 20;
+  const MAX_TIMEOUT_MS = 60 * 60_000;
+  return Math.min(
+    MAX_TIMEOUT_MS,
+    Math.max(BASE_TIMEOUT_MS, turnCount * RECOVERY_BUDGET_PER_TURN_MS),
+  );
+}
+
 export class SimulationHost {
   readonly ready: Promise<void>;
   private worker: Worker;
@@ -43,7 +61,7 @@ export class SimulationHost {
       const timeout = setTimeout(() => {
         reject(new Error("Server simulation initialization timed out"));
         this.stop();
-      }, 180_000);
+      }, simulationInitializationTimeout(turns.length));
       this.worker.on("message", (result) => {
         if (result.ready) {
           clearTimeout(timeout);

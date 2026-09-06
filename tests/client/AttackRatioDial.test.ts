@@ -80,7 +80,31 @@ describe("attack-ratio-dial", () => {
     expect(
       element.querySelector(".atlas-attack-dial__value")?.textContent,
     ).toBe("84K");
+    expect(
+      element.querySelector(".atlas-attack-dial__ratio")?.textContent,
+    ).toBe("35%");
     expect(element.querySelector("input")).toBeNull();
+  });
+
+  test("keeps the percentage alongside troop counts at rest and after a gesture", async () => {
+    const control = await mount(100);
+    element.displayValue = "1.2M";
+    await element.updateComplete;
+    const percentage = () =>
+      element.querySelector(".atlas-attack-dial__ratio")?.textContent;
+    expect(percentage()).toBe("100%");
+    expect(element.hasAttribute("data-dragging")).toBe(false);
+
+    control.dispatchEvent(pointerEvent("pointerdown", { clientY: 100 }));
+    control.dispatchEvent(pointerEvent("pointermove", { clientY: 300 }));
+    await element.updateComplete;
+    expect(percentage()).toBe("1%");
+    control.dispatchEvent(pointerEvent("pointerup", { clientY: 300 }));
+    await element.updateComplete;
+    expect(percentage()).toBe("1%");
+    expect(
+      element.querySelector(".atlas-attack-dial__value")?.textContent,
+    ).toBe("1.2M");
   });
 
   test("increases on upward drag and decreases on downward drag", async () => {

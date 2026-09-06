@@ -3,7 +3,7 @@
  *
  * Always draws at full brightness (after the optional night composite).
  * Reads pre-computed border flags and defense proximity
- * from the BorderComputePass RGBA8 buffer.
+ * from the BorderComputePass RG8 buffer.
  */
 
 import type { RenderSettings } from "../RenderSettings";

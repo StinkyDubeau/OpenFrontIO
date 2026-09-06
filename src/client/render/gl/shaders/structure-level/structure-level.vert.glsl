@@ -11,6 +11,7 @@ uniform sampler2D uGlyphMetrics;  // CHAR_RANGE x 2, RGBA32F
 
 uniform mat3  uCamera;
 uniform float uZoom;
+uniform float uLodZoom;
 
 // Structure icon sizing (mirrors structure.vert.glsl)
 uniform float uIconSize;
@@ -37,13 +38,13 @@ void main() {
 
   // Same icon scale logic as structure.vert.glsl
   float iconScale;
-  if (uZoom <= uDotsThreshold) {
+  if (uLodZoom <= uDotsThreshold) {
     iconScale = 0.0;  // hidden in dots mode
-  } else if (uZoom >= uIconGrowZoom) {
+  } else if (uLodZoom >= uIconGrowZoom) {
     // World-anchored: grow with the map past this zoom, matching the icons.
-    iconScale = uZoom / uIconGrowZoom;
+    iconScale = uLodZoom / uIconGrowZoom;
   } else {
-    iconScale = min(1.0, uZoom / uScaleFactor);
+    iconScale = min(1.0, uLodZoom / uScaleFactor);
   }
 
   // Cull when invisible

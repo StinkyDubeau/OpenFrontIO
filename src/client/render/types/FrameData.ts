@@ -24,8 +24,16 @@ export interface FrameData {
   readonly inSpawnPhase: boolean;
   readonly tileState: Uint16Array;
   readonly trailState: Uint16Array;
+  /** Live sparse trail state used by page-backed worlds. */
+  readonly trailSparseState: ReadonlyMap<number, number> | null;
   readonly railroadState: Uint8Array;
+  /** Live sparse rail state used by page-backed worlds. */
+  readonly railroadSparseState: ReadonlyMap<number, number> | null;
   readonly units: ReadonlyMap<number, UnitState>;
+  /** Active renderer candidates excluding stationary structures. */
+  readonly mobileUnits: ReadonlyMap<number, UnitState>;
+  /** Structure-only state, rebuilt only on structure lifecycle changes. */
+  readonly structures: ReadonlyMap<number, UnitState>;
   readonly players: ReadonlyMap<number, PlayerState>;
   readonly names: ReadonlyMap<string, NameEntry>;
 

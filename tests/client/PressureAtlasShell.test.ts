@@ -69,7 +69,7 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(playerInfo).not.toContain("opacity-0 invisible");
     expect(spawnTimer).toContain("--atlas-board-safe-top");
     expect(styles).toContain("--atlas-hud-information-top");
-    expect(styles).toContain("--atlas-hud-edge-gap: 2px");
+    expect(styles).toContain("--atlas-hud-edge-gap: 6px");
     expect(styles).not.toContain("calc(var(--atlas-board-safe-top) + 0.4rem)");
     expect(styles).toContain("atlas-game-hud[data-player-info-visible]");
   });
@@ -290,8 +290,8 @@ describe("Pressure Atlas OpenFront shell", () => {
       "src/client/components/persistent-world/PersistentWorldCreationWizard.ts",
     );
 
-    expect(copy).toContain('subtitle: "Game subtitle"');
-    expect(copy).toContain('heading: "Page header"');
+    expect(copy).toContain('subtitle: "online world domination"');
+    expect(copy).toContain('heading: "welcome to idlefront"');
     expect(copy).toContain('stepInstructions: "Step instructions"');
     expect(playPage).toContain("placeholderCopy.landing.identityLabel");
     expect(worldPage).toContain("placeholderCopy.worlds.heading");

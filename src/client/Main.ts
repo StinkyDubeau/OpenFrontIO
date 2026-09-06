@@ -99,6 +99,10 @@ import "./styles/modal/chat.css";
 import "./styles/persistent-world.css";
 import "./styles/pressure-atlas.css";
 import "./styles/war-room.css";
+// The material system is an intentional final presentation layer. Loading it
+// after both the page and legacy-theme sheets keeps one source of truth for
+// state contrast, texture scale, and surface hierarchy.
+import "./styles/satisfum.css";
 import { initWarRoomUI } from "./ui/WarRoomUI";
 
 declare global {

@@ -10,7 +10,10 @@ function source(relativePath: string): string {
 describe("IdleFront stone button specimen deck", () => {
   const lab = source("src/client/components/AtlasUiLab.ts");
   const styles = source("src/client/styles/stone-button-specimen.css");
+  const skins = source("src/client/styles/stone-controls.css");
   const baseStyles = source("src/client/styles/war-room.css");
+  const satisfum = source("src/client/styles/satisfum.css");
+  const main = source("src/client/Main.ts");
 
   test("is available only through a dedicated UI-lab screen", () => {
     expect(lab).toContain('const STONE_BUTTON_LAB = "stone-buttons"');
@@ -35,13 +38,18 @@ describe("IdleFront stone button specimen deck", () => {
       "emerald",
     ]) {
       expect(lab).toContain(`variant: "${variant}"`);
-      expect(styles).toContain(`/images/ui/materials/stones/${variant}.webp`);
+      expect(skins).toContain(`/images/ui/materials/stones/${variant}.webp`);
     }
   });
 
   test("changes only the existing button texture plane", () => {
-    expect(styles).toContain(".atlas-texture-demo__button[data-stone]::after");
-    expect(styles).toContain("var(--atlas-demo-stone-texture)");
+    expect(skins).toContain(
+      '.atlas-war-button[data-stone]:not([data-stone="none"])::after',
+    );
+    expect(skins).toContain("var(--atlas-stone-texture)");
+    expect(skins).not.toContain(":hover");
+    expect(skins).not.toContain(":active");
+    expect(baseStyles).toContain('@import "./stone-controls.css"');
     expect(styles).not.toContain(".atlas-texture-demo__button:hover");
     expect(styles).not.toContain(".atlas-texture-demo__button:active");
     expect(styles).not.toContain("@stone-toggle-request");
@@ -95,6 +103,39 @@ describe("IdleFront stone button specimen deck", () => {
     expect(baseStyles).toContain("scroll-snap-type: x mandatory");
     expect(baseStyles).toContain("body.atlas-ui-lab-active {");
     expect(baseStyles).toContain("overflow: hidden !important");
+  });
+
+  test("reuses the specimen stones across production controls and settings", () => {
+    expect(main).toContain('import "./styles/satisfum.css"');
+    expect(main.indexOf('import "./styles/satisfum.css"')).toBeGreaterThan(
+      main.indexOf('import "./styles/war-room.css"'),
+    );
+    expect(satisfum).toContain("--sf-quartz:");
+    expect(satisfum).toContain("--sf-obsidian:");
+    expect(satisfum).toContain("--sf-amethyst:");
+    expect(satisfum).toContain("--sf-ruby:");
+    expect(satisfum).toContain("--sf-emerald:");
+    expect(satisfum).toContain(".atlas-settings-list button");
+    expect(satisfum).toContain('input[type="range"]::-webkit-slider-thumb');
+    expect(satisfum).toContain('input[type="range"]::-moz-range-thumb');
+    expect(satisfum).toContain(":where(#app, canvas, map-display)");
+  });
+
+  test("keeps every large photographic substrate retina-ready", () => {
+    for (const material of ["mahogany", "parchment"]) {
+      const asset = path.join(
+        repoRoot,
+        `resources/images/ui/materials/${material}@4x.webp`,
+      );
+      expect(fs.existsSync(asset)).toBe(true);
+      expect(fs.statSync(asset).size).toBeGreaterThan(80_000);
+      expect(fs.readFileSync(asset).subarray(0, 4).toString("ascii")).toBe(
+        "RIFF",
+      );
+      expect(baseStyles).toContain(`${material}@4x.webp`);
+    }
+
+    expect(satisfum).toContain("418px 418px");
   });
 
   test("composes material content into one surface instead of duplicating it", async () => {

@@ -61,4 +61,26 @@ describe("RailroadCache dirty tiles", () => {
     expect(cache.dirtyTiles).toEqual([21, 22, 23]);
     expect([...cache.railroadState.slice(21, 24)]).toEqual([0, 0, 0]);
   });
+
+  it("retains live sparse values for page-backed renderers without a world buffer", () => {
+    const cache = new RailroadCache(10, 10, true);
+    cache.apply(
+      update({
+        [GameUpdateType.RailroadConstructionEvent]: [
+          {
+            type: GameUpdateType.RailroadConstructionEvent,
+            id: 11,
+            tiles: [31, 32, 33],
+          },
+        ],
+      }),
+    );
+
+    expect(cache.railroadState).toHaveLength(0);
+    expect([...cache.getSparseState()!.entries()]).toEqual([
+      [31, 2],
+      [32, 2],
+      [33, 2],
+    ]);
+  });
 });

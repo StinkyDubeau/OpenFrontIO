@@ -53,6 +53,7 @@ export enum GameMapType {
   GiantWorldMap = "Giant World Map", // map-generator/assets/maps/giantworldmap/info.json
   ExpandedGiantWorld = "Expanded Earth", // map-generator/assets/maps/expandedgiantworld/info.json
   ExpandedGiantWorldLarge = "Expanded Earth XL", // map-generator/assets/maps/expandedgiantworldlarge/info.json
+  ExpandedGiantWorldUltra = "Expanded Earth Ultra", // map-generator/assets/maps/expandedgiantworldultra/info.json
   GreatLakes = "Great Lakes", // map-generator/assets/maps/greatlakes/info.json
   GulfOfGuinea = "Gulf Of Guinea", // map-generator/assets/maps/gulfofguinea/info.json
   GulfOfStLawrence = "Gulf of St. Lawrence", // map-generator/assets/maps/gulfofstlawrence/info.json
@@ -1014,6 +1015,13 @@ export const maps: readonly MapInfo[] = [
     id: "ExpandedGiantWorldLarge",
     type: GameMapType.ExpandedGiantWorldLarge,
     translationKey: "map.expandedgiantworldlarge",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },
+  {
+    id: "ExpandedGiantWorldUltra",
+    type: GameMapType.ExpandedGiantWorldUltra,
+    translationKey: "map.expandedgiantworldultra",
     categories: ["world"],
     multiplayerFrequency: 0,
   },
