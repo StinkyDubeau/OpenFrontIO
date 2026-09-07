@@ -36,6 +36,22 @@ function withPlayers(
 }
 
 describe("GameView.update — players", () => {
+  it("defers global derivations until a fragmented snapshot ends", () => {
+    const game = makeGameView();
+    const begin = withPlayers(1, [
+      makePlayerUpdate({ id: "alice", smallID: 1, name: "Alice" }),
+    ]);
+    begin.snapshotPhase = "begin";
+    game.update(begin);
+    expect(game.frameData().relationsDirty).toBe(false);
+
+    const end = makeEmptyGu(1);
+    end.snapshotPhase = "end";
+    game.update(end);
+    expect(game.frameData().relationsDirty).toBe(true);
+    expect(game.frameData().relationSize).toBe(4096);
+  });
+
   it("creates a PlayerView for each player in the first tick", () => {
     const game = makeGameView();
     game.update(

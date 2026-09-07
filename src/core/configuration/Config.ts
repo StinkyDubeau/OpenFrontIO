@@ -292,7 +292,13 @@ export class Config {
   trainSpawnRate(numPlayerFactories: number): number {
     // hyperbolic decay, midpoint at 10 factories
     // expected number of trains = numPlayerFactories  / trainSpawnRate(numPlayerFactories)
-    return (numPlayerFactories + 10) * 15;
+    return Math.max(
+      1,
+      Math.floor(
+        ((numPlayerFactories + 10) * 15) /
+          (this._gameConfig.trainTrafficMultiplier ?? 1),
+      ),
+    );
   }
   trainGold(
     rel: "self" | "team" | "ally" | "other",
@@ -347,12 +353,14 @@ export class Config {
     // fixed global midpoint makes their seas almost empty. Scale the entire
     // sigmoid (not just its midpoint) by map area to preserve the same ships
     // per geographic area and the same-shaped saturation curve.
-    const tradeScale =
+    const mapScale =
       this._gameConfig.gameMap === "Expanded Earth Ultra"
         ? 16
         : this._gameConfig.gameMap === "Expanded Earth XL"
           ? 4
           : 1;
+    const trafficMultiplier = this._gameConfig.tradeShipTrafficMultiplier ?? 1;
+    const tradeScale = mapScale * trafficMultiplier;
     const decayRate = Math.LN2 / (50 * tradeScale);
 
     // Approaches 0 as numTradeShips increase
@@ -362,7 +370,16 @@ export class Config {
     // Pity timer: increases spawn chance after consecutive rejections
     const rejectionModifier = 1 / (tradeShipSpawnRejections + 1);
 
-    return Math.floor((100 * rejectionModifier) / baseSpawnRate);
+    // A traffic stress preset needs both a larger steady-state fleet and more
+    // launches per unit time. Scaling only the sigmoid would merely take
+    // longer to reach a higher cap; scaling only this rate would saturate at
+    // the ordinary fleet size.
+    return Math.max(
+      1,
+      Math.floor(
+        (100 * rejectionModifier) / (baseSpawnRate * trafficMultiplier),
+      ),
+    );
   }
 
   unitInfo(type: UnitType): UnitInfo {
@@ -790,15 +807,12 @@ export class Config {
     defender: Player | TerraNullius,
     numAdjacentTilesWithEnemy: number,
   ): number {
-    if (defender.isPlayer()) {
-      return (
-        within(((5 * attackTroops) / defender.troops()) * 2, 0.01, 0.5) *
+    const normalSpeed = defender.isPlayer()
+      ? within(((5 * attackTroops) / defender.troops()) * 2, 0.01, 0.5) *
         numAdjacentTilesWithEnemy *
         3
-      );
-    } else {
-      return numAdjacentTilesWithEnemy * 2;
-    }
+      : numAdjacentTilesWithEnemy * 2;
+    return normalSpeed / (this._gameConfig.territoryAttackSpeedDivisor ?? 1);
   }
 
   boatAttackAmount(attacker: Player, defender: Player | TerraNullius): number {

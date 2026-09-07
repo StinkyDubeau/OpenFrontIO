@@ -1,13 +1,14 @@
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { quickJoinDebugGame, quickStartDebugGame } from "../DebugQuickStart";
+import type { DebugPlaytestPreset } from "../../core/DebugPlaytest";
+import { quickJoinDebugGame } from "../DebugQuickStart";
 import { requestHaptic } from "../ui/Haptics";
 
 @customElement("idlefront-debug-quick-launch")
 export class DebugQuickLaunch extends LitElement {
   @state() private expanded = false;
   @state() private longSession = false;
-  @state() private action: "idle" | "starting" | "joining" = "idle";
+  @state() private action: DebugPlaytestPreset | null = null;
   @state() private status = "Debug tools";
 
   static styles = css`
@@ -39,9 +40,11 @@ export class DebugQuickLaunch extends LitElement {
       border-radius: 15px;
       background:
         linear-gradient(180deg, rgb(255 255 255 / 8%), transparent 42%),
-        var(--war-felt-texture),
-        rgb(7 28 22 / 94%);
-      background-size: auto, 256px 256px, auto;
+        var(--war-felt-texture), rgb(7 28 22 / 94%);
+      background-size:
+        auto,
+        256px 256px,
+        auto;
       box-shadow:
         0 10px 32px rgb(0 0 0 / 45%),
         inset 0 1px rgb(255 255 255 / 16%);
@@ -165,23 +168,24 @@ export class DebugQuickLaunch extends LitElement {
     }
   `;
 
-  private run = async (action: "starting" | "joining"): Promise<void> => {
-    this.action = action;
-    this.status = action === "starting" ? "Preparing game…" : "Finding game…";
+  private run = async (preset: DebugPlaytestPreset): Promise<void> => {
+    this.action = preset;
+    this.status = "Finding game…";
     try {
       const status = (message: string) => (this.status = message);
-      if (action === "starting") {
-        await quickStartDebugGame(status, this.longSession ? "1d" : "1h");
-      } else {
-        await quickJoinDebugGame(status);
-      }
+      await quickJoinDebugGame(
+        status,
+        preset,
+        this.longSession ? "1d" : "1h",
+        true,
+      );
       requestHaptic("success");
     } catch (error) {
       this.status =
         error instanceof Error ? error.message : "Debug action failed";
       requestHaptic("error");
     } finally {
-      this.action = "idle";
+      this.action = null;
     }
   };
 
@@ -196,36 +200,47 @@ export class DebugQuickLaunch extends LitElement {
         >
           <span>${this.status}</span><span aria-hidden="true">⌄</span>
         </button>
-        ${this.expanded
-          ? html`<div class="tools">
-              <header><p>Test controls</p><a href="/?ui-lab=hud">HUD preview</a></header>
-              <label>
-                <input
-                  type="checkbox"
-                  .checked=${this.longSession}
-                  ?disabled=${this.action !== "idle"}
-                  @change=${(event: Event) => {
-                    this.longSession = (event.target as HTMLInputElement).checked;
-                  }}
-                />
-                Long session (up to 24h; normal victories still apply)
-              </label>
-              <button
-                type="button"
-                ?disabled=${this.action !== "idle"}
-                @click=${() => this.run("starting")}
-              >
-                ${this.action === "starting" ? "Starting…" : "Quick start"}
-              </button>
-              <button
-                type="button"
-                ?disabled=${this.action !== "idle"}
-                @click=${() => this.run("joining")}
-              >
-                ${this.action === "joining" ? "Joining…" : "Quick join"}
-              </button>
-            </div>`
-          : null}
+        ${
+          this.expanded
+            ? html`<div class="tools">
+                <header>
+                  <p>Test controls</p>
+                  <a href="/?ui-lab=hud">HUD preview</a>
+                </header>
+                <label>
+                  <input
+                    type="checkbox"
+                    .checked=${this.longSession}
+                    ?disabled=${this.action !== null}
+                    @change=${(event: Event) => {
+                      this.longSession = (
+                        event.target as HTMLInputElement
+                      ).checked;
+                    }}
+                  />
+                  Long session (up to 24h; normal victories still apply)
+                </label>
+                <button
+                  type="button"
+                  ?disabled=${this.action !== null}
+                  @click=${() => this.run("great-lakes")}
+                >
+                  ${this.action === "great-lakes" ? "Joining…" : "Great Lakes"}
+                </button>
+                <button
+                  type="button"
+                  ?disabled=${this.action !== null}
+                  @click=${() => this.run("enormous-earth")}
+                >
+                  ${
+                    this.action === "enormous-earth"
+                      ? "Joining…"
+                      : "Enormous Earth"
+                  }
+                </button>
+              </div>`
+            : null
+        }
       </aside>
     `;
   }

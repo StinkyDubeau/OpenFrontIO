@@ -8,8 +8,19 @@ export interface TickResult {
   bytes: Uint8Array;
   tick: number;
   duration: number;
+  coreDuration: number;
+  encodingDuration: number;
+  tileDeltaCount: number;
+  motionPlanBytes: number;
+  unitUpdateCount: number;
   stats?: LiveStats;
   win?: WinUpdate;
+}
+
+export interface SimulationRecoveryProgress {
+  completedTurns: number;
+  totalTurns: number;
+  elapsedMs: number;
 }
 
 // Replaying a durable, week-scale world is real simulation work rather than a
@@ -17,11 +28,12 @@ export interface TickResult {
 // a healthy large recovery is not killed by the old three-minute constant.
 export function simulationInitializationTimeout(turnCount: number): number {
   const BASE_TIMEOUT_MS = 180_000;
-  // Expanded-world replay currently costs about 15 ms/turn on the reference
-  // host once structures and fleets are established. Leave headroom for GC,
-  // map construction, and a concurrently connected client instead of killing
-  // a healthy recovery just as it reaches the journal head.
-  const RECOVERY_BUDGET_PER_TURN_MS = 20;
+  // Late, structure-dense 2,000-bot worlds can exceed 50 ms/turn even though
+  // their opening turns are much cheaper. Journal-only recovery must not kill
+  // a healthy deterministic replay based on an early-game average. Durable
+  // checkpoints will eventually bound this work; until then size the deadline
+  // for the measured late-game cost on the reference host.
+  const RECOVERY_BUDGET_PER_TURN_MS = 75;
   const MAX_TIMEOUT_MS = 60 * 60_000;
   return Math.min(
     MAX_TIMEOUT_MS,
@@ -42,7 +54,12 @@ export class SimulationHost {
     }
   >();
   private stopped = false;
-  constructor(start: GameStartInfo, turns: Turn[] = [], mapsDir?: string) {
+  constructor(
+    start: GameStartInfo,
+    turns: Turn[] = [],
+    mapsDir?: string,
+    onRecoveryProgress?: (progress: SimulationRecoveryProgress) => void,
+  ) {
     this.worker = new Worker(
       new NodeURL("./Simulation.worker.mjs", import.meta.url),
       {
@@ -63,6 +80,10 @@ export class SimulationHost {
         this.stop();
       }, simulationInitializationTimeout(turns.length));
       this.worker.on("message", (result) => {
+        if (result.recoveryProgress) {
+          onRecoveryProgress?.(result.recoveryProgress);
+          return;
+        }
         if (result.ready) {
           clearTimeout(timeout);
           resolve();

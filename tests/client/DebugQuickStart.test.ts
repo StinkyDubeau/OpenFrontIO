@@ -4,6 +4,7 @@ import {
   quickStartDebugGame,
 } from "../../src/client/DebugQuickStart";
 import { persistentWorldApi } from "../../src/client/PersistentWorldApi";
+import { DEBUG_QUICK_START_PREFIX } from "../../src/core/DebugPlaytest";
 import type {
   PersistentWorldCard,
   PersistentWorldLobbySnapshot,
@@ -25,7 +26,12 @@ function card(
   viewerEliminated = false,
 ): PersistentWorldCard {
   return {
-    world: { id, name: "Server playtest demo", phase: "active", createdAt },
+    world: {
+      id,
+      name: `${DEBUG_QUICK_START_PREFIX}fixture`,
+      phase: "active",
+      createdAt,
+    },
     isViewerMember: true,
     viewerEliminated,
   } as PersistentWorldCard;

@@ -345,6 +345,7 @@ export function createRenderer(
 
 export class GameRenderer {
   private layerTickState = new Map<Controller, { lastTickAtMs: number }>();
+  private failedLayers = new Set<Controller>();
 
   constructor(
     public transformHandler: TransformHandler,
@@ -375,6 +376,7 @@ export class GameRenderer {
     const tickLayerDurations: Record<string, number> = {};
 
     for (const layer of this.layers) {
+      if (this.failedLayers.has(layer)) continue;
       if (!layer.tick) {
         continue;
       }
@@ -393,7 +395,32 @@ export class GameRenderer {
       this.layerTickState.set(layer, state);
 
       const tickStart = shouldProfileTick ? performance.now() : 0;
-      layer.tick();
+      try {
+        layer.tick();
+      } catch (error) {
+        // A decorative HUD/controller failure must never abort the authoritative
+        // frame callback. If it escapes, the client cannot ACK the frame and the
+        // server correctly disconnects it 30 seconds later, leaving what looks
+        // like a frozen screenshot. Quarantine the component and keep the map,
+        // input, and remaining HUD alive.
+        if (!this.failedLayers.has(layer)) {
+          this.failedLayers.add(layer);
+          const label = layer.constructor?.name ?? "UnknownLayer";
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(`Disabling failed HUD layer ${label}:`, error);
+          window.dispatchEvent(
+            new CustomEvent("idlefront:diagnostic", {
+              detail: {
+                scope: `hud:${label}`,
+                message,
+                stack: error instanceof Error ? error.stack : undefined,
+              },
+            }),
+          );
+        }
+        continue;
+      }
       if (shouldProfileTick && tickStart !== 0) {
         const duration = performance.now() - tickStart;
         const label = layer.constructor?.name ?? "UnknownLayer";

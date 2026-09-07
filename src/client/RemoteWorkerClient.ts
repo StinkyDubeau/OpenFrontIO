@@ -28,6 +28,7 @@ export class RemoteWorkerClient extends WorkerClient {
       timeout: ReturnType<typeof setTimeout>;
     }
   >();
+  private inFlightByQuery = new Map<string, Promise<unknown>>();
   private stopped = false;
   private identities: RemoteViewIdentity;
 
@@ -77,22 +78,51 @@ export class RemoteWorkerClient extends WorkerClient {
       // snapshot chunks. Only the slow connection waits for this ack.
       setTimeout(() => {
         if (this.stopped) return;
-        const update = packet.update;
-        if (packet.snapshot === "begin") this.snapshotStarted = true;
-        if (
-          !packet.snapshot &&
-          this.appliedTick !== undefined &&
-          update.tick <= this.appliedTick
-        ) {
+        try {
+          const update = packet.update;
+          if (packet.snapshot === "begin") this.snapshotStarted = true;
+          if (
+            !packet.snapshot &&
+            this.appliedTick !== undefined &&
+            update.tick <= this.appliedTick
+          ) {
+            return;
+          }
+          update.tickExecutionDuration = 0; // Simulation time belongs to the server.
+          update.snapshotPhase = packet.snapshot;
+          this.identities.apply(update);
+          this.callback?.(update);
+          if (!packet.snapshot || packet.snapshot === "end")
+            this.appliedTick = update.tick;
+          if (!packet.snapshot || packet.snapshot === "end") {
+            window.dispatchEvent(
+              new CustomEvent("idlefront:simulation-view-live", {
+                detail: { tick: update.tick },
+              }),
+            );
+          }
+        } catch (error) {
+          // The socket must never deadlock because a presentation callback
+          // threw. That used to leave the last successfully rendered map on
+          // screen, prevent spawn input, and make the server disconnect the
+          // device exactly 30 seconds later for a missing ACK. Report the
+          // failing stage to the native shell, but release the bounded server
+          // delivery window so later frames and input can continue.
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error("Error applying authoritative view frame:", error);
+          window.dispatchEvent(
+            new CustomEvent("idlefront:diagnostic", {
+              detail: {
+                scope: `view-apply:${packet.snapshot ?? "live"}`,
+                message: `sequence=${sequence} ${message}`,
+                stack: error instanceof Error ? error.stack : undefined,
+              },
+            }),
+          );
+        } finally {
           this.transport.sendViewMessage({ type: "view_ack", sequence });
-          return;
         }
-        update.tickExecutionDuration = 0; // Simulation time belongs to the server.
-        this.identities.apply(update);
-        this.callback?.(update);
-        if (!packet.snapshot || packet.snapshot === "end")
-          this.appliedTick = update.tick;
-        this.transport.sendViewMessage({ type: "view_ack", sequence });
       }, 0);
     });
   }
@@ -117,8 +147,12 @@ export class RemoteWorkerClient extends WorkerClient {
   override sendTurns(_turns: readonly Turn[]): void {}
   override setFastForward(_enabled: boolean): void {}
   private ask<T>(query: Omit<ViewQuery, "id">): Promise<T> {
+    const queryKey = JSON.stringify(query);
+    const inFlight = this.inFlightByQuery.get(queryKey);
+    if (inFlight !== undefined) return inFlight as Promise<T>;
+
     const id = String(++this.requestSequence);
-    return new Promise((resolve, reject) => {
+    const request = new Promise<T>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(
@@ -131,6 +165,13 @@ export class RemoteWorkerClient extends WorkerClient {
         query: { ...query, id },
       });
     });
+    this.inFlightByQuery.set(queryKey, request);
+    const forget = () => {
+      if (this.inFlightByQuery.get(queryKey) === request)
+        this.inFlightByQuery.delete(queryKey);
+    };
+    void request.then(forget, forget);
+    return request;
   }
   override playerProfile(playerID: number): Promise<PlayerProfile> {
     return this.ask({ type: "player_profile", playerID });
@@ -192,6 +233,7 @@ export class RemoteWorkerClient extends WorkerClient {
       pending.reject(new Error("Game closed"));
     }
     this.pending.clear();
+    this.inFlightByQuery.clear();
     this.callback = undefined;
   }
 }

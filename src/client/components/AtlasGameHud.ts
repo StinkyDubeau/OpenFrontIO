@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import "./SimulationRecoveryOverlay";
 
 /**
  * Reusable mount deck for the canonical OpenFront HUD controllers. It composes
@@ -74,6 +75,7 @@ export class AtlasGameHud extends LitElement {
       <win-modal></win-modal>
       <new-lobby-prompt></new-lobby-prompt>
       <game-starting-modal></game-starting-modal>
+      <simulation-recovery-overlay></simulation-recovery-overlay>
       <div
         class="atlas-hud-corner-stack atlas-hud-top-actions flex flex-col items-end fixed top-0 right-0 min-[1200px]:top-4 min-[1200px]:right-4 z-1000 gap-2"
       >

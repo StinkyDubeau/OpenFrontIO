@@ -3117,7 +3117,7 @@ body.atlas-theme.in-game .atlas-action-notice .atlas-war-button {
 /* Development component lab                                                  */
 /* -------------------------------------------------------------------------- */
 
-body.atlas-ui-lab-active > :not(atlas-ui-lab) {
+body.atlas-ui-lab-active > :not(atlas-ui-lab, simulation-recovery-overlay) {
   display: none !important;
 }
 

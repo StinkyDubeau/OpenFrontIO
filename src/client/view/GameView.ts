@@ -613,6 +613,13 @@ export class GameView implements GameMap {
    * complete. Mutates _frame fields in place; never reassigns them.
    */
   private populateFrame(gu: GameUpdateViewData): void {
+    // A server snapshot is fragmented only for bounded transport and mobile
+    // responsiveness; its parts are not independent simulation ticks. Keep
+    // ingesting core players/tiles/units, but defer whole-world derivations
+    // until the final fragment. On a 2,000-player world this avoids rebuilding
+    // and uploading the 16 MiB relationship matrix dozens of times.
+    const deferGlobalDerived =
+      gu.snapshotPhase !== undefined && gu.snapshotPhase !== "end";
     // Reset trail dirty markers for this tick. The trailManager.update() pass
     // below repaints rows and re-sets these as it goes.
     this.trailManager.clearDirtyRows();
@@ -643,7 +650,7 @@ export class GameView implements GameMap {
     // Names map — rebuilt only when a placement record arrived or a player
     // was added (nameData values cannot change between those ticks). Entry
     // order is irrelevant for the renderer.
-    if (this._namesDirty) {
+    if (this._namesDirty && !deferGlobalDerived) {
       this._namesDirty = false;
       this._names.clear();
       for (const p of this._players.values()) {
@@ -672,18 +679,24 @@ export class GameView implements GameMap {
     f.railroadDirtyTiles = this.railroadCache.dirtyTiles;
     f.trailDirtyTiles = this.trailManager.dirtyTiles;
 
-    f.playerStatus = computePlayerStatus(this._playerStates, this._unitStates, {
-      nukeUnitIds: this._nukeUnitIds,
-      localPlayerSmallID: this._myPlayer?.smallID() ?? 0,
-      localPlayerID: this._myPlayer?.id() ?? "",
-      tileState: this.renderTileState,
-      tick: gu.tick,
-      allianceDuration: this._config.allianceDuration(),
-      isTransitiveTarget: (sid) =>
-        this._myPlayer?.hasTransitiveTarget(sid) ?? false,
-      doomsdayClockWarnTicks:
-        this._config.doomsdayClockConfig().warnSeconds * 10,
-    });
+    if (!deferGlobalDerived) {
+      f.playerStatus = computePlayerStatus(
+        this._playerStates,
+        this._unitStates,
+        {
+          nukeUnitIds: this._nukeUnitIds,
+          localPlayerSmallID: this._myPlayer?.smallID() ?? 0,
+          localPlayerID: this._myPlayer?.id() ?? "",
+          tileState: this.renderTileState,
+          tick: gu.tick,
+          allianceDuration: this._config.allianceDuration(),
+          isTransitiveTarget: (sid) =>
+            this._myPlayer?.hasTransitiveTarget(sid) ?? false,
+          doomsdayClockWarnTicks:
+            this._config.doomsdayClockConfig().warnSeconds * 10,
+        },
+      );
+    }
     // Relations + clusters depend only on allies/embargoes/teams, which
     // change rarely (teams only when a player is added) — recompute only
     // when one of those inputs arrived this tick. buildRelationMatrix
@@ -691,7 +704,9 @@ export class GameView implements GameMap {
     // leaves f.relationMatrix's contents intact. f.relationsDirty lets the
     // upload layer skip the GPU push (and the full-map border recompute it
     // triggers) on unchanged ticks.
-    if (this._relationsDirty) {
+    if (deferGlobalDerived) {
+      f.relationsDirty = false;
+    } else if (this._relationsDirty) {
       this._relationsDirty = false;
       const rel = buildRelationMatrix(this._playerStates, this._teams);
       f.relationMatrix = rel.matrix;
@@ -700,30 +715,32 @@ export class GameView implements GameMap {
     } else {
       f.relationsDirty = false;
     }
-    if (this._clustersDirty) {
+    if (this._clustersDirty && !deferGlobalDerived) {
       this._clustersDirty = false;
       f.allianceClusters = computeAllianceClusters(this._playerStates);
     }
-    f.nukeTelegraphs = extractNukeTelegraphsFromIds(
-      this._nukeUnitIds,
-      this._unitStates,
-      this._map.width(),
-      this._myPlayer?.smallID() ?? 0,
-      // The latest relation matrix — recomputed above when dirty, otherwise
-      // carried over on the frame from the last rebuild.
-      f.relationMatrix,
-      f.relationSize,
-      this.unitMotionPlans,
-      gu.tick,
-    );
-    f.attackRings = this._myPlayer
-      ? extractAttackRingsFromIds(
-          this._transportUnitIds,
-          this._unitStates,
-          this._map.width(),
-          this._myPlayer.smallID(),
-        )
-      : [];
+    if (!deferGlobalDerived) {
+      f.nukeTelegraphs = extractNukeTelegraphsFromIds(
+        this._nukeUnitIds,
+        this._unitStates,
+        this._map.width(),
+        this._myPlayer?.smallID() ?? 0,
+        // The latest relation matrix — recomputed above when dirty, otherwise
+        // carried over on the frame from the last rebuild.
+        f.relationMatrix,
+        f.relationSize,
+        this.unitMotionPlans,
+        gu.tick,
+      );
+      f.attackRings = this._myPlayer
+        ? extractAttackRingsFromIds(
+            this._transportUnitIds,
+            this._unitStates,
+            this._map.width(),
+            this._myPlayer.smallID(),
+          )
+        : [];
+    }
     f.structuresDirty = this._structuresDirty;
 
     // First populate: signal "full upload required" by nulling changedTiles.

@@ -27,9 +27,41 @@ uniform float uDefenseDarken;      // multiplier applied to fill on defended til
 uniform sampler2D uBorderTex;      // RG8 — border flags; R > 0.25 = border tile
 uniform float uSaturation;         // 1 = full color, 0 = grayscale
 uniform float uTerritoryAlpha;     // absolute fill opacity; 1 = fully opaque
+uniform int uMineralEnabled;
+uniform float uMineralStrength;
+uniform float uMineralScale;
+uniform float uMineralVeinStrength;
+uniform float uMineralGrainStrength;
+uniform sampler2D uBoardMaterial;
 
 in vec2 vWorldPos;
 out vec4 fragColor;
+
+vec3 mineralTerritory(vec3 base, vec2 worldPos, float ownerSeed) {
+  float scale = max(0.25, uMineralScale);
+  float transpose = step(0.5, fract(ownerSeed * 0.75487766));
+  vec2 oriented = mix(worldPos, worldPos.yx, transpose);
+  vec2 flip = vec2(
+    mix(-1.0, 1.0, step(0.5, fract(ownerSeed * 0.381966))),
+    mix(-1.0, 1.0, step(0.5, fract(ownerSeed * 0.618034)))
+  );
+  vec2 uv = oriented * flip / (96.0 * scale) + vec2(
+    fract(ownerSeed * 0.1031),
+    fract(ownerSeed * 0.11369)
+  );
+  vec4 lookup = texture(uBoardMaterial, uv);
+  float footprint = max(length(dFdx(worldPos)), length(dFdy(worldPos)));
+  float detailFade = 1.0 - smoothstep(2.5 * scale, 15.0 * scale, footprint);
+  vec2 normalXY = (lookup.rg * 2.0 - 1.0) * (0.66 * detailFade);
+  vec3 normal = normalize(vec3(normalXY, 1.0));
+  float light = 0.82 + 0.24 * max(0.0, dot(normal, normalize(vec3(-0.44, -0.58, 0.92))));
+  vec3 depth = mix(base * 0.66, sqrt(max(base, vec3(0.0))) * 0.94, 0.36);
+  depth *= light * mix(0.91, 1.09, mix(0.5, lookup.b, detailFade));
+  float crystal = smoothstep(0.84, 0.98, lookup.b) * detailFade;
+  depth += mix(vec3(0.72), sqrt(max(base, vec3(0.0))), 0.35)
+    * crystal * uMineralVeinStrength * 0.38;
+  return mix(base, clamp(depth, 0.0, 1.0), clamp(uMineralStrength, 0.0, 1.0));
+}
 
 void main() {
   ivec2 tc = ivec2(floor(vWorldPos));
@@ -127,6 +159,10 @@ void main() {
   if (uSaturation != 1.0) {
     float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
     color.rgb = mix(vec3(luma), color.rgb, uSaturation);
+  }
+
+  if (uMineralEnabled != 0) {
+    color.rgb = mineralTerritory(color.rgb, vWorldPos, float(owner) * 0.37);
   }
 
   color.a = uTerritoryAlpha;

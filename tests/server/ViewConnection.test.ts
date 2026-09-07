@@ -28,6 +28,28 @@ describe("view flow control", () => {
     view.stop();
   });
 
+  it("reports readiness only after the final snapshot frame is acknowledged", () => {
+    vi.useFakeTimers();
+    const ready = vi.fn();
+    const view = new ViewConnection(
+      { readyState: 1, send: vi.fn() } as unknown as WebSocket,
+      vi.fn(),
+      ready,
+    );
+    view.startSnapshot([
+      new Uint8Array([1]),
+      new Uint8Array([2]),
+      new Uint8Array([3]),
+    ]);
+    view.acknowledge(2);
+    expect(ready).not.toHaveBeenCalled();
+    view.acknowledge(3);
+    expect(ready).toHaveBeenCalledOnce();
+    view.acknowledge(3);
+    expect(ready).toHaveBeenCalledOnce();
+    view.stop();
+  });
+
   it("still bounds live ticks while a snapshot is stalled", () => {
     vi.useFakeTimers();
     const slow = vi.fn();

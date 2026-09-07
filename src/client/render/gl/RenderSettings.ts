@@ -70,6 +70,19 @@ export interface RenderSettings {
     highlandColor: string;
     mountainColor: string;
   };
+  /** Procedural mineral finish shared by terrain, territory, and border shaders. */
+  material: {
+    /** Prototype switch. It changes presentation only, never map data. */
+    enabled: boolean;
+    /** Overall blend between the canonical rendering and mineral treatment. */
+    strength: number;
+    /** World-space scale of the stable procedural grain and veins. */
+    scale: number;
+    /** Bright crystalline seam contribution. */
+    veinStrength: number;
+    /** Fine stone-grain contribution. */
+    grainStrength: number;
+  };
   falloutBloom: {
     broilSpeedCold: number;
     broilSpeedHot: number;

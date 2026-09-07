@@ -32,6 +32,7 @@ import {
   ServerLobbyInfoMessage,
   ServerNewLobbyMessage,
   ServerPrestartMessageSchema,
+  ServerSimulationRecoveryMessage,
   ServerStartGameMessage,
   ServerTurnMessage,
   StampedIntent,
@@ -48,7 +49,11 @@ import type {
   ManagedReservedSeat,
 } from "./IPCBridgeSchema";
 import { ServerEnv } from "./ServerEnv";
-import { SimulationHost, type TickResult } from "./simulation/SimulationHost";
+import {
+  SimulationHost,
+  type SimulationRecoveryProgress,
+  type TickResult,
+} from "./simulation/SimulationHost";
 import {
   simulationStartInfo,
   usesServerSimulation,
@@ -117,9 +122,13 @@ function hostCheatsEnabled(hc: GameConfig["hostCheats"]): boolean {
 
 export class GameServer {
   private simulation: SimulationHost | undefined;
+  private simulationRecoveryProgress: SimulationRecoveryProgress | undefined;
   private simulationBusy = false;
   private simulationDeadline = 0;
   private simulationTimer: ReturnType<typeof setTimeout> | undefined;
+  private simulationClockStarted = false;
+  private simulationStartFallbackTimer:
+    ReturnType<typeof setTimeout> | undefined;
   private viewConnections = new Map<WebSocket, ViewConnection>();
   private viewGeneration = new Map<WebSocket, number>();
   private viewHistory: { tick: number; bytes: Uint8Array }[] = [];
@@ -156,10 +165,14 @@ export class GameServer {
     this.viewConnections.delete(ws);
     const generation = (this.viewGeneration.get(ws) ?? 0) + 1;
     this.viewGeneration.set(ws, generation);
-    const connection = new ViewConnection(ws, () => {
-      this.viewConnections.delete(ws);
-      ws.close(1013, "View delivery timed out");
-    });
+    const connection = new ViewConnection(
+      ws,
+      () => {
+        this.viewConnections.delete(ws);
+        ws.close(1013, "View delivery timed out");
+      },
+      () => this.startInitialManagedSimulation("initial view ready"),
+    );
     try {
       let baseTick: number;
       if (afterTick !== undefined) {
@@ -174,8 +187,23 @@ export class GameServer {
           return;
         }
       } else {
+        const snapshotStartedAt = performance.now();
         const snapshot = await this.simulation.snapshot();
         baseTick = snapshot.tick;
+        this.log.info("view snapshot prepared", {
+          gameID: this.id,
+          tick: snapshot.tick,
+          packets: snapshot.packets.length,
+          bytes: snapshot.packets.reduce(
+            (total, packet) => total + packet.byteLength,
+            0,
+          ),
+          maxPacketBytes: Math.max(
+            0,
+            ...snapshot.packets.map((packet) => packet.byteLength),
+          ),
+          preparationMs: performance.now() - snapshotStartedAt,
+        });
         if (
           this.viewGeneration.get(ws) !== generation ||
           ws.readyState !== WebSocket.OPEN
@@ -220,7 +248,12 @@ export class GameServer {
       this.log.info("authoritative simulation", {
         tick: result.tick,
         simulationMs: result.duration,
+        coreSimulationMs: result.coreDuration,
+        viewEncodingMs: result.encodingDuration,
         frameBytes: result.bytes.byteLength,
+        tileDeltas: result.tileDeltaCount,
+        motionPlanBytes: result.motionPlanBytes,
+        unitUpdates: result.unitUpdateCount,
         views: this.viewConnections.size,
         clockDebtMs: Math.max(0, performance.now() - this.simulationDeadline),
       });
@@ -233,6 +266,36 @@ export class GameServer {
       () => this.endTurn(),
       Math.max(0, this.simulationDeadline - performance.now()),
     );
+  }
+
+  private startSimulationClock(): void {
+    if (this.simulationClockStarted || this._hasEnded) return;
+    this.simulationClockStarted = true;
+    clearTimeout(this.simulationStartFallbackTimer);
+    this.simulationStartFallbackTimer = undefined;
+    this.simulationDeadline = performance.now() + ServerEnv.turnIntervalMs();
+    this.scheduleSimulation();
+  }
+
+  /**
+   * A new managed world has a frozen roster before anybody opens its map.
+   * Hold tick zero until one real viewer has loaded and acknowledged the
+   * initial snapshot, so every device receives the full, unchanged 300-turn
+   * spawn phase. Recovered worlds already have a journal and never wait.
+   */
+  private startInitialManagedSimulation(reason: string): void {
+    if (
+      !this.simulation ||
+      !this.managedOptions ||
+      this.turns.length !== 0 ||
+      this.simulationClockStarted
+    )
+      return;
+    this.log.info("starting managed simulation clock", {
+      gameID: this.id,
+      reason,
+    });
+    this.startSimulationClock();
   }
   private sentDesyncMessageClients = new Set<ClientID>();
 
@@ -1094,6 +1157,7 @@ export class GameServer {
 
     // In case a client joined the game late and missed the start message.
     if (this._hasStarted) {
+      this.sendSimulationRecoveryProgress(client.ws);
       this.sendStartGameMsg(client.ws, lastTurn);
     }
 
@@ -1150,6 +1214,7 @@ export class GameServer {
     this.startLobbyInfoBroadcast();
 
     if (this._hasStarted) {
+      this.sendSimulationRecoveryProgress(client.ws);
       this.sendStartGameMsg(client.ws, lastTurn);
     }
     return true;
@@ -1688,13 +1753,25 @@ export class GameServer {
       this.simulation = new SimulationHost(
         simulationStartInfo(this.wireGameStartInfo),
         this.turns,
+        undefined,
+        (progress) => this.broadcastSimulationRecoveryProgress(progress),
       );
       void this.simulation.ready
         .then(() => {
+          this.broadcastSimulationRecoveryReady();
           this.markSimulationReady();
-          this.simulationDeadline =
-            performance.now() + ServerEnv.turnIntervalMs();
-          this.scheduleSimulation();
+          if (this.managedOptions && this.turns.length === 0) {
+            // Offline invitations must still begin eventually. A connected
+            // viewer normally releases this as soon as its snapshot is ready.
+            this.simulationStartFallbackTimer = setTimeout(
+              () =>
+                this.startInitialManagedSimulation("viewer readiness timeout"),
+              60_000,
+            );
+            this.simulationStartFallbackTimer.unref?.();
+          } else {
+            this.startSimulationClock();
+          }
         })
         .catch((error) => {
           this.markSimulationFailed(error);
@@ -1827,6 +1904,54 @@ export class GameServer {
     }
   }
 
+  private simulationRecoveryMessage(
+    status: "replaying" | "ready",
+    progress: SimulationRecoveryProgress,
+  ): ServerSimulationRecoveryMessage {
+    return {
+      type: "simulation_recovery",
+      status,
+      completedTurns: progress.completedTurns,
+      totalTurns: progress.totalTurns,
+      elapsedMs: progress.elapsedMs,
+    };
+  }
+
+  private sendSimulationRecoveryProgress(ws: WebSocket): void {
+    const progress = this.simulationRecoveryProgress;
+    if (!progress || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(
+      JSON.stringify(this.simulationRecoveryMessage("replaying", progress)),
+    );
+  }
+
+  private broadcastSimulationRecoveryProgress(
+    progress: SimulationRecoveryProgress,
+  ): void {
+    this.simulationRecoveryProgress = progress;
+    const message = JSON.stringify(
+      this.simulationRecoveryMessage("replaying", progress),
+    );
+    for (const client of this.activeClients) {
+      if (client.ws.readyState === WebSocket.OPEN) client.ws.send(message);
+    }
+  }
+
+  private broadcastSimulationRecoveryReady(): void {
+    const progress = this.simulationRecoveryProgress;
+    if (!progress) return;
+    const message = JSON.stringify(
+      this.simulationRecoveryMessage("ready", {
+        ...progress,
+        completedTurns: progress.totalTurns,
+      }),
+    );
+    this.simulationRecoveryProgress = undefined;
+    for (const client of this.activeClients) {
+      if (client.ws.readyState === WebSocket.OPEN) client.ws.send(message);
+    }
+  }
+
   private endTurn() {
     // Skip turn execution if game is paused
     if (this.isPaused) {
@@ -1913,6 +2038,7 @@ export class GameServer {
 
   async end() {
     clearTimeout(this.simulationTimer);
+    clearTimeout(this.simulationStartFallbackTimer);
     this.simulation?.stop();
     for (const connection of this.viewConnections.values()) connection.stop();
     this.viewConnections.clear();

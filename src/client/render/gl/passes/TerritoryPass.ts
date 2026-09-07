@@ -42,6 +42,11 @@ export class TerritoryPass {
   private uDefenseDarken: WebGLUniformLocation;
   private uSaturation: WebGLUniformLocation;
   private uTerritoryAlpha: WebGLUniformLocation;
+  private uMineralEnabled: WebGLUniformLocation;
+  private uMineralStrength: WebGLUniformLocation;
+  private uMineralScale: WebGLUniformLocation;
+  private uMineralVeinStrength: WebGLUniformLocation;
+  private uMineralGrainStrength: WebGLUniformLocation;
   private highlightOwner = 0;
   private isTeamMode = false;
 
@@ -117,6 +122,7 @@ export class TerritoryPass {
     skinLayerTex: WebGLTexture,
     skinAnchorTex: WebGLTexture,
     settings: RenderSettings,
+    private readonly boardMaterialTex?: WebGLTexture,
   ) {
     this.gl = gl;
     this.settings = settings;
@@ -180,6 +186,23 @@ export class TerritoryPass {
       this.program,
       "uTerritoryAlpha",
     )!;
+    this.uMineralEnabled = gl.getUniformLocation(
+      this.program,
+      "uMineralEnabled",
+    )!;
+    this.uMineralStrength = gl.getUniformLocation(
+      this.program,
+      "uMineralStrength",
+    )!;
+    this.uMineralScale = gl.getUniformLocation(this.program, "uMineralScale")!;
+    this.uMineralVeinStrength = gl.getUniformLocation(
+      this.program,
+      "uMineralVeinStrength",
+    )!;
+    this.uMineralGrainStrength = gl.getUniformLocation(
+      this.program,
+      "uMineralGrainStrength",
+    )!;
 
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "uTileTex"), 0);
@@ -191,6 +214,7 @@ export class TerritoryPass {
     gl.uniform1i(gl.getUniformLocation(this.program, "uSkinAnchor"), 6);
     gl.uniform1i(gl.getUniformLocation(this.program, "uDefenseCoverageTex"), 7);
     gl.uniform1i(gl.getUniformLocation(this.program, "uBorderTex"), 8);
+    gl.uniform1i(gl.getUniformLocation(this.program, "uBoardMaterial"), 9);
 
     this.vao = createMapQuad(gl, mapW, mapH);
 
@@ -442,6 +466,17 @@ export class TerritoryPass {
     gl.uniform1f(this.uDefenseDarken, mo.territoryDefenseDarken);
     gl.uniform1f(this.uSaturation, mo.territorySaturation);
     gl.uniform1f(this.uTerritoryAlpha, mo.territoryAlpha);
+    gl.uniform1i(this.uMineralEnabled, this.settings.material.enabled ? 1 : 0);
+    gl.uniform1f(this.uMineralStrength, this.settings.material.strength);
+    gl.uniform1f(this.uMineralScale, this.settings.material.scale);
+    gl.uniform1f(
+      this.uMineralVeinStrength,
+      this.settings.material.veinStrength,
+    );
+    gl.uniform1f(
+      this.uMineralGrainStrength,
+      this.settings.material.grainStrength,
+    );
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
@@ -464,6 +499,10 @@ export class TerritoryPass {
     if (this.borderTex) {
       gl.activeTexture(gl.TEXTURE8);
       gl.bindTexture(gl.TEXTURE_2D, this.borderTex);
+    }
+    if (this.boardMaterialTex) {
+      gl.activeTexture(gl.TEXTURE9);
+      gl.bindTexture(gl.TEXTURE_2D, this.boardMaterialTex);
     }
 
     gl.bindVertexArray(this.vao);

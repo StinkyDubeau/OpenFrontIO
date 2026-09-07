@@ -44,6 +44,7 @@ export class UnitDisplay extends LitElement implements Controller {
   private _samLauncher = 0;
   private allDisabled = false;
   private _hoveredUnit: PlayerBuildableUnitType | null = null;
+  private buildablesRequestInFlight = false;
 
   createRenderRoot() {
     return this;
@@ -57,6 +58,10 @@ export class UnitDisplay extends LitElement implements Controller {
 
     this.allDisabled = BuildMenus.types.every((u) => config.isUnitDisabled(u));
     this.requestUpdate();
+  }
+
+  getTickIntervalMs() {
+    return 500;
   }
 
   private cost(item: UnitType): Gold {
@@ -91,10 +96,21 @@ export class UnitDisplay extends LitElement implements Controller {
 
   tick() {
     const player = this.game?.myPlayer();
-    if (!player) return;
-    player.buildables(undefined, BuildMenus.types).then((buildables) => {
-      this.playerBuildables = buildables;
-    });
+    if (!player || !player.isAlive() || this.game.inSpawnPhase()) return;
+    if (!this.buildablesRequestInFlight) {
+      this.buildablesRequestInFlight = true;
+      void player
+        .buildables(undefined, BuildMenus.types)
+        .then((buildables) => {
+          this.playerBuildables = buildables;
+        })
+        .catch(() => {
+          // Keep the last usable costs while a remote query is unavailable.
+        })
+        .finally(() => {
+          this.buildablesRequestInFlight = false;
+        });
+    }
     this._cities = player.totalUnitLevels(UnitType.City);
     this._missileSilo = player.totalUnitLevels(UnitType.MissileSilo);
     this._port = player.totalUnitLevels(UnitType.Port);
@@ -234,21 +250,21 @@ export class UnitDisplay extends LitElement implements Controller {
                 >
                   <div class="font-bold text-sm mb-1">
                     ${translateText(
-                    "unit_type." + structureKey,
-                  )}${` [${displayHotkey}]`}
+                      "unit_type." + structureKey,
+                    )}${` [${displayHotkey}]`}
                   </div>
                   <div class="p-2">
                     ${translateText("build_menu.desc." + structureKey)}
                   </div>
                   ${
-                  unitType === UnitType.Warship
-                    ? html`<div
-                        class="mt-1 px-2 py-1 text-[10px] text-cyan-300 border-t border-white/10"
-                      >
-                        ⇧ ${translateText("build_menu.warship_shift_hint")}
-                      </div>`
-                    : null
-                }
+                    unitType === UnitType.Warship
+                      ? html`<div
+                          class="mt-1 px-2 py-1 text-[10px] text-cyan-300 border-t border-white/10"
+                        >
+                          ⇧ ${translateText("build_menu.warship_shift_hint")}
+                        </div>`
+                      : null
+                  }
                   <div class="flex items-center justify-center gap-1">
                     <img src=${goldCoinIcon} width="13" height="13" />
                     <span class="text-yellow-300"

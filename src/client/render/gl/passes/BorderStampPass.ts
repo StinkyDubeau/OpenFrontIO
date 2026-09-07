@@ -30,6 +30,9 @@ export class BorderStampPass {
   private uEmbargoTint: WebGLUniformLocation;
   private uFriendlyTint: WebGLUniformLocation;
   private uAltView: WebGLUniformLocation;
+  private uMineralEnabled: WebGLUniformLocation;
+  private uMineralStrength: WebGLUniformLocation;
+  private uMineralScale: WebGLUniformLocation;
 
   private vao: WebGLVertexArrayObject;
   private tileTex: WebGLTexture;
@@ -47,6 +50,7 @@ export class BorderStampPass {
     paletteTex: WebGLTexture,
     borderTex: WebGLTexture,
     settings: RenderSettings,
+    private readonly boardMaterialTex?: WebGLTexture,
   ) {
     this.gl = gl;
     this.settings = settings;
@@ -85,6 +89,15 @@ export class BorderStampPass {
     this.uEmbargoTint = gl.getUniformLocation(this.program, "uEmbargoTint")!;
     this.uFriendlyTint = gl.getUniformLocation(this.program, "uFriendlyTint")!;
     this.uAltView = gl.getUniformLocation(this.program, "uAltView")!;
+    this.uMineralEnabled = gl.getUniformLocation(
+      this.program,
+      "uMineralEnabled",
+    )!;
+    this.uMineralStrength = gl.getUniformLocation(
+      this.program,
+      "uMineralStrength",
+    )!;
+    this.uMineralScale = gl.getUniformLocation(this.program, "uMineralScale")!;
 
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "uTileTex"), 0);
@@ -92,6 +105,7 @@ export class BorderStampPass {
     gl.uniform1i(gl.getUniformLocation(this.program, "uBorderTex"), 2);
     gl.uniform1i(gl.getUniformLocation(this.program, "uAffiliation"), 3);
     gl.uniform1i(gl.getUniformLocation(this.program, "uDefenseCoverageTex"), 4);
+    gl.uniform1i(gl.getUniformLocation(this.program, "uBoardMaterial"), 5);
 
     this.vao = createMapQuad(gl, mapW, mapH);
   }
@@ -131,6 +145,9 @@ export class BorderStampPass {
       mo.friendlyTintB,
     );
     gl.uniform1i(this.uAltView, this.altView ? 1 : 0);
+    gl.uniform1i(this.uMineralEnabled, this.settings.material.enabled ? 1 : 0);
+    gl.uniform1f(this.uMineralStrength, this.settings.material.strength);
+    gl.uniform1f(this.uMineralScale, this.settings.material.scale);
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
@@ -145,6 +162,10 @@ export class BorderStampPass {
     if (this.defenseCoverageTex) {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, this.defenseCoverageTex);
+    }
+    if (this.boardMaterialTex) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, this.boardMaterialTex);
     }
 
     gl.bindVertexArray(this.vao);

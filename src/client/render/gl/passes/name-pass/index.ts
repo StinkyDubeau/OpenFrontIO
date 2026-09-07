@@ -92,6 +92,7 @@ export class NamePass {
   private playerByID: Map<string, PlayerStatic>;
   private slots: Map<string, PlayerSlot> = new Map();
   private maxPlayers: number;
+  private capacityWarningShown = false;
   private playerColors: Map<string, [number, number, number]> = new Map();
   private flagAtlas: FlagAtlasArray;
   private crownAtlas: FlagAtlasArray;
@@ -349,6 +350,15 @@ export class NamePass {
       let nextSlotIndex = 0;
       for (const p of this.playerByID.values()) {
         if (!this.slots.has(p.id)) {
+          if (nextSlotIndex >= this.maxPlayers) {
+            if (!this.capacityWarningShown) {
+              this.capacityWarningShown = true;
+              console.warn(
+                `NamePass capacity ${this.maxPlayers} is smaller than the player roster; excess labels will be omitted`,
+              );
+            }
+            continue;
+          }
           const slot: PlayerSlot = {
             index: nextSlotIndex++,
             playerID: p.id,

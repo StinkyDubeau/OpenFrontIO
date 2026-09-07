@@ -45,7 +45,8 @@ export const NATIVE_BRIDGE_BOOTSTRAP = `
     var detail = {
       platform: ${JSON.stringify(Platform.OS)},
       shellVersion: "0.1.0",
-      capabilities: ["app-state", "haptics", "persistent-session"]
+      frameRateCap: 30,
+      capabilities: ["app-state", "haptics", "persistent-session", "frame-cap-30"]
     };
     window.__PRESSURE_ATLAS_NATIVE__ = detail;
     window.__IDLEFRONT_NATIVE__ = detail;

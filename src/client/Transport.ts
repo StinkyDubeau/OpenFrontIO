@@ -40,6 +40,26 @@ import { LocalServer } from "./LocalServer";
 import { translateText } from "./Utils";
 import { PlayerView } from "./view";
 
+/**
+ * Browsers do not agree on the runtime type used for binary WebSocket frames.
+ * Chromium normally honours `binaryType = "arraybuffer"`, while WKWebView and
+ * some React Native WebViews can still provide a Blob. Normalize every binary
+ * shape before decoding so view snapshots work consistently on every device.
+ */
+export async function webSocketBinaryPayload(
+  data: unknown,
+): Promise<ArrayBuffer | null> {
+  if (data instanceof ArrayBuffer) return data;
+  if (typeof Blob !== "undefined" && data instanceof Blob)
+    return data.arrayBuffer();
+  if (ArrayBuffer.isView(data)) {
+    const copy = new Uint8Array(data.byteLength);
+    copy.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    return copy.buffer;
+  }
+  return null;
+}
+
 export class PauseGameIntentEvent implements GameEvent {
   constructor(public readonly paused: boolean) {}
 }
@@ -367,11 +387,12 @@ export class Transport {
     // WS origin comes from ClientEnv (same-origin on web, audience-derived on
     // the desktop app://openfront origin), not window.location.host.
     const workerPath = ClientEnv.workerPath(this.lobbyConfig.gameID);
-    this.socket = new WebSocket(`${ClientEnv.serverWsBase()}/${workerPath}`);
-    this.socket.binaryType = "arraybuffer";
+    const socket = new WebSocket(`${ClientEnv.serverWsBase()}/${workerPath}`);
+    this.socket = socket;
+    socket.binaryType = "arraybuffer";
     this.onconnect = onconnect;
     this.onmessage = onmessage;
-    this.socket.onopen = () => {
+    socket.onopen = () => {
       console.log("Connected to game server!");
       if (this.socket === null) {
         console.error("socket is null");
@@ -388,32 +409,59 @@ export class Transport {
       }
       onconnect();
     };
-    this.socket.onmessage = (event: MessageEvent) => {
-      try {
-        if (event.data instanceof ArrayBuffer) {
-          const sequence = new DataView(event.data).getUint32(0);
-          this.viewReceiver?.(sequence, decodeViewPacket(event.data.slice(4)));
-          return;
-        }
-        const parsed = JSON.parse(event.data);
-        const result = ServerMessageSchema.safeParse(parsed);
-        if (!result.success) {
-          const error = z.prettifyError(result.error);
-          console.error("Error parsing server message", error);
-          return;
-        }
-        this.onmessage(result.data);
-      } catch (e) {
-        console.error("Error in onmessage handler:", e, event.data);
-        return;
-      }
+    // Blob conversion is asynchronous. Serialize message handling so a later
+    // snapshot part can never overtake an earlier one while it is converted.
+    let incoming = Promise.resolve();
+    socket.onmessage = (event: MessageEvent) => {
+      incoming = incoming
+        .then(async () => {
+          if (this.socket !== socket) return;
+          const binary = await webSocketBinaryPayload(event.data);
+          if (binary !== null) {
+            if (binary.byteLength < 4)
+              throw new Error("View packet is missing its sequence header");
+            const sequence = new DataView(binary).getUint32(0);
+            this.viewReceiver?.(sequence, decodeViewPacket(binary.slice(4)));
+            return;
+          }
+          if (typeof event.data !== "string")
+            throw new Error("Unsupported WebSocket message payload");
+          const parsed = JSON.parse(event.data);
+          const result = ServerMessageSchema.safeParse(parsed);
+          if (!result.success) {
+            const error = z.prettifyError(result.error);
+            console.error("Error parsing server message", error);
+            return;
+          }
+          if (result.data.type === "simulation_recovery") {
+            window.dispatchEvent(
+              new CustomEvent("idlefront:simulation-recovery", {
+                detail: result.data,
+              }),
+            );
+            return;
+          }
+          this.onmessage(result.data);
+        })
+        .catch((e) => {
+          console.error("Error in onmessage handler:", e, event.data);
+          window.dispatchEvent(
+            new CustomEvent("idlefront:diagnostic", {
+              detail: {
+                scope: "view-transport",
+                message: e instanceof Error ? e.message : String(e),
+                stack: e instanceof Error ? e.stack : undefined,
+              },
+            }),
+          );
+        });
     };
-    this.socket.onerror = (err) => {
+    socket.onerror = (err) => {
       console.error("Socket encountered error: ", err, "Closing socket");
       if (this.socket === null) return;
       this.socket.close();
     };
-    this.socket.onclose = (event: CloseEvent) => {
+    socket.onclose = (event: CloseEvent) => {
       console.log(
         `WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`,
       );
@@ -707,6 +755,16 @@ export class Transport {
   }
 
   private sendIntent(intent: Intent) {
+    if (intent.type === "spawn") {
+      window.dispatchEvent(
+        new CustomEvent("idlefront:diagnostic", {
+          detail: {
+            scope: "spawn-transport",
+            message: `sending spawn intent socket=${this.socket?.readyState ?? "local"}`,
+          },
+        }),
+      );
+    }
     if (this.isLocal || this.socket?.readyState === WebSocket.OPEN) {
       const msg = {
         type: "intent",

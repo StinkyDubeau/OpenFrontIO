@@ -5,6 +5,7 @@
  * GLSL. This avoids a second map-sized texture and a 4-byte-per-tile CPU bake.
  */
 
+import type { RenderSettings } from "../RenderSettings";
 import terrainFragSrc from "../shaders/terrain/terrain.frag.glsl?raw";
 import terrainVertSrc from "../shaders/terrain/terrain.vert.glsl?raw";
 import {
@@ -22,6 +23,7 @@ export class TerrainPass {
   private vao: WebGLVertexArrayObject;
   private uCamera: WebGLUniformLocation;
   private readonly colorUniforms: readonly WebGLUniformLocation[];
+  private readonly material: RenderSettings["material"];
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -29,7 +31,16 @@ export class TerrainPass {
     mapW: number,
     mapH: number,
     terrainColors?: TerrainColorOverrides,
+    material?: RenderSettings["material"],
+    private readonly boardMaterialTex?: WebGLTexture,
   ) {
+    this.material = material ?? {
+      enabled: false,
+      strength: 0,
+      scale: 1,
+      veinStrength: 0,
+      grainStrength: 0,
+    };
     this.program = createProgram(
       gl,
       shaderSrc(terrainVertSrc, { MAP_W: mapW, MAP_H: mapH }),
@@ -45,6 +56,27 @@ export class TerrainPass {
     ];
     gl.useProgram(this.program);
     gl.uniform1i(gl.getUniformLocation(this.program, "uTerrain"), 0);
+    gl.uniform1i(gl.getUniformLocation(this.program, "uBoardMaterial"), 1);
+    gl.uniform1i(
+      gl.getUniformLocation(this.program, "uMineralEnabled"),
+      this.material.enabled ? 1 : 0,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralStrength"),
+      this.material.strength,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralScale"),
+      this.material.scale,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralVeinStrength"),
+      this.material.veinStrength,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralGrainStrength"),
+      this.material.grainStrength,
+    );
     this.setTerrainColors(terrainColors);
 
     this.vao = createMapQuad(gl, mapW, mapH);
@@ -79,6 +111,10 @@ export class TerrainPass {
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    if (this.boardMaterialTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.boardMaterialTex);
+    }
 
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 6);

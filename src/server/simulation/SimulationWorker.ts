@@ -13,7 +13,6 @@ import type { GameStartInfo, Turn } from "../../core/Schemas";
 import type { WorkerMessage } from "../../core/worker/WorkerMessages";
 import { NodeGameMapLoader } from "./NodeGameMapLoader";
 import { ViewSnapshot } from "./ViewSnapshot";
-import { MovingUnitTracker } from "./MovingUnitTracker";
 
 const port = parentPort!;
 console.debug = () => {};
@@ -37,8 +36,28 @@ function tick(turn: Turn) {
     throw new Error(failure ?? "Simulation tick failed");
   snapshot.record(latest);
 }
-for (const turn of workerData.turns as Turn[]) tick(turn);
-const movingUnits = new MovingUnitTracker();
+const recoveryTurns = workerData.turns as Turn[];
+const recoveryStartedAt = performance.now();
+let lastRecoveryReportAt = recoveryStartedAt;
+
+function reportRecoveryProgress(completedTurns: number, force = false) {
+  const now = performance.now();
+  if (!force && now - lastRecoveryReportAt < 250) return;
+  lastRecoveryReportAt = now;
+  port.postMessage({
+    recoveryProgress: {
+      completedTurns,
+      totalTurns: recoveryTurns.length,
+      elapsedMs: now - recoveryStartedAt,
+    },
+  });
+}
+
+if (recoveryTurns.length > 0) reportRecoveryProgress(0, true);
+for (let index = 0; index < recoveryTurns.length; index++) {
+  tick(recoveryTurns[index]);
+  reportRecoveryProgress(index + 1, index + 1 === recoveryTurns.length);
+}
 
 function query(q: ViewQuery): WorkerMessage {
   const game = runner.game;
@@ -101,19 +120,18 @@ port.on("message", (command) => {
     if (command.type === "turn") {
       const started = performance.now();
       tick(command.turn);
-      // Render clients receive current positions. Original motion executions
-      // still run in the core; no per-client path execution is required.
-      latest.packedMotionPlans = undefined;
-      // The core already emits state changes for structures and units. Only
-      // movement bypasses that path when clients run motion plans. Structures
-      // can never move, so do not rescan them as the world builds up.
-      movingUnits.appendChangedPositions(
-        runner.game,
-        latest.updates[GameUpdateType.Unit],
-      );
+      // Preserve the engine's compact motion plans. The authoritative worker
+      // still simulates every ship and train; render clients only derive their
+      // visual position from the server-issued path and tick. Sending a full
+      // JSON UnitUpdate for every moving unit on every turn made high-traffic
+      // worlds produce multi-megabyte frames and eventually pulled server TPS
+      // below real time. Non-plan-driven movement (for example warships) and
+      // all lifecycle/state changes continue through the ordinary Unit stream.
       latest.pendingTurns = 0;
       latest.serverTickExecutionDuration = performance.now() - started;
+      const encodingStarted = performance.now();
       const bytes = encodeViewPacket({ kind: "update", update: latest });
+      const encodingDuration = performance.now() - encodingStarted;
       const stats =
         latest.tick % 100 === 0
           ? {
@@ -142,6 +160,11 @@ port.on("message", (command) => {
           bytes,
           tick: latest.tick,
           duration: performance.now() - started,
+          coreDuration: latest.tickExecutionDuration ?? 0,
+          encodingDuration,
+          tileDeltaCount: latest.packedTileUpdates.length / 2,
+          motionPlanBytes: latest.packedMotionPlans?.byteLength ?? 0,
+          unitUpdateCount: latest.updates[GameUpdateType.Unit].length,
           stats,
           win: latest.updates[GameUpdateType.Win][0],
         },

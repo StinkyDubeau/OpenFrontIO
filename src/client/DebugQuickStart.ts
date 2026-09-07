@@ -1,3 +1,9 @@
+import {
+  debugPlaytestLabel,
+  debugPlaytestPrefix,
+  type DebugPlaytestPreset,
+  isDebugQuickStartWorldName,
+} from "../core/DebugPlaytest";
 import type {
   PersistentWorldCard,
   PersistentWorldControllerSession,
@@ -15,7 +21,7 @@ import { runtimeDebugEnabled } from "./RuntimeDebug";
 
 // Long enough for a second device to hit Quick join, short enough to stay a
 // one-action developer loop.
-const QUICK_START_DELAY_MS = 60_000;
+const QUICK_START_DELAY_MS = 20_000;
 const RUNTIME_WAIT_MS = 120_000;
 
 export type DebugQuickStartStatus = (message: string) => void;
@@ -66,6 +72,7 @@ function enterRuntime(gameID: string): void {
 async function waitForRuntime(
   worldId: string,
   status: DebugQuickStartStatus,
+  preset: DebugPlaytestPreset,
 ): Promise<PersistentWorldLobbySnapshot> {
   const deadline = Date.now() + RUNTIME_WAIT_MS;
   while (Date.now() < deadline) {
@@ -83,7 +90,7 @@ async function waitForRuntime(
     status(
       snapshot.world.phase === "scheduled"
         ? `Starting in ${seconds}s…`
-        : "Allocating the Expanded Earth worker…",
+        : `Allocating the ${debugPlaytestLabel(preset)} worker…`,
     );
     await new Promise((resolve) => setTimeout(resolve, 750));
   }
@@ -104,13 +111,14 @@ function activeFirst(cards: PersistentWorldCard[]): PersistentWorldCard[] {
 export async function quickStartDebugGame(
   status: DebugQuickStartStatus = () => undefined,
   duration: Extract<PersistentWorldDuration, "1h" | "1d"> = "1h",
+  preset: DebugPlaytestPreset = "great-lakes",
 ): Promise<string> {
   if (!runtimeDebugEnabled()) throw new Error("Runtime debug mode is disabled");
   status("Binding the test identity…");
   await ensureSession();
   status("Creating a test world…");
   const created = await persistentWorldApi.createWorld({
-    name: `Server playtest ${new Date().toLocaleTimeString([], {
+    name: `${debugPlaytestPrefix(preset)}${new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     })}`,
@@ -120,7 +128,7 @@ export async function quickStartDebugGame(
     maxHumans: 8,
     startsAt: Date.now() + QUICK_START_DELAY_MS,
   });
-  const ready = await waitForRuntime(created.snapshot.world.id, status);
+  const ready = await waitForRuntime(created.snapshot.world.id, status, preset);
   status("Joining the test game…");
   enterRuntime(ready.runtimeGameId!);
   return ready.world.id;
@@ -128,6 +136,9 @@ export async function quickStartDebugGame(
 
 export async function quickJoinDebugGame(
   status: DebugQuickStartStatus = () => undefined,
+  preset: DebugPlaytestPreset = "great-lakes",
+  duration: Extract<PersistentWorldDuration, "1h" | "1d"> = "1h",
+  createIfMissing = false,
 ): Promise<string> {
   if (!runtimeDebugEnabled()) throw new Error("Runtime debug mode is disabled");
   status("Finding a running test world…");
@@ -141,7 +152,7 @@ export async function quickJoinDebugGame(
     if (
       seen.has(card.world.id) ||
       card.viewerEliminated ||
-      !card.world.name.startsWith("Server playtest ") ||
+      !isDebugQuickStartWorldName(card.world.name, preset) ||
       (card.world.phase !== "active" && card.world.phase !== "scheduled")
     ) {
       return false;
@@ -164,7 +175,7 @@ export async function quickJoinDebugGame(
     if (!snapshot.runtimeGameId) {
       if (snapshot.world.phase !== "scheduled") continue;
       status("Joined. Waiting for the test game to start…");
-      snapshot = await waitForRuntime(card.world.id, status);
+      snapshot = await waitForRuntime(card.world.id, status, preset);
     }
     status("Joining the running game…");
     const exists = await fetch(
@@ -179,5 +190,11 @@ export async function quickJoinDebugGame(
     enterRuntime(snapshot.runtimeGameId!);
     return snapshot.world.id;
   }
-  throw new Error("No joinable test world was found; use Quick start");
+  if (createIfMissing) {
+    status(`No ${debugPlaytestLabel(preset)} world is running. Creating one…`);
+    return quickStartDebugGame(status, duration, preset);
+  }
+  throw new Error(
+    `No joinable ${debugPlaytestLabel(preset)} test world was found`,
+  );
 }

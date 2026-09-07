@@ -15,9 +15,18 @@ uniform float uEmbargoTintRatio;
 uniform float uFriendlyTintRatio;
 uniform vec3 uEmbargoTint;
 uniform vec3 uFriendlyTint;
+uniform int uMineralEnabled;
+uniform float uMineralStrength;
+uniform float uMineralScale;
+uniform sampler2D uBoardMaterial;
 
 in vec2 vWorldPos;
 out vec4 fragColor;
+
+uint ownerAt(ivec2 tc) {
+  tc = clamp(tc, ivec2(0), ivec2(uMapSize) - ivec2(1));
+  return texelFetch(uTileTex, tc, 0).r & uint(OWNER_MASK);
+}
 
 void main() {
   ivec2 tc = ivec2(floor(vWorldPos));
@@ -57,6 +66,26 @@ void main() {
       if (defense) {
         bool checker = ((tc.x + tc.y) & 1) == 1;
         if (checker) bc *= uDefenseCheckerDarken;
+      }
+      // Turn the existing one-tile tactical silhouette into a cut edge. Four
+      // owner reads establish its direction; a fixed board light supplies the
+      // bevel and contact shadow without another render pass.
+      if (uMineralEnabled != 0) {
+        vec2 edge = vec2(
+          (ownerAt(tc + ivec2(-1, 0)) != owner ? 1.0 : 0.0) -
+            (ownerAt(tc + ivec2(1, 0)) != owner ? 1.0 : 0.0),
+          (ownerAt(tc + ivec2(0, -1)) != owner ? 1.0 : 0.0) -
+            (ownerAt(tc + ivec2(0, 1)) != owner ? 1.0 : 0.0)
+        );
+        float bevel = dot(edge, edge) > 0.0
+          ? dot(normalize(edge), normalize(vec2(-0.44, -0.58)))
+          : 0.0;
+        vec2 uv = (mix(vWorldPos, vWorldPos.yx, step(0.5, fract(float(owner) * 0.279))) /
+          (96.0 * max(0.25, uMineralScale))) + vec2(fract(float(owner) * 0.1031));
+        float crystal = texture(uBoardMaterial, uv).b;
+        vec3 gemEdge = mix(bc * 0.62, sqrt(max(bc, vec3(0.0))), 0.42);
+        gemEdge *= 0.88 + bevel * 0.16 + crystal * 0.09;
+        bc = mix(bc, clamp(gemEdge, 0.0, 1.0), uMineralStrength * 0.62);
       }
     }
     fragColor = vec4(bc, 1.0);

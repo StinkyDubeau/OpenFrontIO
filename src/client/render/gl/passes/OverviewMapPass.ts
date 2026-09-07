@@ -1,5 +1,6 @@
 import type { GameMap } from "../../../../core/game/GameMap";
 import type { RenderSettings } from "../RenderSettings";
+import { createBoardMaterialTexture } from "../utils/BoardMaterialTexture";
 import {
   createMapQuad,
   createProgram,
@@ -38,7 +39,42 @@ uniform ivec2 uPageGrid;
 uniform vec2 uWorldSize;
 uniform uint uHighlightOwner;
 uniform float uTerritoryAlpha;
+uniform int uMineralEnabled;
+uniform float uMineralStrength;
+uniform float uMineralScale;
+uniform float uMineralVeinStrength;
+uniform float uMineralGrainStrength;
+uniform sampler2D uBoardMaterial;
 out vec4 outColor;
+
+vec3 mineralSurface(vec3 base, vec2 worldPos, float seed, bool water) {
+  float scale = max(0.25, uMineralScale);
+  float transpose = step(0.5, fract(seed * 0.75487766));
+  vec2 oriented = mix(worldPos, worldPos.yx, transpose);
+  vec2 flip = vec2(
+    mix(-1.0, 1.0, step(0.5, fract(seed * 0.381966))),
+    mix(-1.0, 1.0, step(0.5, fract(seed * 0.618034)))
+  );
+  vec2 uv = oriented * flip / (96.0 * scale) + vec2(
+    fract(seed * 0.1031),
+    fract(seed * 0.11369)
+  );
+  vec4 lookup = texture(uBoardMaterial, uv);
+  float footprint = max(length(dFdx(worldPos)), length(dFdy(worldPos)));
+  float detailFade = 1.0 - smoothstep(2.5 * scale, 15.0 * scale, footprint);
+  vec2 normalXY = (lookup.rg * 2.0 - 1.0) * (0.64 * detailFade);
+  vec3 normal = normalize(vec3(normalXY, 1.0));
+  float light = 0.82 + 0.24 * max(0.0, dot(normal, normalize(vec3(-0.44, -0.58, 0.92))));
+  float value = water ? lookup.a : lookup.b;
+  vec3 material = water
+    ? mix(base * 0.20, vec3(0.018, 0.052, 0.066), 0.76)
+    : mix(base * 0.66, sqrt(max(base, vec3(0.0))) * 0.94, 0.36);
+  material *= light * mix(0.91, 1.09, mix(0.5, value, detailFade));
+  float crystal = smoothstep(0.84, 0.98, lookup.b) * detailFade;
+  material += (water ? vec3(0.018, 0.044, 0.054) : sqrt(max(base, vec3(0.0))))
+    * crystal * uMineralVeinStrength * 0.35;
+  return mix(base, clamp(material, 0.0, 1.0), uMineralStrength);
+}
 
 vec3 terrainColor(uint t) {
   bool land = (t & 128u) != 0u;
@@ -84,21 +120,66 @@ uint ownerAt(ivec2 world) {
   return tileAt(world) & 4095u;
 }
 
+bool landAt(ivec2 world) {
+  world = clamp(world, ivec2(0), ivec2(uWorldSize) - ivec2(1));
+  return (terrainAt(world) & 128u) != 0u;
+}
+
 void main() {
   ivec2 world = clamp(ivec2(vWorldPos), ivec2(0), ivec2(uWorldSize) - ivec2(1));
   uint terrain = terrainAt(world);
   uint tile = tileAt(world);
   uint owner = tile & 4095u;
+  bool isLand = (terrain & 128u) != 0u;
   vec3 color = terrainColor(terrain);
+  if (uMineralEnabled != 0) {
+    color = mineralSurface(color, vWorldPos, 0.0, !isLand);
+    bool shoreline = (terrain & 64u) != 0u;
+    if (shoreline) {
+      vec2 coast = vec2(
+        (landAt(world + ivec2(1, 0)) ? 1.0 : 0.0) -
+          (landAt(world - ivec2(1, 0)) ? 1.0 : 0.0),
+        (landAt(world + ivec2(0, 1)) ? 1.0 : 0.0) -
+          (landAt(world - ivec2(0, 1)) ? 1.0 : 0.0)
+      );
+      if (dot(coast, coast) > 0.0) {
+        float coastLight = dot(normalize(coast), normalize(vec2(-0.44, -0.58)));
+        color *= isLand ? 0.91 + coastLight * 0.09 : 0.78 - coastLight * 0.05;
+      }
+    }
+  }
   if (owner != 0u) {
     vec3 territory = texelFetch(uPalette, ivec2(int(owner), 0), 0).rgb;
     if (owner == uHighlightOwner) territory = mix(territory, vec3(1.0), 0.22);
+    if (uMineralEnabled != 0) {
+      territory = mineralSurface(
+        territory,
+        vWorldPos,
+        float(owner) * 0.37,
+        false
+      );
+    }
     color = mix(color, territory, uTerritoryAlpha);
-    bool border = ownerAt(world + ivec2(1, 0)) != owner ||
-                  ownerAt(world + ivec2(-1, 0)) != owner ||
-                  ownerAt(world + ivec2(0, 1)) != owner ||
-                  ownerAt(world + ivec2(0, -1)) != owner;
-    if (border) color *= 0.56;
+    bool rightEdge = ownerAt(world + ivec2(1, 0)) != owner;
+    bool leftEdge = ownerAt(world + ivec2(-1, 0)) != owner;
+    bool downEdge = ownerAt(world + ivec2(0, 1)) != owner;
+    bool upEdge = ownerAt(world + ivec2(0, -1)) != owner;
+    bool border = rightEdge || leftEdge || downEdge || upEdge;
+    if (border) {
+      if (uMineralEnabled != 0) {
+        vec2 edge = vec2(
+          (leftEdge ? 1.0 : 0.0) - (rightEdge ? 1.0 : 0.0),
+          (upEdge ? 1.0 : 0.0) - (downEdge ? 1.0 : 0.0)
+        );
+        float bevel = dot(edge, edge) > 0.0
+          ? dot(normalize(edge), normalize(vec2(-0.44, -0.58)))
+          : 0.0;
+        color *= 0.69 + bevel * 0.14;
+        color += max(bevel, 0.0) * sqrt(max(territory, vec3(0.0))) * 0.10;
+      } else {
+        color *= 0.56;
+      }
+    }
   }
   if ((tile & 8192u) != 0u) color = mix(color, vec3(0.20, 0.17, 0.15), 0.72);
   outColor = vec4(color, 1.0);
@@ -147,6 +228,7 @@ export class OverviewMapPass {
   private readonly detailTerrainTex: WebGLTexture;
   private readonly detailTileTex: WebGLTexture;
   private readonly pageTableTex: WebGLTexture;
+  private readonly boardMaterialTex: WebGLTexture;
   private readonly pageTable: Uint16Array;
   private readonly pageGridWidth: number;
   private readonly pageGridHeight: number;
@@ -192,9 +274,7 @@ export class OverviewMapPass {
     });
     this.pageGridWidth = Math.ceil(map.width() / DETAIL_PAGE_SIZE);
     this.pageGridHeight = Math.ceil(map.height() / DETAIL_PAGE_SIZE);
-    this.pageTable = new Uint16Array(
-      this.pageGridWidth * this.pageGridHeight,
-    );
+    this.pageTable = new Uint16Array(this.pageGridWidth * this.pageGridHeight);
     this.detailCapacity = Math.max(
       1,
       Math.min(
@@ -221,6 +301,7 @@ export class OverviewMapPass {
       data: this.pageTable,
       filter: gl.NEAREST,
     });
+    this.boardMaterialTex = createBoardMaterialTexture(gl);
     this.program = createProgram(gl, VERTEX_SOURCE, FRAGMENT_SOURCE);
     this.vao = createMapQuad(gl, map.width(), map.height());
     this.uCamera = gl.getUniformLocation(this.program, "uCamera")!;
@@ -235,6 +316,7 @@ export class OverviewMapPass {
     gl.uniform1i(gl.getUniformLocation(this.program, "uDetailTerrain"), 3);
     gl.uniform1i(gl.getUniformLocation(this.program, "uDetailTiles"), 4);
     gl.uniform1i(gl.getUniformLocation(this.program, "uPageTable"), 5);
+    gl.uniform1i(gl.getUniformLocation(this.program, "uBoardMaterial"), 6);
     gl.uniform2f(
       gl.getUniformLocation(this.program, "uWorldSize"),
       map.width(),
@@ -253,6 +335,26 @@ export class OverviewMapPass {
     gl.uniform1f(
       gl.getUniformLocation(this.program, "uTerritoryAlpha"),
       settings.mapOverlay.territoryAlpha,
+    );
+    gl.uniform1i(
+      gl.getUniformLocation(this.program, "uMineralEnabled"),
+      settings.material.enabled ? 1 : 0,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralStrength"),
+      settings.material.strength,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralScale"),
+      settings.material.scale,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralVeinStrength"),
+      settings.material.veinStrength,
+    );
+    gl.uniform1f(
+      gl.getUniformLocation(this.program, "uMineralGrainStrength"),
+      settings.material.grainStrength,
     );
   }
 
@@ -314,8 +416,7 @@ export class OverviewMapPass {
       this.pageGridHeight - 1,
       Math.floor((centerY + halfH) / DETAIL_PAGE_SIZE) + 1,
     );
-    const count =
-      (maxPageX - minPageX + 1) * (maxPageY - minPageY + 1);
+    const count = (maxPageX - minPageX + 1) * (maxPageY - minPageY + 1);
     if (count > this.detailCapacity) return;
     for (let pageY = minPageY; pageY <= maxPageY; pageY++) {
       for (let pageX = minPageX; pageX <= maxPageX; pageX++) {
@@ -596,6 +697,8 @@ export class OverviewMapPass {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.detailTileTex);
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, this.pageTableTex);
+    gl.activeTexture(gl.TEXTURE6);
+    gl.bindTexture(gl.TEXTURE_2D, this.boardMaterialTex);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
@@ -606,6 +709,7 @@ export class OverviewMapPass {
     this.gl.deleteTexture(this.detailTerrainTex);
     this.gl.deleteTexture(this.detailTileTex);
     this.gl.deleteTexture(this.pageTableTex);
+    this.gl.deleteTexture(this.boardMaterialTex);
     this.gl.deleteProgram(this.program);
     this.gl.deleteVertexArray(this.vao);
   }

@@ -200,6 +200,28 @@ export class AtlasUiLab extends LitElement {
 
 export function mountAtlasUiLab(): boolean {
   const lab = new URLSearchParams(location.search).get("ui-lab");
+  if (lab === "recovery") {
+    document.body.classList.add("atlas-ui-lab-active", "in-game");
+    void customElements.whenDefined("simulation-recovery-overlay").then(() => {
+      if (!document.querySelector(":scope > simulation-recovery-overlay")) {
+        document.body.append(
+          document.createElement("simulation-recovery-overlay"),
+        );
+      }
+      window.dispatchEvent(
+        new CustomEvent("idlefront:simulation-recovery", {
+          detail: {
+            type: "simulation_recovery",
+            status: "replaying",
+            completedTurns: 10_944,
+            totalTurns: 23_287,
+            elapsedMs: 398_000,
+          },
+        }),
+      );
+    });
+    return true;
+  }
   if (lab === "hud") {
     void import("./AtlasHudReference").then(({ mountHudReference }) =>
       mountHudReference(),

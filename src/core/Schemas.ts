@@ -107,6 +107,7 @@ export type ClientMessage =
 export type ServerMessage =
   | ServerTurnMessage
   | ServerStartGameMessage
+  | ServerSimulationRecoveryMessage
   | ServerPingMessage
   | ServerDesyncMessage
   | ServerPrestartMessage
@@ -117,6 +118,9 @@ export type ServerMessage =
 export type ServerTurnMessage = z.infer<typeof ServerTurnMessageSchema>;
 export type ServerStartGameMessage = z.infer<
   typeof ServerStartGameMessageSchema
+>;
+export type ServerSimulationRecoveryMessage = z.infer<
+  typeof ServerSimulationRecoveryMessageSchema
 >;
 export type ServerPingMessage = z.infer<typeof ServerPingMessageSchema>;
 export type ServerDesyncMessage = z.infer<typeof ServerDesyncSchema>;
@@ -316,6 +320,12 @@ export const DoomsdayClockConfigSchema = z.object({
 export const GameConfigSchema = z.object({
   // Transport/runtime selection only; executions continue using the same rules.
   serverSimulation: z.boolean().optional(),
+  // Internal stress-playtest control. One raises both the trade-fleet
+  // saturation point and launch frequency without changing ship rewards.
+  tradeShipTrafficMultiplier: z.number().int().min(1).max(100).optional(),
+  // Internal pacing controls used by explicit playtest presets only.
+  trainTrafficMultiplier: z.number().int().min(1).max(100).optional(),
+  territoryAttackSpeedDivisor: z.number().min(1).max(100).optional(),
   gameMap: z.enum(GameMapType),
   difficulty: z.enum(Difficulty),
   donateGold: z.boolean(), // Configures donations to humans only
@@ -802,6 +812,21 @@ export const ServerStartGameMessageSchema = z.object({
   myClientID: ID.optional(),
 });
 
+/**
+ * Real progress from the authoritative simulation worker while a durable
+ * world's turn journal is being reconstructed after a server restart.
+ * `ready` means replay is complete and the server is preparing/sending the
+ * first view snapshot; the client keeps the surface visible until that view
+ * actually arrives.
+ */
+export const ServerSimulationRecoveryMessageSchema = z.object({
+  type: z.literal("simulation_recovery"),
+  status: z.enum(["replaying", "ready"]),
+  completedTurns: z.number().int().nonnegative(),
+  totalTurns: z.number().int().nonnegative(),
+  elapsedMs: z.number().nonnegative(),
+});
+
 export const ServerDesyncSchema = z.object({
   type: z.literal("desync"),
   turn: z.number(),
@@ -836,6 +861,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   ServerTurnMessageSchema,
   ServerPrestartMessageSchema,
   ServerStartGameMessageSchema,
+  ServerSimulationRecoveryMessageSchema,
   ServerPingMessageSchema,
   ServerDesyncSchema,
   ServerErrorSchema,

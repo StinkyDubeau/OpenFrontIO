@@ -8,7 +8,7 @@ describe("simulation initialization timeout", () => {
   });
 
   it("gives large durable journals enough bounded replay time", () => {
-    expect(simulationInitializationTimeout(42_000)).toBe(840_000);
+    expect(simulationInitializationTimeout(42_000)).toBe(3_150_000);
     expect(simulationInitializationTimeout(1_000_000)).toBe(3_600_000);
   });
 });

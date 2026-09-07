@@ -52,6 +52,7 @@ import {
   ToggleRenderDebugGuiEvent,
 } from "./InputHandler";
 import { endGame, startGame, startTime } from "./LocalPersistantStats";
+import { mapMaterialEnabled } from "./MapMaterialMode";
 import { RemoteWorkerClient } from "./RemoteWorkerClient";
 import { terrainMapFileLoader } from "./TerrainMapFileLoader";
 import { GoToPlayerEvent } from "./TransformHandler";
@@ -72,6 +73,7 @@ import { createCanvas } from "./Utils";
 import { WebGLFrameBuilder } from "./WebGLFrameBuilder";
 import { MapLayerController } from "./controllers/MapLayerController";
 import { createRenderer, GameRenderer } from "./hud/GameRenderer";
+import { playerTextureCapacity } from "./render/PlayerTextureCapacity";
 import {
   applyGraphicsOverrides,
   createRenderSettings,
@@ -360,11 +362,15 @@ function createWebGLView(
         mapHeight,
         unitTypes: [...ALL_UNIT_TYPES],
         players: [],
-        // Pre-allocate renderer textures for up to 1024 players. We add players
-        // dynamically via view.addPlayers() as they come in from the simulation,
-        // but the NamePass / palette / relation matrix all need a static upper
-        // bound at construction time.
-        maxPlayers: gameMap.isPaged() ? 4096 : 1024,
+        // Bots arrive after renderer construction, but the name textures need a
+        // static upper bound. Size for the complete configured roster so a large
+        // authoritative frame cannot partially apply and strand catch-up/HUD
+        // bookkeeping behind the live map.
+        maxPlayers: playerTextureCapacity(
+          config.numBots(),
+          config.gameConfig().maxPlayers,
+          gameMap.isPaged(),
+        ),
       },
       terrainSource,
       palette,
@@ -430,7 +436,14 @@ function mountWebGLFrameLoop(
   });
   resizeObs.observe(glCanvas);
 
-  const syncCamera = (): void => {
+  // WKWebView can spend substantially more power compositing this very large
+  // board than the interaction requires. Keep desktop at the display refresh
+  // rate, but render the native mobile shell at a steady 30 FPS. Simulation
+  // frames and input remain uncapped and authoritative on the server.
+  const minimumFrameIntervalMs = window.ReactNativeWebView ? 1000 / 30 - 1 : 0;
+  let lastRenderedAt = -Infinity;
+
+  const syncCamera = (frameTime: number): void => {
     const scale = transformHandler.scale;
     const dpr = renderDpr();
     const centerX =
@@ -447,7 +460,7 @@ function mountWebGLFrameLoop(
     // we'll get a fresh callback ready for the next canvas2D frame.
     const cb = cachedWebGLFrameCallback.current;
     cachedWebGLFrameCallback.current = null;
-    cb?.(performance.now());
+    cb?.(frameTime);
   };
 
   // Move-target chevrons: when the player issues a warship move, show the
@@ -469,8 +482,11 @@ function mountWebGLFrameLoop(
   // renderer's captured frame callback (which draws). One RAF = one
   // synchronized camera-update + WebGL render.
   let rafId: number | null = null;
-  const driveFrame = (): void => {
-    syncCamera();
+  const driveFrame = (frameTime: number): void => {
+    if (frameTime - lastRenderedAt >= minimumFrameIntervalMs) {
+      lastRenderedAt = frameTime;
+      syncCamera(frameTime);
+    }
     rafId = requestAnimationFrame(driveFrame);
   };
   rafId = requestAnimationFrame(driveFrame);
@@ -600,6 +616,7 @@ async function createClientGame(
     const resolveRenderSettings = (): RenderSettings => {
       const settings = createRenderSettings();
       applyGraphicsOverrides(settings, userSettings.graphicsOverrides());
+      settings.material.enabled = mapMaterialEnabled();
       return settings;
     };
 
@@ -767,6 +784,7 @@ export class ClientGameRunner {
   private currentTickDelay: number | undefined = undefined;
   private catchupControlAbort: AbortController | null = null;
   private catchupCamera: CatchupCamera;
+  private lastPresentationErrorAt = 0;
 
   constructor(
     private lobby: LobbyConfig,
@@ -905,7 +923,27 @@ export class ClientGameRunner {
       this.gameView.update(gu);
       const viewUpdateDuration = performance.now() - viewUpdateStartedAt;
       const gpuUploadStartedAt = performance.now();
-      this.webglBuilder?.update(this.gameView);
+      try {
+        this.webglBuilder?.update(this.gameView);
+      } catch (error) {
+        // Authoritative state has already been committed to GameView. A
+        // presentation failure must not prevent the HUD from observing that
+        // state or keep the remote client marked as perpetually catching up.
+        const now = Date.now();
+        if (now - this.lastPresentationErrorAt >= 5_000) {
+          this.lastPresentationErrorAt = now;
+          console.error("WebGL presentation update failed:", error);
+          window.dispatchEvent(
+            new CustomEvent("idlefront:diagnostic", {
+              detail: {
+                scope: "webgl-frame",
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              },
+            }),
+          );
+        }
+      }
       this.renderer.tick();
       const gpuUploadDuration = performance.now() - gpuUploadStartedAt;
       const mainThreadDuration = performance.now() - mainThreadStartedAt;
@@ -1112,6 +1150,19 @@ export class ClientGameRunner {
     }
     console.log(`clicked cell ${cell}`);
     const tile = this.gameView.ref(cell.x, cell.y);
+    if (this.gameView.inSpawnPhase()) {
+      const isLand = this.gameView.isLand(tile);
+      const hasOwner = this.gameView.hasOwner(tile);
+      const randomSpawn = this.gameView.config().isRandomSpawn();
+      window.dispatchEvent(
+        new CustomEvent("idlefront:diagnostic", {
+          detail: {
+            scope: "spawn-input",
+            message: `tap tile=${tile} land=${isLand} owned=${hasOwner} random=${randomSpawn}`,
+          },
+        }),
+      );
+    }
     if (
       this.gameView.isLand(tile) &&
       !this.gameView.hasOwner(tile) &&

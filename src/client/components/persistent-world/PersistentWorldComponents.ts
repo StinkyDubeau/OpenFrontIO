@@ -9,6 +9,7 @@ import type {
 } from "../../../core/PersistentWorldSchemas";
 import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import { translateText } from "../../Utils";
+import "../ProductWordmark";
 
 @customElement("idlefront-wordmark")
 export class IdleFrontWordmark extends LitElement {
@@ -17,26 +18,7 @@ export class IdleFrontWordmark extends LitElement {
   }
 
   render() {
-    return html`
-      <span class="pw-wordmark" aria-label="IdleFront">
-        <svg viewBox="0 0 36 36" aria-hidden="true">
-          <circle cx="18" cy="18" r="13.5"></circle>
-          <path d="M8.4 20.5c4.7-5.4 9.1-8 19.2-6.4"></path>
-          <path d="M11.2 27.2c3.2-7.3 7.1-12.4 14.2-17.3"></path>
-          <path
-            class="pw-wordmark__needle"
-            d="m18 8 3.1 9.1L18 28l-3.1-10.9Z"
-          ></path>
-          <circle class="pw-wordmark__pin" cx="18" cy="18" r="2.4"></circle>
-        </svg>
-        <span
-          ><strong>Idle</strong><strong>Front</strong
-          ><small data-copy-slot="landing.subtitle"
-            >${placeholderCopy.landing.subtitle}</small
-          ></span
-        >
-      </span>
-    `;
+    return html`<product-wordmark compact></product-wordmark>`;
   }
 }
 

@@ -14,6 +14,10 @@ import { encodeViewPacket } from "../../core/network/ViewProtocol";
 const MAX_TILES_PER_RUN_PACKET = 262_144;
 const MAX_RUNS_PER_PACKET = 16_384;
 const MAX_TERRAIN_PAIRS_PER_PACKET = 16_384;
+const MAX_PLAYERS_PER_PACKET = 64;
+const MAX_NAMES_PER_PACKET = 128;
+const MAX_UNITS_PER_PACKET = 128;
+const MAX_RAILS_PER_PACKET = 64;
 
 export function emptyView(tick: number): GameUpdateViewData {
   const updates = {} as GameUpdates;
@@ -80,14 +84,20 @@ export class ViewSnapshot {
     const tick = game.ticks();
     const begin = emptyView(tick);
     begin.pendingTurns = 2;
-    begin.updates[GameUpdateType.Player] = game
+    const players = game
       .allPlayers()
-      .map((p) => (p as PlayerImpl).toFullUpdate());
-    begin.updates[GameUpdateType.Unit] = game.units().map((u) => u.toUpdate());
-    begin.updates[GameUpdateType.RailroadConstructionEvent] = [
-      ...this.rails.values(),
-    ];
-    begin.playerNameViewData = this.names;
+      .map((p) => (p as PlayerImpl).toFullUpdate())
+      // Deliver connected humans first so their identity and spawn state are
+      // available before the remaining bot roster paints in.
+      .sort(
+        (a, b) =>
+          Number(b.clientID !== null && b.clientID !== undefined) -
+          Number(a.clientID !== null && a.clientID !== undefined),
+      );
+    begin.updates[GameUpdateType.Player] = players.slice(
+      0,
+      MAX_PLAYERS_PER_PACKET,
+    );
     if (this.startTick !== undefined)
       begin.updates[GameUpdateType.SpawnPhaseEnd] = [
         { type: GameUpdateType.SpawnPhaseEnd, startTick: this.startTick },
@@ -95,6 +105,59 @@ export class ViewSnapshot {
     const packets = [
       encodeViewPacket({ kind: "update", snapshot: "begin", update: begin }),
     ];
+    const appendParts = <T>(
+      values: readonly T[],
+      size: number,
+      apply: (part: GameUpdateViewData, chunk: T[]) => void,
+    ) => {
+      for (let offset = 0; offset < values.length; offset += size) {
+        const part = emptyView(tick);
+        part.pendingTurns = 2;
+        apply(part, values.slice(offset, offset + size));
+        packets.push(
+          encodeViewPacket({ kind: "update", snapshot: "part", update: part }),
+        );
+      }
+    };
+    appendParts(
+      players.slice(MAX_PLAYERS_PER_PACKET),
+      MAX_PLAYERS_PER_PACKET,
+      (part, chunk) => {
+        part.updates[GameUpdateType.Player] = chunk;
+      },
+    );
+    // Embargo IDs are translated to renderer small IDs by GameView. Refresh
+    // them after every player exists when the roster spans multiple packets.
+    const embargoes = players
+      .filter((player) => player.embargoes?.size)
+      .map((player) => ({
+        type: GameUpdateType.Player as const,
+        id: player.id,
+        embargoes: player.embargoes,
+      }));
+    appendParts(embargoes, MAX_PLAYERS_PER_PACKET, (part, chunk) => {
+      part.updates[GameUpdateType.Player] = chunk;
+    });
+    if (this.names) {
+      const names = Object.entries(this.names);
+      appendParts(names, MAX_NAMES_PER_PACKET, (part, chunk) => {
+        part.playerNameViewData = Object.fromEntries(chunk);
+      });
+    }
+    appendParts(
+      game.units().map((unit) => unit.toUpdate()),
+      MAX_UNITS_PER_PACKET,
+      (part, chunk) => {
+        part.updates[GameUpdateType.Unit] = chunk;
+      },
+    );
+    appendParts(
+      [...this.rails.values()],
+      MAX_RAILS_PER_PACKET,
+      (part, chunk) => {
+        part.updates[GameUpdateType.RailroadConstructionEvent] = chunk;
+      },
+    );
     let runs: number[] = [];
     let expandedTiles = 0;
     const flushRuns = () => {
@@ -141,7 +204,11 @@ export class ViewSnapshot {
         const bit = 31 - Math.clz32(bits & -bits);
         const tile = word * 32 + bit;
         const state = map.tileState(tile);
-        if (runLength > 0 && tile === runStart + runLength && state === runState) {
+        if (
+          runLength > 0 &&
+          tile === runStart + runLength &&
+          state === runState
+        ) {
           runLength++;
         } else {
           finishRun();

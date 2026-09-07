@@ -21,6 +21,13 @@ export interface GameUpdateViewData {
   tick: number;
   updates: GameUpdates;
   /**
+   * Client-only delivery marker for a server snapshot. It is attached after
+   * decoding, not serialized by the simulation. Global derived renderer data
+   * can therefore be rebuilt once at `end` instead of once per transport
+   * fragment while the same logical world state is arriving.
+   */
+  snapshotPhase?: "begin" | "part" | "end";
+  /**
    * Packed tile updates as `[tileRef, state]` uint32 pairs.
    *
    * `tileRef` is a `TileRef` (fits in uint32), and `state` is the packed per-tile

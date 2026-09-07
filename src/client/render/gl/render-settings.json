@@ -23,6 +23,13 @@
     "highlandColor": "#DCCB9E",
     "mountainColor": "#e6e6e6"
   },
+  "material": {
+    "enabled": false,
+    "strength": 0.72,
+    "scale": 1.0,
+    "veinStrength": 0.24,
+    "grainStrength": 0.13
+  },
   "falloutBloom": {
     "broilSpeedCold": 0.0018,
     "broilSpeedHot": 0,

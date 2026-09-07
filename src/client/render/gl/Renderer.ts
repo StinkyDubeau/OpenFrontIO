@@ -65,6 +65,7 @@ import { UnitPass } from "./passes/UnitPass";
 import { WorldTextPass } from "./passes/WorldTextPass";
 import type { RenderSettings } from "./RenderSettings";
 import { AffiliationPalette } from "./utils/Affiliation";
+import { createBoardMaterialTexture } from "./utils/BoardMaterialTexture";
 import {
   EFFECT_PALETTE_BLOCKS,
   getPaletteSize,
@@ -162,6 +163,7 @@ export class GPURenderer {
   private terrainDeltaScratch = new Uint8Array(1);
 
   private paletteTex: WebGLTexture;
+  private boardMaterialTex: WebGLTexture;
   private paletteData: Float32Array;
   // Per-player trail-effect palette, keyed by smallID (RGBA32F,
   // 4096×(MAX_TRAIL_COLORS·TRAIL_EFFECT_BLOCKS)): one MAX_TRAIL_COLORS-row block
@@ -251,6 +253,7 @@ export class GPURenderer {
     const gl = res.gl;
     this.gl = gl;
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    this.boardMaterialTex = createBoardMaterialTexture(gl);
 
     const floatExt = gl.getExtension("EXT_color_buffer_float");
     if (!floatExt)
@@ -274,13 +277,23 @@ export class GPURenderer {
       data: terrainBytes,
       filter: gl.NEAREST,
     });
-    this.terrainPass = new TerrainPass(gl, this.terrainBytesTex, mapW, mapH, {
-      oceanColor: hexToRgb(this.settings.terrain.oceanColor) ?? undefined,
-      sandColor: hexToRgb(this.settings.terrain.sandColor) ?? undefined,
-      plainsColor: hexToRgb(this.settings.terrain.plainsColor) ?? undefined,
-      highlandColor: hexToRgb(this.settings.terrain.highlandColor) ?? undefined,
-      mountainColor: hexToRgb(this.settings.terrain.mountainColor) ?? undefined,
-    });
+    this.terrainPass = new TerrainPass(
+      gl,
+      this.terrainBytesTex,
+      mapW,
+      mapH,
+      {
+        oceanColor: hexToRgb(this.settings.terrain.oceanColor) ?? undefined,
+        sandColor: hexToRgb(this.settings.terrain.sandColor) ?? undefined,
+        plainsColor: hexToRgb(this.settings.terrain.plainsColor) ?? undefined,
+        highlandColor:
+          hexToRgb(this.settings.terrain.highlandColor) ?? undefined,
+        mountainColor:
+          hexToRgb(this.settings.terrain.mountainColor) ?? undefined,
+      },
+      this.settings.material,
+      this.boardMaterialTex,
+    );
 
     // --- Shared palette texture (RGBA32F, 4096×2) ---
     this.paletteData = paletteData;
@@ -421,6 +434,7 @@ export class GPURenderer {
       this.skinLayerTex,
       this.skinAnchorTex,
       this.settings,
+      this.boardMaterialTex,
     );
     // Route per-tile changes to the border pass so it can scatter-recompute
     // just the affected tiles instead of rebuilding the whole map. A tile
@@ -477,6 +491,7 @@ export class GPURenderer {
       this.paletteTex,
       this.res.borderTex,
       this.settings,
+      this.boardMaterialTex,
     );
     this.borderStampPass.setDefenseCoverageTex(
       this.defenseCoveragePass.getCoverageTex(),
@@ -1476,6 +1491,7 @@ export class GPURenderer {
     this.barPass.dispose();
     disposeGPUResources(this.gl, this.res);
     this.gl.deleteTexture(this.paletteTex);
+    this.gl.deleteTexture(this.boardMaterialTex);
     this.gl.deleteTexture(this.effectTex);
     this.gl.deleteTexture(this.patternMetaTex);
     this.gl.deleteTexture(this.patternDataTex);

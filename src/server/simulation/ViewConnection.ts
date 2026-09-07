@@ -14,9 +14,12 @@ export class ViewConnection {
   private ackTimeout: ReturnType<typeof setTimeout> | undefined;
   private snapshot: Array<Uint8Array | undefined> | null = null;
   private snapshotIndex = 0;
+  private snapshotFinalSequence: number | undefined;
+  private snapshotAcknowledged = false;
   constructor(
     private ws: WebSocket,
     private onSlow: () => void,
+    private onSnapshotAcknowledged: () => void = () => undefined,
   ) {}
   get isClosed(): boolean {
     return this.closed;
@@ -56,16 +59,28 @@ export class ViewConnection {
     clearTimeout(this.ackTimeout);
     this.ackTimeout = undefined;
     this.acknowledged = sequence;
+    if (
+      !this.snapshotAcknowledged &&
+      this.snapshotFinalSequence !== undefined &&
+      this.acknowledged >= this.snapshotFinalSequence
+    ) {
+      this.snapshotAcknowledged = true;
+      this.onSnapshotAcknowledged();
+    }
     this.pump();
   }
   private pump(): void {
     if (this.closed || this.ws.readyState !== WebSocket.OPEN) return;
     while (this.sequence - this.acknowledged < 8) {
       let bytes: Uint8Array;
+      let finalSnapshotFrame = false;
       if (this.snapshot && this.snapshotIndex < this.snapshot.length) {
         bytes = this.snapshot[this.snapshotIndex]!;
         this.snapshot[this.snapshotIndex++] = undefined;
-        if (this.snapshotIndex === this.snapshot.length) this.snapshot = null;
+        if (this.snapshotIndex === this.snapshot.length) {
+          finalSnapshotFrame = true;
+          this.snapshot = null;
+        }
       } else {
         const frame = this.queue.shift();
         if (!frame) break;
@@ -74,6 +89,7 @@ export class ViewConnection {
       }
       const header = Buffer.alloc(4);
       header.writeUInt32BE(++this.sequence);
+      if (finalSnapshotFrame) this.snapshotFinalSequence = this.sequence;
       this.ws.send(
         Buffer.concat([header, bytes]),
         { binary: true },

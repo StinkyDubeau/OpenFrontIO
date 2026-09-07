@@ -36,6 +36,8 @@ describe("thin render client", () => {
     expect(update).not.toHaveBeenCalled();
     await vi.runAllTimersAsync();
     expect(update).toHaveBeenCalledTimes(2);
+    expect(update.mock.calls[0][0].snapshotPhase).toBe("begin");
+    expect(update.mock.calls[1][0].snapshotPhase).toBe("end");
     expect(client.isLoadingInitialView).toBe(false);
     receive(3, { kind: "update", update: emptyView(5001) });
     await vi.runAllTimersAsync();
@@ -80,5 +82,68 @@ describe("thin render client", () => {
     const rejected = expect(closing).rejects.toThrow("Game closed");
     client.cleanup();
     await rejected;
+  });
+  it("coalesces identical in-flight action queries", async () => {
+    let receive!: (sequence: number, packet: ViewPacket) => void;
+    const send = vi.fn();
+    const client = new RemoteWorkerClient(
+      { players: [], config: {} } as unknown as GameStartInfo,
+      "test",
+      {
+        setViewReceiver: (r: typeof receive) => {
+          receive = r;
+        },
+        sendViewMessage: send,
+      } as unknown as Transport,
+    );
+    await client.initialize();
+
+    const first = client.playerBorderTiles("player");
+    const second = client.playerBorderTiles("player");
+    expect(send).toHaveBeenCalledTimes(1);
+
+    const query = send.mock.calls[0][0].query;
+    receive(0, {
+      kind: "result",
+      message: {
+        type: "player_border_tiles_result",
+        id: query.id,
+        result: { borderTiles: new Set([5, 9]) },
+      },
+    });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { borderTiles: new Set([5, 9]) },
+      { borderTiles: new Set([5, 9]) },
+    ]);
+    client.cleanup();
+  });
+  it("acknowledges a frame even when presentation throws", async () => {
+    vi.useFakeTimers();
+    let receive!: (sequence: number, packet: ViewPacket) => void;
+    const send = vi.fn();
+    const client = new RemoteWorkerClient(
+      { players: [], config: {} } as unknown as GameStartInfo,
+      "test",
+      {
+        setViewReceiver: (r: typeof receive) => {
+          receive = r;
+        },
+        sendViewMessage: send,
+      } as unknown as Transport,
+    );
+    await client.initialize();
+    client.start(() => {
+      throw new Error("render failed");
+    });
+
+    receive(7, {
+      kind: "update",
+      snapshot: "part",
+      update: emptyView(42),
+    });
+    await vi.runAllTimersAsync();
+
+    expect(send).toHaveBeenCalledWith({ type: "view_ack", sequence: 7 });
+    client.cleanup();
   });
 });

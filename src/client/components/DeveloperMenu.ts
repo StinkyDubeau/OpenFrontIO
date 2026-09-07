@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { quickJoinDebugGame, quickStartDebugGame } from "../DebugQuickStart";
+import type { DebugPlaytestPreset } from "../../core/DebugPlaytest";
+import { quickJoinDebugGame } from "../DebugQuickStart";
 import { runtimeDebugEnabled } from "../RuntimeDebug";
 import { requestHaptic } from "../ui/Haptics";
 
@@ -55,7 +56,7 @@ export function openDeveloperMenu(
 @customElement("idlefront-developer-menu")
 export class IdleFrontDeveloperMenu extends LitElement {
   @state() private copyState: "idle" | "copied" | "failed" = "idle";
-  @state() private gameAction: "idle" | "starting" | "joining" = "idle";
+  @state() private gameAction: DebugPlaytestPreset | null = null;
   @state() private gameStatus = "";
   private previouslyFocused: HTMLElement | null = null;
 
@@ -127,30 +128,21 @@ export class IdleFrontDeveloperMenu extends LitElement {
     location.reload();
   };
 
-  private quickStart = async (): Promise<void> => {
-    this.gameAction = "starting";
-    this.gameStatus = "Preparing the test game…";
-    try {
-      await quickStartDebugGame((message) => (this.gameStatus = message));
-      this.close();
-    } catch (error) {
-      this.gameStatus =
-        error instanceof Error ? error.message : "Quick start failed";
-      this.gameAction = "idle";
-      requestHaptic("error");
-    }
-  };
-
-  private quickJoin = async (): Promise<void> => {
-    this.gameAction = "joining";
+  private quickJoin = async (preset: DebugPlaytestPreset): Promise<void> => {
+    this.gameAction = preset;
     this.gameStatus = "Looking for a test game…";
     try {
-      await quickJoinDebugGame((message) => (this.gameStatus = message));
+      await quickJoinDebugGame(
+        (message) => (this.gameStatus = message),
+        preset,
+        "1h",
+        true,
+      );
       this.close();
     } catch (error) {
       this.gameStatus =
         error instanceof Error ? error.message : "Quick join failed";
-      this.gameAction = "idle";
+      this.gameAction = null;
       requestHaptic("error");
     }
   };
@@ -251,23 +243,25 @@ export class IdleFrontDeveloperMenu extends LitElement {
                     <button
                       class="atlas-war-button"
                       type="button"
-                      ?disabled=${this.gameAction !== "idle"}
-                      @click=${this.quickStart}
+                      ?disabled=${this.gameAction !== null}
+                      @click=${() => this.quickJoin("great-lakes")}
                     >
                       <span
-                        ><strong>Quick start</strong
-                        ><small>New solo Expanded Earth test</small></span
+                        ><strong>Great Lakes</strong
+                        ><small>Join or create the lake test</small></span
                       >
                     </button>
                     <button
                       class="atlas-war-button atlas-war-button--secondary"
                       type="button"
-                      ?disabled=${this.gameAction !== "idle"}
-                      @click=${this.quickJoin}
+                      ?disabled=${this.gameAction !== null}
+                      @click=${() => this.quickJoin("enormous-earth")}
                     >
                       <span
-                        ><strong>Quick join</strong
-                        ><small>Enter the newest running test</small></span
+                        ><strong>Enormous Earth</strong
+                        ><small
+                          >Join or create the Ultra-scale test</small
+                        ></span
                       >
                     </button>
                     ${

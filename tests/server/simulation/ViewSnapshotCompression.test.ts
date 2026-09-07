@@ -24,16 +24,7 @@ describe("ViewSnapshot run compression", () => {
     const snapshot = new ViewSnapshot({ game } as never);
     const update = emptyView(42);
     update.packedTileUpdates = new Uint32Array([
-      1,
-      9,
-      2,
-      9,
-      3,
-      9,
-      5,
-      12,
-      6,
-      12,
+      1, 9, 2, 9, 3, 9, 5, 12, 6, 12,
     ]);
     snapshot.record(update);
 
@@ -52,5 +43,55 @@ describe("ViewSnapshot run compression", () => {
     expect([...packet.update.packedTileRuns!]).toEqual([1, 3, 9, 5, 2, 12]);
     expect(packet.update.packedTileUpdates).toHaveLength(0);
     expect(packet.update.updates[GameUpdateType.Player]).toEqual([]);
+  });
+
+  it("bounds large player rosters instead of creating one giant join frame", () => {
+    const map = {
+      width: () => 1,
+      height: () => 1,
+      tileState: () => 0,
+      terrainByte: () => 0x80,
+    };
+    const players = Array.from({ length: 2_001 }, (_, id) => ({
+      toFullUpdate: () => ({
+        type: GameUpdateType.Player,
+        id: `player-${id}`,
+        clientID: id === 2_000 ? "connected-human" : null,
+        name: `Player ${id} with a deliberately representative display name`,
+        displayName: `Player ${id}`,
+        smallID: id,
+        embargoes: id === 0 ? new Set(["player-1"]) : new Set(),
+      }),
+    }));
+    const game = {
+      map: () => map,
+      ticks: () => 42,
+      allPlayers: () => players,
+      units: () => [],
+    };
+    const snapshot = new ViewSnapshot({ game } as never);
+    const packets = snapshot.packets();
+    const decoded = packets.map((bytes) => decodeViewPacket(bytes.buffer));
+    const playerPackets = decoded.filter(
+      (packet) =>
+        packet.kind === "update" &&
+        packet.update.updates[GameUpdateType.Player].length > 0,
+    );
+
+    expect(
+      Math.max(...packets.map((packet) => packet.byteLength)),
+    ).toBeLessThan(128 * 1024);
+    expect(
+      playerPackets.every(
+        (packet) =>
+          packet.kind === "update" &&
+          packet.update.updates[GameUpdateType.Player].length <= 64,
+      ),
+    ).toBe(true);
+    const first = decoded[0];
+    if (first.kind !== "update") throw new Error("wrong packet kind");
+    expect(first.update.updates[GameUpdateType.Player][0].clientID).toBe(
+      "connected-human",
+    );
   });
 });

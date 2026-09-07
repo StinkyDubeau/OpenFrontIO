@@ -2,6 +2,10 @@ import { createHash } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Config } from "../../../src/core/configuration/Config";
 import {
+  DEBUG_ENORMOUS_EARTH_PREFIX,
+  DEBUG_QUICK_START_PREFIX,
+} from "../../../src/core/DebugPlaytest";
+import {
   Difficulty,
   GameMapSize,
   GameMapType,
@@ -137,6 +141,88 @@ describe("persistent-world runtime bridge", () => {
     expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
       GameMapType.ExpandedGiantWorldUltra,
     );
+  });
+
+  it("gives debug quick start the Great Lakes 5x trade preset", async () => {
+    const host = service.createGuestSession({ displayName: "Trade Tester" });
+    service.bindGameplayIdentity(
+      host.bearerToken,
+      createHash("sha256").update("trade-play-identity").digest("hex"),
+    );
+    const created = service.createWorld(host.bearerToken, {
+      name: `${DEBUG_QUICK_START_PREFIX}12:00 PM`,
+      targetDuration: "1h",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now + MINUTE,
+    });
+    now += MINUTE;
+    const world = repository.markActive(created.snapshot.world.id, now);
+    const dispatch = vi.fn(
+      async (
+        command: MasterCreateManagedGame,
+      ): Promise<WorkerManagedGameReady> => ({
+        type: "managedGameReady",
+        requestId: command.requestId,
+        gameID: command.gameID,
+        workerId: 0,
+        outcome: "created",
+      }),
+    );
+    await new PersistentWorldRuntimeBridge(
+      repository,
+      { gameConfig: async () => UPSTREAM_CONFIG } as unknown as MapPlaylist,
+      dispatch,
+    ).ensure(world);
+
+    expect(repository.getRuntime(world.id)?.gameConfig).toMatchObject({
+      gameMap: GameMapType.GreatLakes,
+      tradeShipTrafficMultiplier: 5,
+      trainTrafficMultiplier: 5,
+      territoryAttackSpeedDivisor: 15,
+    });
+  });
+
+  it("gives the enormous-earth button the Ultra map and same pacing preset", async () => {
+    const host = service.createGuestSession({ displayName: "Earth Tester" });
+    service.bindGameplayIdentity(
+      host.bearerToken,
+      createHash("sha256").update("earth-play-identity").digest("hex"),
+    );
+    const created = service.createWorld(host.bearerToken, {
+      name: `${DEBUG_ENORMOUS_EARTH_PREFIX}12:01 PM`,
+      targetDuration: "1h",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now + MINUTE,
+    });
+    now += MINUTE;
+    const world = repository.markActive(created.snapshot.world.id, now);
+    const dispatch = vi.fn(
+      async (
+        command: MasterCreateManagedGame,
+      ): Promise<WorkerManagedGameReady> => ({
+        type: "managedGameReady",
+        requestId: command.requestId,
+        gameID: command.gameID,
+        workerId: 0,
+        outcome: "created",
+      }),
+    );
+    await new PersistentWorldRuntimeBridge(
+      repository,
+      { gameConfig: async () => UPSTREAM_CONFIG } as unknown as MapPlaylist,
+      dispatch,
+    ).ensure(world);
+
+    expect(repository.getRuntime(world.id)?.gameConfig).toMatchObject({
+      gameMap: GameMapType.ExpandedGiantWorldUltra,
+      tradeShipTrafficMultiplier: 5,
+      trainTrafficMultiplier: 5,
+      territoryAttackSpeedDivisor: 15,
+    });
   });
 
   it("freezes bound RSVP seats and exposes only an acknowledged runtime", async () => {

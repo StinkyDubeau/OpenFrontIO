@@ -5,7 +5,7 @@
     "scheme": "pressureatlas",
     "version": "0.1.0",
     "orientation": "default",
-    "icon": "./assets/pressure-atlas-icon.png",
+    "icon": "./assets/idlefront-icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#05090c",
     "ios": {
@@ -23,7 +23,7 @@
       "predictiveBackGestureEnabled": true
     },
     "web": {
-      "favicon": "./assets/pressure-atlas-icon.png"
+      "favicon": "./assets/idlefront-icon.png"
     },
     "plugins": [
       "expo-dev-client",

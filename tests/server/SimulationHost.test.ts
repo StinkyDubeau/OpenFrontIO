@@ -229,9 +229,35 @@ describe("headless simulation and rendering parity", () => {
       expect(late.playerByClientID("human001")?.troops()).toBe(
         first.myPlayer()?.troops(),
       );
-      const recovering = new SimulationHost(authorityTestStart, turns);
+      const recoveryProgress: Array<{
+        completedTurns: number;
+        totalTurns: number;
+        elapsedMs: number;
+      }> = [];
+      const recovering = new SimulationHost(
+        authorityTestStart,
+        turns,
+        undefined,
+        (progress) => recoveryProgress.push(progress),
+      );
       try {
         await recovering.ready;
+        expect(recoveryProgress[0]).toMatchObject({
+          completedTurns: 0,
+          totalTurns: turns.length,
+        });
+        expect(recoveryProgress[recoveryProgress.length - 1]).toMatchObject({
+          completedTurns: turns.length,
+          totalTurns: turns.length,
+        });
+        expect(
+          recoveryProgress.every(
+            (progress, index) =>
+              index === 0 ||
+              progress.completedTurns >=
+                recoveryProgress[index - 1].completedTurns,
+          ),
+        ).toBe(true);
         const restored = await recovering.snapshot();
         expect(restored.tick).toBe(350);
         expect(restored.packets.map((p) => [...p])).toEqual(

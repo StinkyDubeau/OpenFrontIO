@@ -40,6 +40,7 @@ import "./LangSelector";
 import { LangSelector } from "./LangSelector";
 import { initLayout } from "./Layout";
 import "./LeaderboardModal";
+import { syncMapMaterialMode } from "./MapMaterialMode";
 import "./Matchmaking";
 import { MatchmakingModal } from "./Matchmaking";
 import { modalRouter } from "./ModalRouter";
@@ -1196,6 +1197,9 @@ const hideCrazyGamesElements = () => {
 
 // Initialize the client when the DOM is loaded
 const bootstrap = () => {
+  // Capture renderer experiments before page-deck navigation strips query
+  // parameters. This is presentation state only; the simulation never sees it.
+  syncMapMaterialMode();
   initWarRoomUI();
 
   // Prevent Safari's page-level pinch-zoom, which ignores `user-scalable=no`

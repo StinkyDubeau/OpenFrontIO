@@ -263,7 +263,7 @@ export class MasterLobbyService {
     // while a large durable journal is still reconstructing.
     const recoveryTimeoutMs = Math.min(
       61 * 60_000,
-      Math.max(210_000, (command.initialTurns?.length ?? 0) * 20 + 30_000),
+      Math.max(210_000, (command.initialTurns?.length ?? 0) * 75 + 30_000),
     );
     const timeout = setTimeout(() => {
       this.rejectManagedGame(

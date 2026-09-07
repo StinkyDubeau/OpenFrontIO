@@ -1,5 +1,11 @@
 import { createHash } from "crypto";
 import {
+  DEBUG_QUICK_START_ATTACK_SPEED_DIVISOR,
+  DEBUG_QUICK_START_TRADE_MULTIPLIER,
+  DEBUG_QUICK_START_TRAIN_MULTIPLIER,
+  debugPlaytestPresetForWorldName,
+} from "../core/DebugPlaytest";
+import {
   Difficulty,
   GameMapSize,
   GameMapType,
@@ -230,6 +236,8 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
     const upstream = await this.playlist.gameConfig(
       world.mode === "ffa" ? "ffa" : "team",
     );
+    const debugPreset = debugPlaytestPresetForWorldName(world.name);
+    const isQuickTradePlaytest = debugPreset !== null;
     return GameConfigSchema.parse({
       ...upstream,
       // The seamless-world branch changes only the physical board and its
@@ -237,12 +245,24 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       // to come from the current OpenFront configuration.
       // Operator-selected for NEW worlds only; persisted runtimes retain their
       // original map/config. Never swap terrain beneath an existing session.
-      gameMap:
-        process.env.IDLE_WORLD_MAP_SCALE === "4"
+      gameMap: debugPreset
+        ? debugPreset === "great-lakes"
+          ? GameMapType.GreatLakes
+          : GameMapType.ExpandedGiantWorldUltra
+        : process.env.IDLE_WORLD_MAP_SCALE === "4"
           ? GameMapType.ExpandedGiantWorldUltra
           : process.env.IDLE_WORLD_MAP_SCALE === "3"
             ? GameMapType.ExpandedGiantWorldLarge
             : GameMapType.ExpandedGiantWorld,
+      tradeShipTrafficMultiplier: isQuickTradePlaytest
+        ? DEBUG_QUICK_START_TRADE_MULTIPLIER
+        : undefined,
+      trainTrafficMultiplier: isQuickTradePlaytest
+        ? DEBUG_QUICK_START_TRAIN_MULTIPLIER
+        : undefined,
+      territoryAttackSpeedDivisor: isQuickTradePlaytest
+        ? DEBUG_QUICK_START_ATTACK_SPEED_DIVISOR
+        : undefined,
       serverSimulation: process.env.IDLE_SERVER_SIMULATION !== "0",
       // User-approved lifecycle exception for long playtests. Normal conquest,
       // economy, AI, combat, structures and explicit timers remain unchanged.
