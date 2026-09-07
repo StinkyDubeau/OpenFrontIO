@@ -397,7 +397,8 @@ describe("Pressure Atlas OpenFront shell", () => {
     expect(worldStyles).toContain(".pw-header-signal__board::before");
     expect(worldStyles).toContain("@keyframes pw-destination-board-roll");
     expect(worldStyles).toContain("animation: pw-destination-board-roll");
-    expect(worldStyles).toContain("aspect-ratio: 7 / 1");
+    expect(worldStyles).toContain("height: 2.35rem");
+    expect(worldStyles).toContain("align-self: end");
     expect(worldStyles).not.toContain("pw-header-marquee");
     expect(worldStyles).not.toContain(".pw-toast");
   });

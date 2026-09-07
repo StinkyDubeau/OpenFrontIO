@@ -339,10 +339,10 @@ idlefront-wordmark {
   isolation: isolate;
   display: block;
   width: min(100%, 19.6rem);
+  height: 2.35rem;
   min-width: 0;
-  min-height: 2.05rem;
-  aspect-ratio: 7 / 1;
-  align-self: center;
+  min-height: 0;
+  align-self: end;
   justify-self: center;
   color: var(--pw-signal-ink);
 }
@@ -3937,7 +3937,8 @@ persistent-world-creation-wizard {
 
   .pw-header-signal {
     min-width: 0;
-    min-height: 2.05rem;
+    height: 2.15rem;
+    min-height: 0;
   }
 
   .pw-header-signal__board {
