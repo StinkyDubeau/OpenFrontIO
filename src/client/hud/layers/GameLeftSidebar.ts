@@ -136,6 +136,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
           <button
             class="atlas-hud-button"
             type="button"
+            role="button"
             aria-expanded=${this.isPlayerStatsShown}
             @click=${this.togglePlayerStats}
           >
@@ -159,6 +160,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
                   <button
                     class="atlas-hud-button"
                     type="button"
+                    role="button"
                     aria-expanded=${this.isTeamStatsShown}
                     @click=${this.toggleTeamStats}
                   >
