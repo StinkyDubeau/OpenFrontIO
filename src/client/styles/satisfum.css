@@ -10,10 +10,13 @@
 
 :root {
   --sf-quartz: url("/images/ui/materials/stones/quartz.webp");
-  --sf-obsidian: url("/images/ui/materials/stones/obsidian.webp");
-  --sf-amethyst: url("/images/ui/materials/stones/amethyst.webp");
-  --sf-ruby: url("/images/ui/materials/stones/ruby.webp");
-  --sf-emerald: url("/images/ui/materials/stones/emerald.webp");
+  /* v0.11 restraint pass: ordinary surfaces read as navigation hardware,
+   * not gemstones. Quartz remains available for the occasional pale marble
+   * slab; the other named tokens are quiet, texture-free material tones. */
+  --sf-obsidian: linear-gradient(145deg, #303938, #171d1c 68%);
+  --sf-amethyst: linear-gradient(145deg, #72828d, #3d4b54 68%);
+  --sf-ruby: linear-gradient(145deg, #a7655f, #663e3c 68%);
+  --sf-emerald: linear-gradient(145deg, #91b8ab, #476f63 68%);
 
   --sf-emerald-ink: #071a15;
   --sf-quartz-ink: #181a1c;
@@ -36,15 +39,15 @@
       rgb(142 225 194 / 0.11),
       transparent 43%
     ),
-    var(--sf-obsidian), var(--war-leather-texture), #101513;
+    linear-gradient(145deg, #283230, #151c1a);
   --sf-panel-inset:
     linear-gradient(180deg, rgb(0 0 0 / 0.34), transparent 38%),
-    var(--sf-obsidian), var(--war-leather-texture), #0b1210;
+    linear-gradient(180deg, #121918, #202927);
   --sf-field-face:
     linear-gradient(180deg, rgb(0 0 0 / 0.22), transparent 38%),
     linear-gradient(100deg, rgb(255 255 255 / 0.24), transparent 42%),
     var(--sf-quartz), #d8d9d2;
-  --sf-panel-size: auto, auto, 720px 480px, 184px 184px, auto;
+  --sf-panel-size: auto;
   --sf-control-size: 720px 480px;
   --sf-panel-shadow:
     inset 0 1px rgb(255 255 255 / 0.17), inset 0 -1px rgb(0 0 0 / 0.85),
@@ -73,6 +76,11 @@ body.atlas-theme {
   --atlas-text-muted: #d5cdb8;
   --atlas-line: rgb(255 231 174 / 0.18);
   --atlas-line-strong: rgb(255 231 174 / 0.42);
+  --war-mahogany-texture: linear-gradient(145deg, #2a302f, #161b1a);
+  --war-felt-texture: linear-gradient(145deg, #243b36, #122520);
+  --war-leather-texture: linear-gradient(145deg, #303634, #1c2220);
+  /* Retain the real paper grain: it remains quiet enough to support copy. */
+  --war-parchment-texture: url("/resources/images/ui/materials/parchment@4x.webp");
 }
 
 /* ------------------------------------------------------------------------ */
@@ -169,18 +177,18 @@ body.atlas-theme o-button button[data-variant="warning"] {
   --war-control-texture: var(--sf-emerald);
 }
 
-/* The title-screen call to action now uses the same actual stone image as the
- * lab, rather than a similar-looking CSS gradient. */
+/* The title-screen call to action keeps its physical press construction but
+ * uses a restrained navigation-blue face instead of a gemstone slab. */
 .atlas-quick-play {
-  --sf-quick-stone: var(--sf-amethyst);
-  border-color: #654680 !important;
+  --sf-quick-stone: none;
+  border-color: #657b7d !important;
   background-image:
     radial-gradient(
       ellipse at 48% -5%,
-      rgb(255 255 255 / 0.56),
+      rgb(255 255 255 / 0.34),
       transparent 48%
     ),
-    var(--war-gem-amethyst-face) !important;
+    linear-gradient(180deg, #819698, #566c70 48%, #344c50 52%, #657c7f) !important;
 }
 
 .atlas-quick-play::after {
@@ -193,15 +201,10 @@ body.atlas-theme o-button button[data-variant="warning"] {
       rgb(26 3 40 / 0.14) 77%,
       transparent 79%
     ),
-    var(--sf-quick-stone), var(--war-gem-amethyst-inclusions),
-    var(--war-leather-texture) !important;
-  background-size:
-    auto,
-    var(--sf-control-size),
-    auto,
-    184px 184px !important;
-  background-blend-mode: screen, normal, screen, soft-light !important;
-  opacity: 0.6 !important;
+    linear-gradient(180deg, rgb(255 255 255 / 0.14), transparent 42%) !important;
+  background-size: auto !important;
+  background-blend-mode: screen !important;
+  opacity: 0.42 !important;
 }
 
 /* Title composition: one restrained obsidian instrument case, one inset

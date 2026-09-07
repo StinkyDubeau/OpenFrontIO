@@ -189,7 +189,10 @@ export class PersistentWorldPage extends LitElement {
                 type="button"
                 @click=${this.beginCreate}
               >
-                <span aria-hidden="true">＋</span><span>New world</span>
+                <span class="pw-header-action__plus" aria-hidden="true"
+                  ><svg viewBox="0 0 20 20" focusable="false">
+                    <path d="M10 4.25v11.5M4.25 10h11.5" /></svg></span
+                ><span>New world</span>
               </button>`
             : html`<button
                 class="pw-header-action pw-header-action--quiet"
