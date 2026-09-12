@@ -64,6 +64,8 @@ describe("PersistentWorldService lifecycle", () => {
       maxHumans: number;
       startsAt: number;
       teamId: string | null;
+      startMode: "host" | "scheduled";
+      gamePreset: "great-lakes" | "scheduled-earth";
     }> = {},
   ) {
     return service.createWorld(bearerToken, {
@@ -227,6 +229,8 @@ describe("PersistentWorldService lifecycle", () => {
       access: "private",
       mode: "teams",
       teamId: "amber",
+      startMode: "host",
+      gamePreset: "great-lakes",
     });
     const worldId = created.snapshot.world.id;
     service.rsvp(worldId, player.bearerToken, {

@@ -1,7 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import type { DebugPlaytestPreset } from "../../core/DebugPlaytest";
-import { quickJoinDebugGame } from "../DebugQuickStart";
 import { runtimeDebugEnabled } from "../RuntimeDebug";
 import { requestHaptic } from "../ui/Haptics";
 
@@ -129,22 +128,10 @@ export class IdleFrontDeveloperMenu extends LitElement {
   };
 
   private quickJoin = async (preset: DebugPlaytestPreset): Promise<void> => {
-    this.gameAction = preset;
-    this.gameStatus = "Looking for a test game…";
-    try {
-      await quickJoinDebugGame(
-        (message) => (this.gameStatus = message),
-        preset,
-        "1h",
-        true,
-      );
-      this.close();
-    } catch (error) {
-      this.gameStatus =
-        error instanceof Error ? error.message : "Quick join failed";
-      this.gameAction = null;
-      requestHaptic("error");
-    }
+    this.close();
+    window.location.assign(
+      "/worlds/new?kind=custom&preset=" + encodeURIComponent(preset),
+    );
   };
 
   render() {

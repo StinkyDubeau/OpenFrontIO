@@ -75,6 +75,10 @@ afterEach(async () => {
 });
 
 describe("server simulation rollout", () => {
+  it("never rolls fog matches back to the unrestricted client simulation", () => {
+    vi.stubEnv("IDLE_SERVER_SIMULATION", "0");
+    expect(usesServerSimulation({ ...start, config: { ...start.config, fogOfWar: "v0.2", serverSimulation: false } })).toBe(true);
+  });
   it("defaults populated games on, honors explicit rollback, and skips empty rolling lobbies", () => {
     expect(usesServerSimulation(start)).toBe(true);
     expect(

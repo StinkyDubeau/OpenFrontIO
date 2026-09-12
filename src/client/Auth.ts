@@ -387,7 +387,23 @@ export async function getPlayToken(): Promise<string> {
 }
 
 /** Online guests need a server-signed credential; a local UUID is offline-only. */
-export async function getOnlinePlayToken(): Promise<string> {
+export async function getOnlinePlayToken(gameId?: string): Promise<string> {
+  if (gameId) {
+    const { persistentWorldApi } = await import("./PersistentWorldApi");
+    const worldId = persistentWorldApi.worldForGame(gameId);
+    if (worldId) {
+      try {
+        return (await persistentWorldApi.worldPlayToken(worldId)).playToken;
+      } catch (error) {
+        if (!(
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ACCOUNT_SEAT"
+        ))
+          throw error;
+      }
+    }
+  }
   const token = await getPlayToken();
   if (!PersistentIdSchema.safeParse(token).success) return token;
   if (__onlineGuestPromise) return __onlineGuestPromise;

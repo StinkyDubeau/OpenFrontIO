@@ -220,6 +220,8 @@ describe("PersistentWorldRepository", () => {
     repository.close();
     const v3 = new DatabaseSync(dbPath);
     v3.exec(`
+      DROP TABLE persistent_world_claims;
+      DROP TABLE persistent_world_passwords;
       DROP TABLE persistent_world_runtime_player_status;
       DROP TABLE persistent_world_runtime_turns;
       DROP TABLE persistent_world_runtimes;
@@ -275,7 +277,7 @@ describe("PersistentWorldRepository", () => {
       )
       .all() as Array<{ version: number }>;
     expect(migrations.map(({ version }) => version)).toEqual([
-      1, 2, 3, 4, 5, 6,
+      1, 2, 3, 4, 5, 6, 7,
     ]);
     const stored = audit
       .prepare(
@@ -1101,7 +1103,7 @@ describe("PersistentWorldRepository", () => {
 
     now = startsAt + persistentWorldDurationMs("1h");
     expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toMatchObject({
-      finished: [{ id: "world_completed", phase: "finished" }],
+      finished: [],
       cancelled: [],
     });
     expect(repository.archiveStaleWorlds(now, 5 * 60_000)).toEqual({
@@ -1110,10 +1112,11 @@ describe("PersistentWorldRepository", () => {
     });
     expect(repository.listPublicWorlds().map((world) => world.id)).toEqual([
       "world_future",
+      "world_completed",
     ]);
     expect(
       repository.listWorldsForIdentity(host.id).map((world) => world.id),
-    ).toEqual(["world_future"]);
+    ).toEqual(["world_completed", "world_future"]);
   });
 
   it("lists public and personal worlds and persists inferred reminder choices", () => {

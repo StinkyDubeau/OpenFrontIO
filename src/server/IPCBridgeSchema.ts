@@ -25,6 +25,7 @@ export type ManagedGameOptions = z.infer<typeof ManagedGameOptionsSchema>;
 export type MasterCreateManagedGame = z.infer<
   typeof MasterCreateManagedGameSchema
 >;
+export type MasterEndManagedGame = z.infer<typeof MasterEndManagedGameSchema>;
 export type WorkerManagedGameReady = z.infer<
   typeof WorkerManagedGameReadySchema
 >;
@@ -273,6 +274,13 @@ const MasterCreateManagedGameSchema = z
     }
   });
 
+const MasterEndManagedGameSchema = z
+  .object({
+    type: z.literal("endManagedGame"),
+    gameID: ID,
+  })
+  .strict();
+
 const MasterDeploymentDrainSchema = z
   .object({
     type: z.literal("deploymentDrain"),
@@ -284,6 +292,7 @@ export const MasterMessageSchema = z.discriminatedUnion("type", [
   MasterLobbiesBroadcastSchema,
   MasterCreateGameSchema,
   MasterCreateManagedGameSchema,
+  MasterEndManagedGameSchema,
   MasterUpdateGameSchema,
   MasterDeploymentDrainSchema,
 ]);

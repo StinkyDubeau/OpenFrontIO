@@ -48,6 +48,7 @@ export function stubTheme(): Theme {
 export function stubConfig(overrides: Partial<Config> = {}): Config {
   const theme = stubTheme();
   const cfg = {
+    gameConfig: () => ({}),
     theme: () => theme,
     SAMCooldown: () => 120,
     SiloCooldown: () => 75,

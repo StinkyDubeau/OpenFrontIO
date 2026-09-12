@@ -10,12 +10,11 @@ import { EventBus } from "../../src/core/EventBus";
 import { Cell } from "../../src/core/game/Game";
 
 describe("catchup overview", () => {
-  it("fits once per catchup, not on every chunk or normal live tick", () => {
+  it("fits for initial catchup, never for a live conquest backlog", () => {
     const bus = new EventBus();
     const fit = vi.fn();
     bus.on(FitMapEvent, fit);
     const camera = new CatchupCamera(bus);
-    camera.update(0);
     camera.update(2);
     camera.update(300);
     camera.update(2);
@@ -24,7 +23,32 @@ describe("catchup overview", () => {
     camera.update(0);
     expect(camera.active).toBe(false);
     camera.update(2);
-    expect(fit).toHaveBeenCalledTimes(2);
+    expect(fit).toHaveBeenCalledTimes(1);
+    expect(camera.active).toBe(false);
+  });
+
+  it("does not zoom out after an immediate live join", () => {
+    const bus = new EventBus();
+    const fit = vi.fn();
+    bus.on(FitMapEvent, fit);
+    const camera = new CatchupCamera(bus);
+    camera.update(0);
+    camera.update(300);
+    expect(fit).not.toHaveBeenCalled();
+  });
+
+  it("fits initial snapshots once and ignores later fog-reveal snapshots", () => {
+    const bus = new EventBus();
+    const fit = vi.fn();
+    bus.on(FitMapEvent, fit);
+    const camera = new CatchupCamera(bus);
+    camera.update(0, "begin");
+    camera.update(0, "part");
+    camera.update(0, "end");
+    camera.update(20, "begin");
+    camera.update(0, "end");
+    expect(fit).toHaveBeenCalledTimes(1);
+    expect(camera.active).toBe(false);
   });
 
   it.each([

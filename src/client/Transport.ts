@@ -393,6 +393,7 @@ export class Transport {
     this.onconnect = onconnect;
     this.onmessage = onmessage;
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       console.log("Connected to game server!");
       if (this.socket === null) {
         console.error("socket is null");
@@ -417,6 +418,7 @@ export class Transport {
         .then(async () => {
           if (this.socket !== socket) return;
           const binary = await webSocketBinaryPayload(event.data);
+          if (this.socket !== socket) return;
           if (binary !== null) {
             if (binary.byteLength < 4)
               throw new Error("View packet is missing its sequence header");
@@ -458,14 +460,24 @@ export class Transport {
     };
     socket.onerror = (err) => {
       console.error("Socket encountered error: ", err, "Closing socket");
-      if (this.socket === null) return;
-      this.socket.close();
+      if (this.socket !== socket) return;
+      socket.close();
     };
     socket.onclose = (event: CloseEvent) => {
+      if (this.socket !== socket) return;
       console.log(
         `WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`,
       );
-      if (event.code === 1002) {
+      if (event.code === 4009) {
+        // Finish queued server messages first: the server sends the useful
+        // error before closing. Do not stack a second alert over that panel.
+        void incoming.then(() => {
+          if (this.socket !== socket || document.querySelector("#error-modal")) return;
+          showInGameAlert(
+            "Someone with that username is currently playing. Disconnect on your other device, then try again.",
+          );
+        });
+      } else if (event.code === 1002) {
         showInGameAlert(
           translateText("error_modal.connection_refused", {
             reason: event.reason,
@@ -497,7 +509,9 @@ export class Transport {
       clanTag: this.lobbyConfig.playerClanTag ?? null,
       cosmetics: this.lobbyConfig.cosmetics,
       turnstileToken: this.lobbyConfig.turnstileToken,
-      token: await (this.isLocal ? getPlayToken() : getOnlinePlayToken()),
+      token: await (this.isLocal
+        ? getPlayToken()
+        : getOnlinePlayToken(this.lobbyConfig.gameID)),
     } satisfies ClientJoinMessage);
   }
 
@@ -507,7 +521,9 @@ export class Transport {
       gameID: this.lobbyConfig.gameID,
       // Note: clientID is not sent - server looks it up from persistentID in token
       lastTurn: lastTurn,
-      token: await (this.isLocal ? getPlayToken() : getOnlinePlayToken()),
+      token: await (this.isLocal
+        ? getPlayToken()
+        : getOnlinePlayToken(this.lobbyConfig.gameID)),
     } satisfies ClientRejoinMessage);
   }
 

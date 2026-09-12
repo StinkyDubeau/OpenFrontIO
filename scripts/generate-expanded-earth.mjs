@@ -26,25 +26,33 @@ function integerArg(name, fallback) {
 
 const largeVariant = process.argv.includes("--variant=large");
 const ultraVariant = process.argv.includes("--variant=ultra");
-if (largeVariant && ultraVariant)
+const uhd27Variant = process.argv.includes("--variant=uhd27");
+const pixelTerrain = process.argv.includes("--pixel-terrain");
+if (pixelTerrain && !uhd27Variant) throw new Error("Pixel Earth v1 requires the 27x variant");
+if ([largeVariant, ultraVariant, uhd27Variant].filter(Boolean).length > 1)
   throw new Error("Choose only one versioned expanded-Earth variant");
-const scale = integerArg("scale", ultraVariant ? 4 : largeVariant ? 3 : 2);
+const scale = uhd27Variant ? Math.sqrt(27) : integerArg("scale", ultraVariant ? 4 : largeVariant ? 3 : 2);
 if (largeVariant && scale !== 3)
   throw new Error("The versioned large variant must remain scale=3");
 if (ultraVariant && scale !== 4)
   throw new Error("The versioned ultra variant must remain scale=4");
 const pageSize = integerArg("page-size", 1024);
 const sourceName = "giantworldmap";
-const mapId = ultraVariant
+const terrainArg = process.argv
+  .find((arg) => arg.startsWith("--terrain-bin="))
+  ?.slice(14);
+const baseMapId = ultraVariant
   ? "ExpandedGiantWorldUltra"
   : largeVariant
     ? "ExpandedGiantWorldLarge"
     : "ExpandedGiantWorld";
-const mapName = ultraVariant
+const baseMapName = ultraVariant
   ? "Expanded Earth Ultra"
   : largeVariant
     ? "Expanded Earth XL"
     : "Expanded Earth";
+const mapId = pixelTerrain ? "PixelEarth27v1" : uhd27Variant ? "ExpandedGiantWorldUHD27v1" : terrainArg ? `${baseMapId}HDv1` : baseMapId;
+const mapName = pixelTerrain ? "Pixel Earth 27x v1" : uhd27Variant ? "UHD Earth 27x v1" : terrainArg ? `${baseMapName} HD v1` : baseMapName;
 const outputName = mapId.toLowerCase();
 const sourceDir = join(repo, "resources", "maps", sourceName);
 // Experimental assets must never replace maps used by running games.
@@ -54,6 +62,10 @@ const outputArg = process.argv
 const outputRoot = outputArg
   ? resolve(repo, outputArg)
   : join(repo, "resources", "maps");
+if (terrainArg && !outputArg)
+  throw new Error("HD terrain requires an isolated --output-root");
+if (uhd27Variant && (!terrainArg || !outputArg))
+  throw new Error("UHD 27x requires imported terrain and an isolated output root");
 const relativeOutput = relative(repo, outputRoot);
 if (
   !relativeOutput ||
@@ -97,8 +109,8 @@ if (source.length !== sourceWidth * sourceHeight) {
   throw new Error("Giant Earth map.bin does not match its manifest dimensions");
 }
 
-const width = sourceWidth * scale;
-const height = sourceHeight * scale;
+const width = uhd27Variant ? Math.round(sourceWidth * scale / 4) * 4 : sourceWidth * scale;
+const height = uhd27Variant ? Math.round(sourceHeight * scale / 4) * 4 : sourceHeight * scale;
 if (!Number.isSafeInteger(width * height) || width * height > 0x7fffffff) {
   throw new Error(
     "Scaled map exceeds the engine's signed 32-bit tile address space",
@@ -141,14 +153,8 @@ function generateFullResolutionTerrain() {
       Math.min(sourceHeight - 1, Math.floor(continuousY)),
     );
     const bottom = Math.min(sourceHeight - 1, top + 1);
-    const fy = Math.max(
-      0,
-      Math.min(1, continuousY - Math.floor(continuousY)),
-    );
-    const nearestY = Math.min(
-      sourceHeight - 1,
-      Math.floor((y + 0.5) / scale),
-    );
+    const fy = Math.max(0, Math.min(1, continuousY - Math.floor(continuousY)));
+    const nearestY = Math.min(sourceHeight - 1, Math.floor((y + 0.5) / scale));
     const sourceRow = nearestY * sourceWidth;
     const localY = ((y + 0.5) % scale) / scale;
     const outputRow = y * width;
@@ -174,8 +180,7 @@ function generateFullResolutionTerrain() {
           sx + 1 < sourceWidth && isLand(source[sourceIndex + 1]);
         const landUp = sy > 0 && isLand(source[sourceIndex - sourceWidth]);
         const landDown =
-          sy + 1 < sourceHeight &&
-          isLand(source[sourceIndex + sourceWidth]);
+          sy + 1 < sourceHeight && isLand(source[sourceIndex + sourceWidth]);
         if (landLeft && landRight) land = Math.abs(localX[x] - 0.5) > 0.26;
         if (landUp && landDown) land = Math.abs(localY - 0.5) > 0.26;
       }
@@ -210,7 +215,22 @@ function generateFullResolutionTerrain() {
   return { output, landTiles };
 }
 
-const fullResolution = ultraVariant ? generateFullResolutionTerrain() : null;
+const importedTerrain = terrainArg
+  ? readFileSync(resolve(repo, terrainArg))
+  : null;
+if (importedTerrain && importedTerrain.length !== width * height)
+  throw new Error("Imported terrain dimensions do not match target variant");
+const fullResolution = importedTerrain
+  ? {
+      output: importedTerrain,
+      landTiles: importedTerrain.reduce(
+        (n, b) => n + (b & 128 && (b & 31) !== 31 ? 1 : 0),
+        0,
+      ),
+    }
+  : ultraVariant
+    ? generateFullResolutionTerrain()
+    : null;
 
 const pages = [];
 for (let pageY = 0; pageY < pagesHigh; pageY++) {
@@ -260,7 +280,7 @@ for (let pageY = 0; pageY < pagesHigh; pageY++) {
 function scaleCoordinates(entries = []) {
   return entries.map((entry) => ({
     ...entry,
-    coordinates: entry.coordinates?.map((coordinate) => coordinate * scale),
+    coordinates: entry.coordinates?.map((coordinate, axis) => Math.round(coordinate * (axis === 0 ? width / sourceWidth : height / sourceHeight))),
   }));
 }
 
@@ -363,6 +383,45 @@ const manifest = {
   teamGameSpawnAreas: scaleSpawnAreas(sourceManifest.teamGameSpawnAreas),
 };
 
+if (terrainArg) {
+  const metadata = JSON.parse(
+    readFileSync(resolve(repo, `${terrainArg}.json`), "utf8"),
+  );
+  manifest.source = metadata;
+  // The new source has more exact shorelines. Keep each original nation's
+  // vicinity, snapping only water placements to the nearest land tile.
+  for (const nation of [
+    ...manifest.nations,
+    ...(manifest.additionalNations ?? []),
+  ]) {
+    if (!nation.coordinates) continue;
+    const [ox, oy] = nation.coordinates;
+    let best = null,
+      bestDistance = Infinity;
+    const radius = Math.ceil(20 * scale);
+    for (
+      let y = Math.max(0, oy - radius);
+      y <= Math.min(height - 1, oy + radius);
+      y++
+    ) {
+      for (
+        let x = Math.max(0, ox - radius);
+        x <= Math.min(width - 1, ox + radius);
+        x++
+      ) {
+        const value = importedTerrain[y * width + x];
+        const distance = (x - ox) ** 2 + (y - oy) ** 2;
+        if (value & 128 && (value & 31) !== 31 && distance < bestDistance) {
+          best = [x, y];
+          bestDistance = distance;
+        }
+      }
+    }
+    if (!best) throw new Error(`No land near nation ${nation.name}`);
+    nation.coordinates = best;
+  }
+}
+
 writeFileSync(
   join(outputDir, "manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
@@ -379,12 +438,16 @@ if (lod4 && lod16) {
   copyFileSync(join(sourceDir, "map4x.bin"), join(outputDir, "map16x.bin"));
 }
 copyFileSync(
-  join(sourceDir, "thumbnail.webp"),
+  terrainArg
+    ? resolve(repo, `${terrainArg}.webp`)
+    : join(sourceDir, "thumbnail.webp"),
   join(outputDir, "thumbnail.webp"),
 );
 writeFileSync(
   join(outputDir, "NOTICE.md"),
-  `# Expanded Earth asset notice
+  terrainArg
+    ? readFileSync(resolve(repo, `${terrainArg}.NOTICE.md`), "utf8")
+    : `# Expanded Earth asset notice
 
 Expanded Earth is a modified, ${scale}-times linear enlargement of OpenFront's
 \`giantworldmap\` terrain, thumbnail, nation coordinates, and spawn metadata.

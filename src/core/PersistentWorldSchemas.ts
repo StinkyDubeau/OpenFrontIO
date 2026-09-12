@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+export const WorldStartModeSchema = z.enum(["scheduled", "host"]);
+export const WorldPresetSchema = z.enum([
+  "scheduled-earth",
+  "great-lakes",
+  "enormous-earth",
+  "hd-earth-9x",
+  "uhd-earth-27x",
+  "pixel-earth-27x",
+  "fog-earth-27x",
+]);
+
 export const PersistentWorldDurationSchema = z.enum(["1h", "1d", "7d"]);
 export type PersistentWorldDuration = z.infer<
   typeof PersistentWorldDurationSchema
@@ -149,6 +160,8 @@ export const PersistentWorldInvitationSecretSchema = z
 
 export const CreatePersistentWorldInputSchema = z
   .object({
+    startMode: WorldStartModeSchema.optional(),
+    gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
     name: z.string().trim().min(1).max(100),
     targetDuration: PersistentWorldDurationSchema,
@@ -231,6 +244,8 @@ export type PersistentWorldLobbyMember = z.infer<
 
 export const PersistentWorldSchema = z
   .object({
+    startMode: WorldStartModeSchema.optional(),
+    gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
     name: z.string().min(1).max(100),
     targetDuration: PersistentWorldDurationSchema,
@@ -360,6 +375,8 @@ export type PersistentWorldReminderSelection = z.infer<
 
 export const PersistentWorldViewSchema = z
   .object({
+    startMode: WorldStartModeSchema.optional(),
+    gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
     name: z.string().min(1).max(100),
     targetDuration: PersistentWorldDurationSchema,
@@ -420,6 +437,9 @@ export type PersistentWorldLobbySnapshot = z.infer<
 
 export const CreatePersistentWorldRequestSchema = z
   .object({
+    startMode: WorldStartModeSchema.optional(),
+    gamePreset: WorldPresetSchema.optional(),
+    password: z.string().min(1).max(128).optional(),
     name: z.string().trim().min(1).max(100),
     targetDuration: PersistentWorldDurationSchema,
     access: PersistentWorldAccessSchema,

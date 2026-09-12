@@ -9,6 +9,10 @@ import { GameMap, TileRef } from "./GameMap";
 const WATER_GRAPH_REBUILD_INTERVAL = 20;
 
 export class WaterManager {
+  // Exact full-tile lookups. Bound memory independently of world size; mini
+  // terrain edits and graph replacement invalidate even cached null results.
+  private readonly componentMemo = new Map<TileRef, number | null>();
+  private readonly memoComponents: boolean;
   private _miniWaterGraph: AbstractGraph | null = null;
   private _miniWaterHPA: AStarWaterHierarchical | null = null;
   private _waterGraphVersion: number = 0;
@@ -32,7 +36,10 @@ export class WaterManager {
     private map: GameMap,
     private miniMap: GameMap,
     private disableNavMesh: boolean,
+    private onWaterConverted?: (tile: TileRef) => void,
   ) {
+    this.memoComponents = Boolean(miniMap.observeTerrain);
+    miniMap.observeTerrain?.(() => this.componentMemo.clear());
     if (!disableNavMesh) {
       const graphBuilder = new AbstractGraphBuilder(miniMap);
       this._miniWaterGraph = graphBuilder.build();
@@ -68,6 +75,7 @@ export class WaterManager {
             this.map.setFallout(tile, false);
           }
           this.map.setWater(tile);
+          this.onWaterConverted?.(tile);
           converted.push(tile);
         }
       }
@@ -100,6 +108,7 @@ export class WaterManager {
         { cachePaths: true },
       );
       this._waterGraphVersion++;
+      this.componentMemo.clear();
     }
 
     return changedTiles;
@@ -118,6 +127,17 @@ export class WaterManager {
   }
 
   getWaterComponent(tile: TileRef): number | null {
+    if (!this.memoComponents || !this._miniWaterGraph)
+      return this.getWaterComponentUncached(tile);
+    const cached = this.componentMemo.get(tile);
+    if (cached !== undefined) return cached;
+    const component = this.getWaterComponentUncached(tile);
+    if (this.componentMemo.size >= 65_536) this.componentMemo.clear();
+    this.componentMemo.set(tile, component);
+    return component;
+  }
+
+  private getWaterComponentUncached(tile: TileRef): number | null {
     // Permissive fallback for tests with disableNavMesh
     if (!this._miniWaterGraph) return 0;
 

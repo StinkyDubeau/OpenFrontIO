@@ -1,3 +1,5 @@
+export type PseudoRandomState = readonly [number, number, number, number];
+
 export class PseudoRandom {
   // sfc32 state. All operations are 32-bit integer ops, so sequences are
   // identical across platforms.
@@ -7,6 +9,19 @@ export class PseudoRandom {
   private s3: number;
 
   private static readonly POW36_8 = Math.pow(36, 8); // Pre-compute 36^8
+
+  /** Copy-only checkpoint: taking one never consumes a random draw. */
+  snapshot(): PseudoRandomState {
+    return [this.s0, this.s1, this.s2, this.s3];
+  }
+
+  static fromSnapshot(state: PseudoRandomState): PseudoRandom {
+    if (state.length !== 4 || state.some((value) => (value | 0) !== value))
+      throw new Error("Invalid PRNG checkpoint");
+    const random = Object.create(PseudoRandom.prototype) as PseudoRandom;
+    [random.s0, random.s1, random.s2, random.s3] = state;
+    return random;
+  }
 
   constructor(seed: number) {
     // The seed is truncated to 32 bits: seeds congruent mod 2^32 produce

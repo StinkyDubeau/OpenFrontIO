@@ -18,8 +18,6 @@ import {
   persistentWorldShareUrl,
   rememberInvitation,
 } from "../../PersistentWorldApi";
-import { runtimeDebugEnabled } from "../../RuntimeDebug";
-import "../DebugQuickLaunch";
 import "./PersistentWorldComponents";
 import { PersistentWorldQuickChat } from "./PersistentWorldComponents";
 import "./PersistentWorldCreationWizard";
@@ -47,15 +45,19 @@ export class PersistentWorldPage extends LitElement {
   @state() private snapshot: PersistentWorldLobbySnapshot | null = null;
   @state() private loading = true;
   @state() private submitting = false;
+  @state() private wizardDeparting = false;
+  @state() private customGame = false;
   @state() private error = "";
   @state() private notice: HeaderNotice | null = null;
   @state() private identityName = "";
+  @state() private gamePassword = "";
   @state() private identityContinuation: IdentityContinuation = "create";
   @state() private invitationSecret: string | null = null;
   @state() private selectedTeam = "team-1";
   @state() private confirmingLeave = false;
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private pollingWorldId: string | null = null;
+  private autoEnterWorldId: string | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | undefined;
   private loadSequence = 0;
 
@@ -98,7 +100,9 @@ export class PersistentWorldPage extends LitElement {
             ? this.renderIdentity()
             : this.view === "wizard"
               ? html`<persistent-world-creation-wizard
+                  .customGame=${this.customGame}
                   .submitting=${this.submitting}
+                  .departing=${this.wizardDeparting}
                   .error=${this.error}
                   @world-create=${this.createWorld}
                   @world-wizard-close=${this.returnFromWizard}
@@ -210,8 +214,7 @@ export class PersistentWorldPage extends LitElement {
 
   private renderHub() {
     return html`
-      <main class="pw-hub ${runtimeDebugEnabled() ? "pw-hub--debug" : ""}">
-        ${runtimeDebugEnabled() ? html`<idlefront-debug-quick-launch></idlefront-debug-quick-launch>` : nothing}
+      <main class="pw-hub">
         <section class="pw-hub__intro">
           <div>
             <span class="pw-eyebrow" data-copy-slot="worlds.eyebrow"
@@ -224,20 +227,33 @@ export class PersistentWorldPage extends LitElement {
               ${placeholderCopy.worlds.description}
             </p>
           </div>
-          <button
-            class="pw-button pw-button--primary pw-hub__create"
-            type="button"
-            @click=${this.beginCreate}
-          >
-            <span class="pw-button__medallion" aria-hidden="true">＋</span>
-            <span
-              ><strong data-copy-slot="worlds.primaryAction"
-                >${placeholderCopy.worlds.primaryAction}</strong
-              ><small data-copy-slot="worlds.primaryActionDetail"
-                >${placeholderCopy.worlds.primaryActionDetail}</small
-              ></span
+          <div class="pw-hub__actions">
+            <button
+              class="pw-button pw-button--primary pw-hub__create"
+              type="button"
+              @click=${this.beginCreate}
             >
-          </button>
+              <span class="pw-button__medallion" aria-hidden="true">＋</span>
+              <span
+                ><strong data-copy-slot="worlds.primaryAction"
+                  >make a lobby</strong
+                ><small data-copy-slot="worlds.primaryActionDetail"
+                  >Scheduled · Enormous Earth · 4×</small
+                ></span
+              >
+            </button>
+            <button
+              class="pw-button pw-button--secondary pw-hub__create"
+              type="button"
+              @click=${() => this.beginCustomGame()}
+            >
+              <span class="pw-button__medallion" aria-hidden="true">◇</span>
+              <span
+                ><strong>custom game</strong
+                ><small>Choose a world · start when ready</small></span
+              >
+            </button>
+          </div>
         </section>
         ${
           this.error && !this.loading
@@ -349,7 +365,21 @@ export class PersistentWorldPage extends LitElement {
               @world-share-status=${this.shareStatus}
               @world-share-failed=${this.copyShareFallback}
               @world-enter-runtime=${this.enterRuntimeFromCard}
+              @world-dev-end=${this.endWorldForDevelopment}
             ></persistent-world-invitation-card>
+            ${
+              world.access === "private" &&
+              !snapshot.viewer.isMember &&
+              world.phase === "active"
+                ? html`<button
+                    class="pw-button pw-button--primary"
+                    type="button"
+                    @click=${() => this.requireIdentity("rsvp")}
+                  >
+                    Resume a nation
+                  </button>`
+                : nothing
+            }
             ${
               isPendingRuntime
                 ? html`<section
@@ -394,12 +424,16 @@ export class PersistentWorldPage extends LitElement {
                     </section>`
                   : nothing
             }
-            <persistent-world-reminder-picker
-              .options=${snapshot.reminderOptionsMs}
-              .selected=${snapshot.selectedReminderLeadTimesMs}
-              ?disabled=${!snapshot.viewer.isMember || this.submitting}
-              @world-reminders-change=${this.updateReminders}
-            ></persistent-world-reminder-picker>
+            ${
+              world.startMode !== "host"
+                ? html`<persistent-world-reminder-picker
+                    .options=${snapshot.reminderOptionsMs}
+                    .selected=${snapshot.selectedReminderLeadTimesMs}
+                    ?disabled=${!snapshot.viewer.isMember || this.submitting}
+                    @world-reminders-change=${this.updateReminders}
+                  ></persistent-world-reminder-picker>`
+                : nothing
+            }
           </div>
           <div
             class="pw-lobby__roster ${
@@ -459,6 +493,20 @@ export class PersistentWorldPage extends LitElement {
     }
     if (snapshot.viewer.isMember) {
       return html` <div class="pw-lobby-actions">
+        ${
+          world.startMode === "host" && world.phase === "scheduled"
+            ? snapshot.viewer.isHost
+              ? html`<button
+                  class="pw-button pw-button--primary"
+                  type="button"
+                  ?disabled=${this.submitting}
+                  @click=${this.startCustomGame}
+                >
+                  ${this.submitting ? "Starting…" : "Start game"}
+                </button>`
+              : html`<span role="status">Waiting for the host to start</span>`
+            : nothing
+        }
         <div class="pw-lobby-actions__membership">
           <span class="pw-membership-check" aria-hidden="true">✓</span
           ><span
@@ -613,6 +661,25 @@ export class PersistentWorldPage extends LitElement {
               event.key === "Enter" && this.createIdentity()}
         /></label>
         ${
+          this.identityContinuation === "rsvp"
+            ? html`<label class="pw-field"
+                ><span>Game password</span>
+                <input
+                  type="password"
+                  autocomplete="current-password"
+                  maxlength="128"
+                  .value=${this.gamePassword}
+                  @input=${(event: Event) => (this.gamePassword = (event.target as HTMLInputElement).value)}
+                  @keydown=${(event: KeyboardEvent) => event.key === "Enter" && this.createIdentity()}
+                />
+                <small
+                  >To resume your nation, use exactly the same username as on
+                  your other device.</small
+                >
+              </label>`
+            : nothing
+        }
+        ${
           this.error
             ? html`<div class="pw-alert" role="alert">${this.error}</div>`
             : nothing
@@ -666,6 +733,8 @@ export class PersistentWorldPage extends LitElement {
       return;
     }
     if (/^\/worlds\/new\/?$/.test(window.location.pathname)) {
+      this.customGame =
+        new URLSearchParams(window.location.search).get("kind") === "custom";
       void this.openWizardRoute();
       return;
     }
@@ -719,12 +788,30 @@ export class PersistentWorldPage extends LitElement {
         this.invitationSecret,
       );
       if (sequence !== this.loadSequence) return;
+      if (
+        this.snapshot?.world.id === worldId &&
+        this.snapshot.world.phase === "scheduled" &&
+        snapshot.world.phase === "active" &&
+        snapshot.viewer.isMember
+      ) {
+        this.autoEnterWorldId = worldId;
+      }
       this.snapshot = snapshot;
       this.loading = false;
+      if (this.autoEnterWorldId === worldId && snapshot.runtimeGameId) {
+        this.autoEnterWorldId = null;
+        void this.enterRuntime(snapshot.runtimeGameId);
+      }
     } catch (error) {
       if (sequence !== this.loadSequence) return;
       this.error = this.errorMessage(error);
       this.loading = false;
+      if (
+        error instanceof PersistentWorldApiError &&
+        error.code === "INVITATION_REQUIRED"
+      ) {
+        this.requireIdentity("rsvp");
+      }
     }
     if (
       sequence === this.loadSequence &&
@@ -745,6 +832,7 @@ export class PersistentWorldPage extends LitElement {
     if (this.session || !persistentWorldApi.sessionToken()) return;
     try {
       const session = await persistentWorldApi.resumeSession();
+      setGuestPlayToken(null);
       const guestPlayToken = await persistentWorldApi.bindGameIdentityWithToken(
         await getPlayToken(),
       );
@@ -759,10 +847,41 @@ export class PersistentWorldPage extends LitElement {
   }
 
   private beginCreate = () => {
+    this.customGame = false;
+    this.openCreateWizard();
+  };
+
+  private beginCustomGame = () => {
+    this.customGame = true;
+    this.openCreateWizard();
+  };
+
+  private openCreateWizard = () => {
     if (!this.session) return this.requireIdentity("create");
     this.error = "";
+    this.wizardDeparting = false;
     this.view = "wizard";
-    this.navigate("/worlds/new", false);
+    this.navigate(
+      this.customGame ? "/worlds/new?kind=custom" : "/worlds/new",
+      false,
+    );
+  };
+
+  private startCustomGame = async () => {
+    if (!this.snapshot || this.submitting) return;
+    this.submitting = true;
+    this.autoEnterWorldId = this.snapshot.world.id;
+    try {
+      this.snapshot = await persistentWorldApi.startCustomWorld(
+        this.snapshot.world.id,
+      );
+      this.showNotice("Preparing the map…");
+    } catch (error) {
+      this.autoEnterWorldId = null;
+      this.showNotice(this.errorMessage(error), "error");
+    } finally {
+      this.submitting = false;
+    }
   };
 
   private createWorld = async (
@@ -778,11 +897,21 @@ export class PersistentWorldPage extends LitElement {
       }
       this.invitationSecret = created.invitationSecret;
       this.snapshot = created.snapshot;
+      this.wizardDeparting = true;
+      await new Promise<void>((resolve) =>
+        window.setTimeout(
+          resolve,
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? 60
+            : 620,
+        ),
+      );
       this.view = "lobby";
       this.navigate(`/world/${worldId}`, false);
       this.startPolling(worldId);
       this.showNotice("Invitation created");
     } catch (error) {
+      this.wizardDeparting = false;
       this.error = this.errorMessage(error);
     } finally {
       this.submitting = false;
@@ -819,6 +948,14 @@ export class PersistentWorldPage extends LitElement {
       );
       this.showNotice("RSVP confirmed");
     } catch (error) {
+      if (
+        error instanceof PersistentWorldApiError &&
+        (error.code === "WORLD_PASSWORD_REQUIRED" ||
+          error.code === "USERNAME_TAKEN")
+      ) {
+        this.requireIdentity("rsvp");
+        return;
+      }
       this.showNotice(this.errorMessage(error), "error");
     } finally {
       this.submitting = false;
@@ -847,6 +984,23 @@ export class PersistentWorldPage extends LitElement {
     try {
       this.snapshot = await persistentWorldApi.cancel(worldId);
       this.showNotice("Invitation cancelled", "warning");
+    } catch (error) {
+      this.showNotice(this.errorMessage(error), "error");
+    } finally {
+      this.submitting = false;
+    }
+  };
+
+  // TODO(remove-after-playtests): temporary public dev control.
+  private endWorldForDevelopment = async () => {
+    const worldId = this.snapshot?.world.id;
+    if (!worldId || this.submitting) return;
+    if (!window.confirm("End this world for development testing?")) return;
+    this.submitting = true;
+    try {
+      await persistentWorldApi.devEndWorld(worldId);
+      await this.loadLobby(worldId, true);
+      this.showNotice("World ended (development control)", "warning");
     } catch (error) {
       this.showNotice(this.errorMessage(error), "error");
     } finally {
@@ -890,7 +1044,25 @@ export class PersistentWorldPage extends LitElement {
     }
   };
 
-  private enterRuntime(runtimeGameId: string) {
+  private async enterRuntime(runtimeGameId: string) {
+    const worldId =
+      this.snapshot?.runtimeGameId === runtimeGameId
+        ? this.snapshot.world.id
+        : null;
+    if (worldId) {
+      try {
+        await persistentWorldApi.worldPlayToken(worldId);
+        persistentWorldApi.rememberGameWorld(runtimeGameId, worldId);
+      } catch (error) {
+        if (!(
+          error instanceof PersistentWorldApiError &&
+          error.code === "ACCOUNT_SEAT"
+        )) {
+          this.showNotice(this.errorMessage(error), "error");
+          return;
+        }
+      }
+    }
     this.dispatchEvent(
       new CustomEvent("join-lobby", {
         detail: {
@@ -922,9 +1094,12 @@ export class PersistentWorldPage extends LitElement {
       // A new guest session must not reuse a credential issued to the prior
       // session on this device.
       setGuestPlayToken(null);
-      const created = await persistentWorldApi.createGuestSession(
-        this.identityName.trim(),
-      );
+      const created =
+        this.session?.identity.displayName === this.identityName.trim()
+          ? { session: this.session }
+          : await persistentWorldApi.createGuestSession(
+              this.identityName.trim(),
+            );
       const guestPlayToken = await persistentWorldApi.bindGameIdentityWithToken(
         await getPlayToken(),
       );
@@ -932,8 +1107,25 @@ export class PersistentWorldPage extends LitElement {
       this.session = created.session;
       if (this.identityContinuation === "create") {
         this.view = "wizard";
-        this.navigate("/worlds/new", false);
+        this.navigate(
+          this.customGame ? "/worlds/new?kind=custom" : "/worlds/new",
+          false,
+        );
       } else {
+        const worldId =
+          this.snapshot?.world.id ?? window.location.pathname.split("/")[2];
+        if (this.gamePassword) {
+          await persistentWorldApi.unlockWorld(
+            worldId,
+            this.gamePassword,
+            this.identityName.trim(),
+          );
+          this.gamePassword = "";
+          this.snapshot = await persistentWorldApi.getSnapshot(
+            worldId,
+            this.invitationSecret,
+          );
+        }
         this.view = "lobby";
         await this.completeRsvp();
       }
@@ -957,6 +1149,7 @@ export class PersistentWorldPage extends LitElement {
   }
 
   private showHub = (updateUrl = true) => {
+    this.autoEnterWorldId = null;
     this.view = "hub";
     this.snapshot = null;
     this.stopPolling();
@@ -965,6 +1158,7 @@ export class PersistentWorldPage extends LitElement {
   };
 
   private returnFromWizard = () => {
+    this.wizardDeparting = false;
     history.replaceState(history.state, "", "/worlds");
     this.showHub(false);
   };

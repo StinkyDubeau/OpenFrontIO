@@ -53,6 +53,9 @@ export enum GameMapType {
   GiantWorldMap = "Giant World Map", // map-generator/assets/maps/giantworldmap/info.json
   ExpandedGiantWorld = "Expanded Earth", // map-generator/assets/maps/expandedgiantworld/info.json
   ExpandedGiantWorldLarge = "Expanded Earth XL", // map-generator/assets/maps/expandedgiantworldlarge/info.json
+  ExpandedGiantWorldLargeHDv1 = "Expanded Earth XL HD v1", // map-generator/assets/maps/expandedgiantworldlargehdv1/info.json
+  ExpandedGiantWorldUHD27v1 = "UHD Earth 27x v1", // map-generator/assets/maps/expandedgiantworlduhd27v1/info.json
+  PixelEarth27v1 = "Pixel Earth 27x v1", // map-generator/assets/maps/pixelearth27v1/info.json
   ExpandedGiantWorldUltra = "Expanded Earth Ultra", // map-generator/assets/maps/expandedgiantworldultra/info.json
   GreatLakes = "Great Lakes", // map-generator/assets/maps/greatlakes/info.json
   GulfOfGuinea = "Gulf Of Guinea", // map-generator/assets/maps/gulfofguinea/info.json
@@ -1015,6 +1018,27 @@ export const maps: readonly MapInfo[] = [
     id: "ExpandedGiantWorldLarge",
     type: GameMapType.ExpandedGiantWorldLarge,
     translationKey: "map.expandedgiantworldlarge",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },
+  {
+    id: "ExpandedGiantWorldLargeHDv1",
+    type: GameMapType.ExpandedGiantWorldLargeHDv1,
+    translationKey: "map.expandedgiantworldlargehdv1",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },
+  {
+    id: "PixelEarth27v1",
+    type: GameMapType.PixelEarth27v1,
+    translationKey: "map.pixelearth27v1",
+    categories: ["world"],
+    multiplayerFrequency: 0,
+  },
+  {
+    id: "ExpandedGiantWorldUHD27v1",
+    type: GameMapType.ExpandedGiantWorldUHD27v1,
+    translationKey: "map.expandedgiantworlduhd27v1",
     categories: ["world"],
     multiplayerFrequency: 0,
   },

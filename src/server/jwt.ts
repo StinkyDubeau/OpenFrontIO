@@ -21,8 +21,9 @@ type TokenVerificationResult =
 
 export async function verifyClientToken(
   token: string,
+  gameId?: string,
 ): Promise<TokenVerificationResult> {
-  const guestPersistentId = verifyGuestPlayToken(token);
+  const guestPersistentId = verifyGuestPlayToken(token, Date.now(), gameId);
   if (guestPersistentId !== null) {
     return { type: "success", persistentId: guestPersistentId, claims: null };
   }

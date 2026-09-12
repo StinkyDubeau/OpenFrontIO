@@ -157,9 +157,14 @@ export class RailroadCache {
    * Event order matches the upstream game client: Construction → Snap → Destruction.
    */
   apply(gu: GameUpdateViewData): void {
+    if (gu.fog?.resetUnits) {
+      // Clear only existing rail tiles, including negative fog-segment IDs;
+      // retain dirty texels so a global-discovery snapshot cannot leave ghosts.
+      for (const id of this.anims.keys()) this.removeRailroad(id);
+    }
     const constructs = (gu.updates[GameUpdateType.RailroadConstructionEvent] ??
       []) as RailroadConstructionUpdate[];
-    for (const evt of constructs) this.addRailroad(evt.id, evt.tiles, false);
+    for (const evt of constructs) this.addRailroad(evt.id, evt.tiles, evt.revealed === true);
 
     const snaps = (gu.updates[GameUpdateType.RailroadSnapEvent] ??
       []) as RailroadSnapUpdate[];

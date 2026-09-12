@@ -124,14 +124,16 @@ export class GameServer {
   private simulation: SimulationHost | undefined;
   private simulationRecoveryProgress: SimulationRecoveryProgress | undefined;
   private simulationBusy = false;
+  private simulationFailed = false;
   private simulationDeadline = 0;
   private simulationTimer: ReturnType<typeof setTimeout> | undefined;
   private simulationClockStarted = false;
   private simulationStartFallbackTimer:
     ReturnType<typeof setTimeout> | undefined;
   private viewConnections = new Map<WebSocket, ViewConnection>();
+  private viewSeats = new Map<WebSocket, string>();
   private viewGeneration = new Map<WebSocket, number>();
-  private viewHistory: { tick: number; bytes: Uint8Array }[] = [];
+  private viewHistory: { tick: number; bytes: Uint8Array; clientID?: string }[] = [];
   private readonly startupReady: Promise<void>;
   private resolveStartupReady!: () => void;
   private rejectStartupReady!: (error: Error) => void;
@@ -156,8 +158,25 @@ export class GameServer {
   private async subscribeView(
     ws: WebSocket,
     afterTick?: number,
+    viewerClientID?: string,
   ): Promise<void> {
     if (!this.simulation) return;
+    if (this.gameConfig.fogOfWar && afterTick !== undefined) {
+      this.sendViewError(ws, "Restoring your current view", undefined, true);
+      return;
+    }
+    if (this.gameConfig.fogOfWar && !viewerClientID) {
+      this.sendViewError(ws, "An authenticated player seat is required");
+      return;
+    }
+    if (viewerClientID) this.viewSeats.set(ws, viewerClientID);
+    if (this.simulationFailed) {
+      this.sendViewError(
+        ws,
+        "This match stopped and needs server recovery. It is not currently running.",
+      );
+      return;
+    }
     // A reconnect gets a new socket; duplicate requests must not enqueue
     // unbounded expensive snapshots for the same authenticated connection.
     if (this.viewGeneration.has(ws)) return;
@@ -188,7 +207,7 @@ export class GameServer {
         }
       } else {
         const snapshotStartedAt = performance.now();
-        const snapshot = await this.simulation.snapshot();
+        const snapshot = await this.simulation.snapshot(viewerClientID);
         baseTick = snapshot.tick;
         this.log.info("view snapshot prepared", {
           gameID: this.id,
@@ -217,7 +236,7 @@ export class GameServer {
       )
         return;
       for (const frame of this.viewHistory)
-        if (frame.tick > baseTick) connection.enqueue(frame.bytes, frame.tick);
+        if (frame.tick > baseTick && (!this.gameConfig.fogOfWar || frame.clientID === viewerClientID)) connection.enqueue(frame.bytes, frame.tick);
       if (!connection.isClosed) this.viewConnections.set(ws, connection);
     } catch (error) {
       connection.stop();
@@ -226,16 +245,22 @@ export class GameServer {
   }
 
   private publishView(result: TickResult): void {
-    this.viewHistory.push({ tick: result.tick, bytes: result.bytes });
-    this.viewHistoryBytes += result.bytes.byteLength;
+    const frames = result.views?.flatMap(view => (view.packets ?? [view.bytes]).map(bytes => ({ clientID: view.clientID, bytes }))) ?? [{ bytes: result.bytes, clientID: undefined }];
+    for (const frame of frames) {
+      this.viewHistory.push({ tick: result.tick, ...frame });
+      this.viewHistoryBytes += frame.bytes.byteLength;
+    }
     while (
       this.viewHistory.length > 256 ||
       this.viewHistoryBytes > 16 * 1024 * 1024
     ) {
       this.viewHistoryBytes -= this.viewHistory.shift()!.bytes.byteLength;
     }
-    for (const connection of this.viewConnections.values())
-      connection.enqueue(result.bytes, result.tick);
+    const scoped = result.views && new Map(result.views.map(view => [view.clientID, view.packets ?? [view.bytes]]));
+    for (const [ws, connection] of this.viewConnections) {
+      const packets = scoped ? scoped.get(this.viewSeats.get(ws) ?? "") : [result.bytes];
+      if (packets) connection.enqueueBatch(packets, result.tick);
+    }
     if (result.stats) {
       this.latestLiveStats = result.stats;
       this.managedHooks?.onLiveStatsCommitted?.(result.stats);
@@ -249,8 +274,10 @@ export class GameServer {
         tick: result.tick,
         simulationMs: result.duration,
         coreSimulationMs: result.coreDuration,
+        navigationPreparationMs: result.navigationPreparationMs,
+        navigation: result.navigationMetrics,
         viewEncodingMs: result.encodingDuration,
-        frameBytes: result.bytes.byteLength,
+        frameBytes: frames.reduce((sum, frame) => sum + frame.bytes.byteLength, 0),
         tileDeltas: result.tileDeltaCount,
         motionPlanBytes: result.motionPlanBytes,
         unitUpdates: result.unitUpdateCount,
@@ -1033,6 +1060,10 @@ export class GameServer {
     if (this.kickedPersistentIds.has(client.persistentID)) {
       return "kicked";
     }
+    const existingId = this.getClientIdForPersistentId(client.persistentID);
+    const existing = existingId ? this.allClients.get(existingId) : undefined;
+    if (existing && this.rejectDuplicateController(existing, client.ws))
+      return "rejected";
 
     const managedClientID = this.managedClientIDForPersistentId(
       client.persistentID,
@@ -1099,6 +1130,7 @@ export class GameServer {
     // inherently same-IP.
     if (
       ServerEnv.env() !== GameEnv.Dev &&
+      !this.managedOptions &&
       this.gameConfig.gameType === GameType.Public &&
       this.activeClients.filter(
         (c) => c.ip === client.ip && c.clientID !== client.clientID,
@@ -1179,11 +1211,18 @@ export class GameServer {
     const client = this.allClients.get(clientID);
     if (!client) return false;
 
+    if (this.rejectDuplicateController(client, ws)) return true;
+
     this.websockets.add(ws);
     this.log.info("client rejoining", { clientID, lastTurn });
 
     // Close old WebSocket to prevent resource leaks
     if (client.ws !== ws) {
+      this.viewConnections.get(client.ws)?.stop();
+      this.viewConnections.delete(client.ws);
+      this.viewGeneration.delete(client.ws);
+      this.viewSeats.delete(client.ws);
+      this.websockets.delete(client.ws);
       client.ws.removeAllListeners();
       client.ws.close();
     }
@@ -1220,6 +1259,25 @@ export class GameServer {
     return true;
   }
 
+  private rejectDuplicateController(client: Client, ws: WebSocket): boolean {
+    if (
+      !this.managedOptions ||
+      client.ws === ws ||
+      client.ws.readyState !== WebSocket.OPEN ||
+      Date.now() - client.lastPing >= 30_000
+    )
+      return false;
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        error:
+          "Someone with that username is currently playing. Disconnect on your other device, then try again.",
+      } satisfies ServerErrorMessage),
+    );
+    ws.close(4009, "Username is playing on another device");
+    return true;
+  }
+
   private addListeners(client: Client) {
     client.ws.removeAllListeners("message");
     client.ws.on("message", async (message: string) => {
@@ -1247,7 +1305,7 @@ export class GameServer {
           if (message.type === "view_ack") {
             this.viewConnections.get(client.ws)?.acknowledge(message.sequence);
           } else if (message.type === "view_subscribe") {
-            await this.subscribeView(client.ws, message.afterTick);
+            await this.subscribeView(client.ws, message.afterTick, client.clientID);
           } else {
             // Bound expensive queries separately from gameplay intent budgets.
             const now = Date.now();
@@ -1267,7 +1325,7 @@ export class GameServer {
                 : { at: now, count: 1 },
             );
             try {
-              const result = await this.simulation.query(message.query);
+              const result = await this.simulation.query(message.query, client.clientID);
               if (client.ws.readyState === WebSocket.OPEN)
                 client.ws.send(Buffer.concat([Buffer.alloc(4), result.bytes]));
             } catch (error) {
@@ -1423,6 +1481,8 @@ export class GameServer {
       this.viewConnections.get(client.ws)?.stop();
       this.viewConnections.delete(client.ws);
       this.viewGeneration.delete(client.ws);
+      this.viewSeats.delete(client.ws);
+      if (this.gameConfig.fogOfWar) void this.simulation?.forgetViewer(client.clientID).catch(() => {});
       this.log.info("client disconnected", {
         clientID: client.clientID,
         persistentID: client.persistentID,
@@ -1863,6 +1923,17 @@ export class GameServer {
   }
 
   private sendStartGameMsg(ws: WebSocket, lastTurn: number) {
+    if (this.simulationFailed) {
+      if (ws.readyState === WebSocket.OPEN)
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            error:
+              "This match stopped and needs server recovery. It is not currently running.",
+          } satisfies ServerErrorMessage),
+        );
+      return;
+    }
     // Find which client this websocket belongs to
     const client = this.activeClients.find((c) => c.ws === ws);
     if (!client) {
@@ -1982,6 +2053,8 @@ export class GameServer {
         })
         .catch((error) => {
           this.simulationBusy = false;
+          this.simulationFailed = true;
+          this.simulation?.stop();
           this.log.error("Authoritative simulation stopped", {
             error: String(error),
           });
@@ -2166,9 +2239,8 @@ export class GameServer {
       }
     }
     this.activeClients = alive;
-    const expiresAt =
-      this.managedOptions?.expiresAt ?? this.createdAt + this.maxGameDuration;
-    if (now > expiresAt) {
+    // Persistent-world duration is a pacing target, not a wall-clock cutoff.
+    if (!this.managedOptions && now > this.createdAt + this.maxGameDuration) {
       this.log.warn("game past max duration", {
         gameID: this.id,
       });

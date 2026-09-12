@@ -4,6 +4,20 @@ import { ViewConnection } from "../../src/server/simulation/ViewConnection";
 
 afterEach(() => vi.useRealTimers());
 describe("view flow control", () => {
+  it("streams a large live reveal as one bounded update without modifying buffers shared with another device", () => {
+    vi.useFakeTimers();
+    const ws = { readyState: 1, send: vi.fn() }, slow = vi.fn();
+    const view = new ViewConnection(ws as unknown as WebSocket, slow);
+    const packets = Array.from({ length: 1500 }, (_, i) => new Uint8Array([i % 255]));
+    view.enqueueBatch(packets, 500);
+    view.enqueue(new Uint8Array([255]), 501);
+    for (let ack = 8; ack <= 1504; ack += 8) view.acknowledge(Math.min(ack, 1501));
+    expect(slow).not.toHaveBeenCalled();
+    expect(ws.send).toHaveBeenCalledTimes(1501);
+    expect(packets.every(p => p instanceof Uint8Array)).toBe(true);
+    expect(ws.send.mock.calls[1500][0][4]).toBe(255);
+    view.stop();
+  });
   it("streams snapshots larger than the live queue, preserving order and releasing chunks", () => {
     vi.useFakeTimers();
     const ws = { readyState: 1, send: vi.fn() };

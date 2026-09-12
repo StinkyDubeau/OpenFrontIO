@@ -17,6 +17,7 @@ import type { SpiralRibbon } from "./SpiralTrails";
  * Satisfied by GameView through TypeScript structural typing.
  */
 export interface FrameUploadTarget {
+  setFog?(enabled: boolean): void;
   uploadTileAndTrailState(
     tileState: Uint16Array,
     trailState: Uint16Array,
@@ -65,6 +66,7 @@ export function uploadFrameData(
   view: FrameUploadTarget,
   frame: FrameData,
 ): void {
+  view.setFog?.(frame.fogEnabled ?? false);
   // --- Tiles + Trails ---
   // changedTiles[] means "only these tiles changed" (empty = nothing changed,
   // skip upload). null means "no delta info" (first tick — full upload needed).

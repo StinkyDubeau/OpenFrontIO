@@ -431,7 +431,10 @@ export async function startWorker() {
         }
 
         // Verify token signature
-        const result = await verifyClientToken(clientMsg.token);
+        const result = await verifyClientToken(
+          clientMsg.token,
+          clientMsg.gameID,
+        );
         if (result.type === "error") {
           log.warn(`Invalid token: ${result.message}`, {
             gameID: clientMsg.gameID,

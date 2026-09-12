@@ -5,6 +5,15 @@ import {
 } from "../../src/server/GuestPlayToken";
 
 describe("guest play tokens", () => {
+  it("restricts a recovered nation credential to its game", () => {
+    const now = Date.now();
+    const token = issueGuestPlayToken("pwi_test_identity", now, "game1234");
+    expect(verifyGuestPlayToken(token, now, "game1234")).toBe(
+      "pwi_test_identity",
+    );
+    expect(verifyGuestPlayToken(token, now, "other123")).toBeNull();
+    expect(verifyGuestPlayToken(token, now)).toBeNull();
+  });
   it("accepts every issued signature, including embedded underscores", () => {
     const issuedAt = 1_700_000_000_000;
     let embeddedUnderscores = 0;

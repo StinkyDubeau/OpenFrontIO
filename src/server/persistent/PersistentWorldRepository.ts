@@ -46,7 +46,7 @@ import {
   type Turn,
 } from "../../core/Schemas";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 8;
 const DEFAULT_DUE_LIMIT = 100;
 const MAX_DUE_LIMIT = 500;
 const DEFAULT_CHAT_LIMIT = 100;
@@ -264,6 +264,7 @@ export class PersistentWorldRepository {
     this.db = new DatabaseSync(this.dbPath);
     this.configureDatabase();
     this.migrate();
+    this.ensureWorldModeColumns();
   }
 
   private configureDatabase(): void {
@@ -623,6 +624,101 @@ export class PersistentWorldRepository {
           .run(this.validNow());
       });
     }
+    if (version < 7) {
+      this.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE persistent_world_passwords (
+            world_id TEXT PRIMARY KEY REFERENCES persistent_worlds(id),
+            password_hash TEXT NOT NULL
+          ) STRICT;
+          CREATE TABLE persistent_world_claims (
+            world_id TEXT NOT NULL REFERENCES persistent_worlds(id),
+            controller_id TEXT NOT NULL REFERENCES persistent_world_identities(id),
+            identity_id TEXT NOT NULL REFERENCES persistent_world_identities(id),
+            PRIMARY KEY(world_id, controller_id)
+          ) STRICT;
+        `);
+        this.db
+          .prepare(
+            "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (7, ?)",
+          )
+          .run(this.validNow());
+      });
+    }
+  }
+
+  private ensureWorldModeColumns(): void {
+    // Additive migration: existing runtime configurations and journals are untouched.
+    const columns = this.db
+      .prepare("PRAGMA table_info(persistent_worlds)")
+      .all() as SqlRow[];
+    if (columns.some((column) => column.name === "start_mode")) return;
+    this.transaction(() => {
+      this.db.exec(`
+        ALTER TABLE persistent_worlds ADD COLUMN start_mode TEXT NOT NULL
+          DEFAULT 'scheduled' CHECK(start_mode IN ('scheduled', 'host'));
+        ALTER TABLE persistent_worlds ADD COLUMN game_preset TEXT;
+      `);
+      this.db
+        .prepare(
+          "INSERT INTO persistent_world_schema_migrations(version, applied_at) VALUES (8, ?)",
+        )
+        .run(this.validNow());
+    });
+  }
+
+  setWorldPassword(worldId: string, hash: string): void {
+    this.db
+      .prepare(
+        "INSERT INTO persistent_world_passwords(world_id, password_hash) VALUES (?, ?)",
+      )
+      .run(worldId, hash);
+  }
+
+  worldPassword(worldId: string): string | null {
+    const row = this.db
+      .prepare(
+        "SELECT password_hash FROM persistent_world_passwords WHERE world_id = ?",
+      )
+      .get(worldId) as SqlRow | undefined;
+    return row ? String(row.password_hash) : null;
+  }
+
+  claimWorldIdentity(
+    worldId: string,
+    controllerId: string,
+    identityId: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO persistent_world_claims(world_id, controller_id, identity_id)
+      VALUES (?, ?, ?) ON CONFLICT(world_id, controller_id) DO UPDATE SET identity_id = excluded.identity_id`,
+      )
+      .run(worldId, controllerId, identityId);
+  }
+
+  claimedWorldIdentity(
+    worldId: string,
+    controllerId: string,
+  ): PersistentWorldIdentity | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT i.* FROM persistent_world_claims c
+      JOIN persistent_world_identities i ON i.id = c.identity_id
+      WHERE c.world_id = ? AND c.controller_id = ?`,
+      )
+      .get(worldId, controllerId) as SqlRow | undefined;
+    return row ? this.identityFromRow(row) : undefined;
+  }
+
+  claimedWorldIds(controllerId: string): string[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT world_id FROM persistent_world_claims WHERE controller_id = ?",
+        )
+        .all(controllerId) as SqlRow[]
+    ).map((row) => String(row.world_id));
   }
 
   private validNow(): number {
@@ -1207,12 +1303,6 @@ export class PersistentWorldRepository {
       }
 
       const requestedAt = this.validNow();
-      if (expiresAt <= requestedAt) {
-        throw new PersistentWorldRepositoryError(
-          "INVALID_PHASE",
-          "Cannot reserve a runtime after its world lifetime has elapsed",
-        );
-      }
       try {
         this.db
           .prepare(
@@ -1287,12 +1377,6 @@ export class PersistentWorldRepository {
         throw new PersistentWorldRepositoryError(
           "INVALID_PHASE",
           `Cannot ready a runtime for a ${String(world.phase)} world`,
-        );
-      }
-      if (at > runtime.expiresAt) {
-        throw new PersistentWorldRepositoryError(
-          "INVALID_PHASE",
-          "Runtime expired before it became ready",
         );
       }
       if (at < runtime.requestedAt) {
@@ -1715,6 +1799,8 @@ export class PersistentWorldRepository {
       if (existing) {
         const sameDefinition =
           existing.name === input.name &&
+          existing.startMode === (input.startMode ?? "scheduled") &&
+          existing.gamePreset === input.gamePreset &&
           existing.targetDuration === input.targetDuration &&
           existing.access === input.access &&
           existing.mode === input.mode &&
@@ -1745,8 +1831,8 @@ export class PersistentWorldRepository {
           `INSERT INTO persistent_worlds(
             id, name, target_duration, access, mode, max_humans, phase,
             starts_at, join_closes_at, host_identity_id,
-            invitation_secret_hash, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?)`,
+            invitation_secret_hash, created_at, updated_at, start_mode, game_preset
+          ) VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -1763,6 +1849,8 @@ export class PersistentWorldRepository {
             : null,
           now,
           now,
+          input.startMode ?? "scheduled",
+          input.gamePreset ?? null,
         );
       this.db
         .prepare(
@@ -1771,14 +1859,15 @@ export class PersistentWorldRepository {
           ) VALUES (?, ?, ?, ?, ?)`,
         )
         .run(input.id, input.host.id, input.hostTeamId ?? null, now, now);
-      this.ensureNotificationJobRows(
-        input.id,
-        input.host.id,
-        "start",
-        null,
-        input.startsAt,
-        now,
-      );
+      if (input.startMode !== "host")
+        this.ensureNotificationJobRows(
+          input.id,
+          input.host.id,
+          "start",
+          null,
+          input.startsAt,
+          now,
+        );
       return this.getWorld(input.id)!;
     });
   }
@@ -1866,17 +1955,13 @@ export class PersistentWorldRepository {
              ) AS runtime_ready
            FROM persistent_worlds world
            WHERE world.phase IN ('scheduled', 'active')
+             AND NOT (world.phase = 'scheduled' AND world.start_mode = 'host')
            ORDER BY world.starts_at, world.id`,
         )
         .all() as SqlRow[];
 
       const finishedIds: string[] = [];
       const cancelledIds: string[] = [];
-      const finish = this.db.prepare(
-        `UPDATE persistent_worlds
-         SET phase = 'finished', finished_at = ?, updated_at = ?
-         WHERE id = ? AND phase = 'active'`,
-      );
       const cancel = this.db.prepare(
         `UPDATE persistent_worlds
          SET phase = 'cancelled', cancelled_at = ?, updated_at = ?
@@ -1902,10 +1987,7 @@ export class PersistentWorldRepository {
         const missedRuntimeGrace = startsAt + startupGraceMs <= at;
 
         let changed = false;
-        if (phase === "active" && runtimeReady && reachedConfiguredEnd) {
-          changed = numberValue(finish.run(at, at, worldId).changes) === 1;
-          if (changed) finishedIds.push(worldId);
-        } else if (
+        if (
           (!runtimeReady && phase === "active" && missedRuntimeGrace) ||
           (phase === "scheduled" && reachedConfiguredEnd)
         ) {
@@ -1980,6 +2062,8 @@ export class PersistentWorldRepository {
 
   private worldFromRow(row: SqlRow): PersistentWorld {
     return PersistentWorldSchema.parse({
+      startMode: String(row.start_mode),
+      gamePreset: row.game_preset == null ? undefined : String(row.game_preset),
       id: String(row.id),
       name: String(row.name),
       targetDuration: String(row.target_duration),
@@ -2021,6 +2105,12 @@ export class PersistentWorldRepository {
     const startsAt = PersistentWorldTimestampSchema.parse(startsAtValue);
     return this.transaction(() => {
       const row = this.requireWorldRow(worldId);
+      if (row.start_mode === "host") {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "Custom games have no automatic schedule",
+        );
+      }
       if (String(row.host_identity_id) !== actor.id) {
         throw new PersistentWorldRepositoryError(
           "FORBIDDEN",
@@ -2075,7 +2165,10 @@ export class PersistentWorldRepository {
     });
   }
 
-  rsvp(inputValue: PersistentWorldRsvpInput): PersistentWorldRsvp {
+  rsvp(
+    inputValue: PersistentWorldRsvpInput,
+    passwordAuthenticated = false,
+  ): PersistentWorldRsvp {
     const input = PersistentWorldRsvpInputSchema.parse(inputValue);
     return this.transaction(() => {
       const world = this.requireWorldRow(input.worldId);
@@ -2102,7 +2195,8 @@ export class PersistentWorldRepository {
         if (
           input.teamId !== undefined &&
           input.teamId !== existing.team_id &&
-          now >= numberValue(world.starts_at)
+          now >= numberValue(world.starts_at) &&
+          !(world.start_mode === "host" && world.phase === "scheduled")
         ) {
           throw new PersistentWorldRepositoryError(
             "SCHEDULE_LOCKED",
@@ -2125,14 +2219,15 @@ export class PersistentWorldRepository {
             input.worldId,
             input.identity.id,
           );
-        this.ensureNotificationJobRows(
-          input.worldId,
-          input.identity.id,
-          "start",
-          null,
-          numberValue(world.starts_at),
-          now,
-        );
+        if (!(world.start_mode === "host" && world.phase === "scheduled"))
+          this.ensureNotificationJobRows(
+            input.worldId,
+            input.identity.id,
+            "start",
+            null,
+            numberValue(world.starts_at),
+            now,
+          );
         return this.getRsvp(input.worldId, input.identity.id)!;
       }
 
@@ -2145,7 +2240,8 @@ export class PersistentWorldRepository {
       }
       if (
         String(world.access) === "public" &&
-        now >= numberValue(world.starts_at)
+        now >= numberValue(world.starts_at) &&
+        !(world.start_mode === "host" && world.phase === "scheduled")
       ) {
         throw new PersistentWorldRepositoryError(
           "JOIN_CLOSED",
@@ -2154,15 +2250,19 @@ export class PersistentWorldRepository {
       }
       if (String(world.access) === "private") {
         if (
-          !input.invitationSecret ||
-          !this.invitationMatchesRow(world, input.invitationSecret)
+          !passwordAuthenticated &&
+          (!input.invitationSecret ||
+            !this.invitationMatchesRow(world, input.invitationSecret))
         ) {
           throw new PersistentWorldRepositoryError(
             "INVALID_INVITATION",
             "Invitation secret is invalid",
           );
         }
-        if (now >= numberValue(world.join_closes_at)) {
+        if (
+          now >= numberValue(world.join_closes_at) &&
+          !(world.start_mode === "host" && world.phase === "scheduled")
+        ) {
           throw new PersistentWorldRepositoryError(
             "JOIN_CLOSED",
             "This private world's late-join window has closed",
@@ -2188,14 +2288,15 @@ export class PersistentWorldRepository {
           ) VALUES (?, ?, ?, ?, ?)`,
         )
         .run(input.worldId, input.identity.id, input.teamId ?? null, now, now);
-      this.ensureNotificationJobRows(
-        input.worldId,
-        input.identity.id,
-        "start",
-        null,
-        numberValue(world.starts_at),
-        now,
-      );
+      if (!(world.start_mode === "host" && world.phase === "scheduled"))
+        this.ensureNotificationJobRows(
+          input.worldId,
+          input.identity.id,
+          "start",
+          null,
+          numberValue(world.starts_at),
+          now,
+        );
       if (input.identity.id !== String(world.host_identity_id)) {
         this.db
           .prepare(
@@ -2440,12 +2541,63 @@ export class PersistentWorldRepository {
            i.verified_email AS identity_verified_email
          FROM persistent_worlds w
          JOIN persistent_world_identities i ON i.id = w.host_identity_id
-         WHERE w.phase = 'scheduled' AND w.starts_at <= ?
+         WHERE w.phase = 'scheduled' AND w.start_mode = 'scheduled' AND w.starts_at <= ?
          ORDER BY w.starts_at, w.id
          LIMIT ?`,
       )
       .all(at, limit) as SqlRow[];
     return rows.map((row) => this.worldFromRow(row));
+  }
+
+  startCustomWorld(worldId: string, hostId: string): PersistentWorld {
+    return this.transaction(() => {
+      const row = this.requireWorldRow(worldId);
+      if (String(row.host_identity_id) !== hostId) {
+        throw new PersistentWorldRepositoryError(
+          "FORBIDDEN",
+          "Only the host can start this game",
+        );
+      }
+      if (row.start_mode !== "host") {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "Scheduled games start at their scheduled time",
+        );
+      }
+      // Repeated requests from the same host are harmless.
+      if (row.phase === "active") return this.worldFromRow(row);
+      if (row.phase !== "scheduled") {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "This game has ended",
+        );
+      }
+      const now = this.validNow();
+      const joinClosesAt =
+        now +
+        persistentWorldDurationMs(
+          PersistentWorldSchema.shape.targetDuration.parse(row.target_duration),
+        ) /
+          3;
+      this.db
+        .prepare(
+          `UPDATE persistent_worlds SET phase = 'active',
+        starts_at = ?, join_closes_at = ?, activated_at = ?, updated_at = ?
+        WHERE id = ? AND phase = 'scheduled'`,
+        )
+        .run(now, joinClosesAt, now, now, worldId);
+      for (const member of this.rsvpRows(worldId)) {
+        this.ensureNotificationJobRows(
+          worldId,
+          String(member.identity_id),
+          "start",
+          null,
+          now,
+          now,
+        );
+      }
+      return this.getWorld(worldId)!;
+    });
   }
 
   markActive(
@@ -2460,6 +2612,12 @@ export class PersistentWorldRepository {
         throw new PersistentWorldRepositoryError(
           "INVALID_PHASE",
           `Cannot activate a ${String(row.phase)} world`,
+        );
+      }
+      if (row.start_mode === "host") {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          "Only the host can start a custom game",
         );
       }
       if (at < numberValue(row.starts_at)) {
@@ -2500,6 +2658,53 @@ export class PersistentWorldRepository {
            WHERE id = ?`,
         )
         .run(at, at, worldId);
+      return this.getWorld(worldId)!;
+    });
+  }
+
+  /** Temporary dev-only lifecycle escape hatch for clearing broken worlds. */
+  endForDevelopment(
+    worldId: string,
+    atValue: number = this.validNow(),
+  ): PersistentWorld {
+    const at = PersistentWorldTimestampSchema.parse(atValue);
+    return this.transaction(() => {
+      const row = this.requireWorldRow(worldId);
+      const phase = String(row.phase);
+      if (phase === "finished" || phase === "cancelled") {
+        return this.worldFromRow(row);
+      }
+      if (phase === "active") {
+        this.db
+          .prepare(
+            `UPDATE persistent_worlds
+             SET phase = 'finished', finished_at = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(at, at, worldId);
+      } else if (phase === "scheduled") {
+        this.db
+          .prepare(
+            `UPDATE persistent_worlds
+             SET phase = 'cancelled', cancelled_at = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(at, at, worldId);
+        this.db
+          .prepare(
+            `UPDATE persistent_world_notification_jobs
+             SET state = 'suppressed', suppressed_at = ?,
+                 claim_token_hash = NULL, lease_expires_at = NULL,
+                 last_error = NULL, updated_at = ?
+             WHERE world_id = ? AND state IN ('pending', 'claimed')`,
+          )
+          .run(at, at, worldId);
+      } else {
+        throw new PersistentWorldRepositoryError(
+          "INVALID_PHASE",
+          `Cannot end a ${phase} world`,
+        );
+      }
       return this.getWorld(worldId)!;
     });
   }

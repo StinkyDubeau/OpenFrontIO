@@ -12,6 +12,7 @@ import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { PseudoRandom } from "../PseudoRandom";
 import { findMinimumBy } from "../Util";
+import { routeDiagnostic } from "../utilities/RateLimitedDiagnostic";
 import { ShellExecution } from "./ShellExecution";
 
 export class WarshipExecution implements Execution {
@@ -693,7 +694,7 @@ export class WarshipExecution implements Execution {
           this.warship.move(result.node);
           break;
         case PathStatus.NOT_FOUND:
-          console.log(`path not found to target`);
+          routeDiagnostic("path not found to target");
           break;
       }
     }
@@ -735,7 +736,7 @@ export class WarshipExecution implements Execution {
         this.warship.move(result.node);
         break;
       case PathStatus.NOT_FOUND: {
-        console.log(`path not found to target`);
+        routeDiagnostic("path not found to target");
         this.warship.setTargetTile(undefined);
         break;
       }

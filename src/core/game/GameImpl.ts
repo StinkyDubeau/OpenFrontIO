@@ -42,6 +42,7 @@ import {
 import { GameMap, TileRef } from "./GameMap";
 import { GameUpdate, GameUpdateType } from "./GameUpdates";
 import { MotionPlanRecord, packMotionPlans } from "./MotionPlans";
+import { OrderedContactIndex } from "./OrderedContactIndex";
 import { PlayerImpl } from "./PlayerImpl";
 import { RailNetwork } from "./RailNetwork";
 import { createRailNetwork } from "./RailNetworkImpl";
@@ -75,6 +76,11 @@ export function createGame(
 export type CellString = string;
 
 export class GameImpl implements Game {
+  private nearbyContacts: OrderedContactIndex;
+  public nearbyTerrainRevision = 0;
+  nearbyOwnerIDs(id: number): number[] {
+    return this.nearbyContacts.neighborsOf(id);
+  }
   private _ticks = 0;
   private startTick: number | null = null;
 
@@ -103,6 +109,9 @@ export class GameImpl implements Game {
   private planDrivenUnitIds = new Set<number>();
   private unitGrid: UnitGrid;
   private _unitMap = new Map<number, Unit>();
+  // Sum of live unit levels, maintained at lifecycle boundaries. Ports query
+  // fleet population repeatedly; walking every player's fleet here is quadratic.
+  private readonly unitLevelCounts = new Map<UnitType, number>();
 
   private playerTeams: Team[] = [];
   private botTeam: Team = ColoredTeams.Bot;
@@ -135,10 +144,19 @@ export class GameImpl implements Game {
     this._width = _map.width();
     this._height = _map.height();
     this.unitGrid = new UnitGrid(this._map);
+    this.nearbyContacts = new OrderedContactIndex(
+      this._map,
+      (id) => (this._playersBySmallID[id - 1] as PlayerImpl)._borderTiles,
+    );
     this._waterManager = new WaterManager(
       this._map,
       this.miniGameMap,
       _config.disableNavMesh(),
+      (tile) => {
+        this.nearbyTerrainRevision++;
+        this.nearbyContacts.localChanged(tile);
+        for (const listener of this.waterConversionObservers) listener(tile);
+      },
     );
     this._sharedWaterCache = new SharedWaterCache(this);
 
@@ -269,6 +287,7 @@ export class GameImpl implements Game {
       return;
     }
     this._map.setFallout(tile, value);
+    this.nearbyContacts.localChanged(tile);
     this.recordTileUpdate(tile);
   }
 
@@ -282,6 +301,10 @@ export class GameImpl implements Game {
       this._map.setFallout(tile, false);
     }
     this._map.setWater(tile);
+    this.nearbyTerrainRevision++;
+    this.nearbyContacts.localChanged(tile);
+    if (!this._map.isLand(tile))
+      for (const listener of this.waterConversionObservers) listener(tile);
     this.recordTileUpdate(tile);
   }
 
@@ -320,8 +343,13 @@ export class GameImpl implements Game {
     third?: UnitType,
   ): Unit[] {
     // Built as a single flat array per call; per-player intermediate arrays
-    // would churn the heap (player.units() with no args is allocation-free).
+    // would churn the heap (player.units() reuses its array until removal).
     const out: Unit[] = [];
+    if (first !== undefined && !Array.isArray(first) && second === undefined) {
+      for (const p of this._players.values())
+        p.appendUnitsOfType(first as UnitType, out);
+      return out;
+    }
     if (Array.isArray(first) && (first as readonly UnitType[]).length > 0) {
       const ts = new Set(first as readonly UnitType[]);
       for (const p of this._players.values()) {
@@ -354,11 +382,7 @@ export class GameImpl implements Game {
   }
 
   unitCount(type: UnitType): number {
-    let total = 0;
-    for (const player of this._players.values()) {
-      total += player.unitCount(type);
-    }
-    return total;
+    return this.unitLevelCounts.get(type) ?? 0;
   }
 
   unitInfo(type: UnitType): UnitInfo {
@@ -746,6 +770,67 @@ export class GameImpl implements Game {
     this._map.forEachNeighborWithDiag(tile, callback);
   }
 
+  private territoryObservers = new Set<
+    (tile: TileRef, previousOwner: number, owner: number) => void
+  >();
+  private waterConversionObservers = new Set<(tile: TileRef) => void>();
+  observeWaterConversions(listener: (tile: TileRef) => void): () => void {
+    this.waterConversionObservers.add(listener);
+    return () => {
+      this.waterConversionObservers.delete(listener);
+    };
+  }
+  private unitLocationObservers = new Set<
+    (unit: Unit, removed: boolean) => void
+  >();
+  observeUnitLocations(
+    listener: (unit: Unit, removed: boolean) => void,
+  ): () => void {
+    this.unitLocationObservers.add(listener);
+    return () => {
+      this.unitLocationObservers.delete(listener);
+    };
+  }
+  private attackActivityPolicy:
+    | ((
+        attacker: Player,
+        target: Player | TerraNullius,
+        tick: number,
+      ) => number)
+    | undefined;
+
+  setAttackActivityPolicy(policy: typeof this.attackActivityPolicy): void {
+    this.attackActivityPolicy = policy;
+  }
+
+  hasAttackActivityPolicy(): boolean {
+    return this.attackActivityPolicy !== undefined;
+  }
+
+  shouldExpandAttack(
+    attacker: Player,
+    target: Player | TerraNullius,
+    tick: number,
+  ): boolean {
+    return this.attackExpansionBudget(attacker, target, tick) > 0;
+  }
+  attackExpansionBudget(
+    attacker: Player,
+    target: Player | TerraNullius,
+    tick: number,
+  ): number {
+    return this.attackActivityPolicy?.(attacker, target, tick) ?? Infinity;
+  }
+
+  observeTerritory(
+    listener: (tile: TileRef, previousOwner: number, owner: number) => void,
+  ): () => void {
+    this.territoryObservers.add(listener);
+    return () => {
+      this.territoryObservers.delete(listener);
+    };
+  }
+
   conquer(owner: PlayerImpl, tile: TileRef): void {
     if (!this.isLand(tile)) {
       throw Error(`cannot conquer water`);
@@ -760,11 +845,18 @@ export class GameImpl implements Game {
       previousOwner._borderTiles.delete(tile);
     }
     this._map.setOwnerID(tile, owner.smallID());
-    owner._tiles.add(tile);
+    owner._tiles.addKnownAbsent(tile);
     owner._lastTileChange = this._ticks;
-    this.updateBorders(tile);
+    this.updateBorders(tile, previousOwner.smallID(), owner.smallID());
+    this.nearbyContacts.ownershipChanged(
+      tile,
+      previousOwner.smallID(),
+      owner.smallID(),
+    );
     this._map.setFallout(tile, false);
     this.recordTileUpdate(tile);
+    for (const listener of this.territoryObservers)
+      listener(tile, previousOwner.smallID(), owner.smallID());
   }
 
   relinquish(tile: TileRef) {
@@ -781,18 +873,35 @@ export class GameImpl implements Game {
     previousOwner._borderTiles.delete(tile);
 
     this._map.setOwnerID(tile, 0);
-    this.updateBorders(tile);
+    this.updateBorders(tile, previousOwner.smallID(), 0);
+    this.nearbyContacts.ownershipChanged(tile, previousOwner.smallID(), 0);
     this.recordTileUpdate(tile);
+    for (const listener of this.territoryObservers)
+      listener(tile, previousOwner.smallID(), 0);
   }
 
   // Reusable neighbor buffer to avoid closures/allocation in updateBorders.
   private borderNbuf: TileRef[] = [0, 0, 0, 0];
 
-  private updateBorders(tile: TileRef) {
+  private updateBorders(tile: TileRef, before: number, after: number) {
     this.updateBorderStatus(tile);
+    if (before === after) return;
     const numNeighbors = this._map.neighbors4(tile, this.borderNbuf);
     for (let i = 0; i < numNeighbors; i++) {
-      this.updateBorderStatus(this.borderNbuf[i]);
+      const neighbor = this.borderNbuf[i];
+      const id = this._map.ownerID(neighbor);
+      if (!id) continue;
+      // Only the edge to `tile` changed. A third player's edge remains foreign;
+      // the losing player's edge is now certainly foreign. Only the gaining
+      // player's neighbor can have lost its LAST foreign edge.
+      if (id === before)
+        (this._playersBySmallID[id - 1] as PlayerImpl)._borderTiles.add(
+          neighbor,
+        );
+      else if (id === after && !this._map.isBorder(neighbor))
+        (this._playersBySmallID[id - 1] as PlayerImpl)._borderTiles.delete(
+          neighbor,
+        );
     }
   }
 
@@ -1044,18 +1153,31 @@ export class GameImpl implements Game {
 
   addUnit(u: Unit) {
     this.unitGrid.addUnit(u);
+    if (!this._unitMap.has(u.id())) {
+      this.unitLevelCounts.set(u.type(), this.unitCount(u.type()) + u.level());
+    }
     this._unitMap.set(u.id(), u);
+    for (const listener of this.unitLocationObservers) listener(u, false);
+  }
+  onUnitLevelChanged(u: Unit, delta: number): void {
+    if (this._unitMap.get(u.id()) === u) {
+      this.unitLevelCounts.set(u.type(), this.unitCount(u.type()) + delta);
+    }
   }
   removeUnit(u: Unit) {
     this.unitGrid.removeUnit(u);
-    this._unitMap.delete(u.id());
+    if (this._unitMap.delete(u.id())) {
+      this.unitLevelCounts.set(u.type(), this.unitCount(u.type()) - u.level());
+    }
     this.planDrivenUnitIds.delete(u.id());
+    for (const listener of this.unitLocationObservers) listener(u, true);
     if (u.hasTrainStation()) {
       this._railNetwork.removeStation(u);
     }
   }
   updateUnitTile(u: Unit) {
     this.unitGrid.updateUnitCell(u);
+    for (const listener of this.unitLocationObservers) listener(u, false);
   }
 
   hasUnitNearby(

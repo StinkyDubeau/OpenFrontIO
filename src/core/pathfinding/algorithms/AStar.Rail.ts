@@ -2,16 +2,37 @@ import { GameMap } from "../../game/GameMap";
 import { DebugSpan } from "../../utilities/DebugSpan";
 import { PathFinder } from "../types";
 import { AStar, AStarAdapter } from "./AStar";
+import { RailConnectivity } from "./RailConnectivity";
+import { SparseAStar } from "./SparseAStar";
 
 export class AStarRail implements PathFinder<number> {
-  private readonly aStar: AStar;
+  private readonly aStar: AStar | SparseAStar;
+  private readonly connectivity?: RailConnectivity;
+  readonly metrics = { queries: 0, disconnected: 0 };
 
   constructor(gameMap: GameMap) {
     const adapter = new RailAdapter(gameMap);
-    this.aStar = new AStar({ adapter });
+    // Dense scratch is faster for small maps; cap it at 64 MiB. Huge maps use
+    // visited-node storage instead of allocating 16 bytes for every mini tile.
+    this.aStar =
+      adapter.numNodes() <= 4_000_000
+        ? new AStar({ adapter })
+        : new SparseAStar({ adapter });
+    // No filter without reliable terrain notifications, or above the bounded
+    // 320 MiB index budget. The sparse exact search remains the fallback.
+    if (
+      gameMap.observeTerrain &&
+      gameMap.width() * gameMap.height() <= 64_000_000
+    )
+      this.connectivity = new RailConnectivity(gameMap);
   }
 
   findPath(from: number | number[], to: number): number[] | null {
+    this.metrics.queries++;
+    if (this.connectivity && !this.connectivity.mayConnect(from, to)) {
+      this.metrics.disconnected++;
+      return null;
+    }
     return DebugSpan.wrap("AStar.Rail:findPath", () =>
       this.aStar.findPath(from, to),
     );
@@ -19,7 +40,7 @@ export class AStarRail implements PathFinder<number> {
 }
 
 // Internal adapter
-class RailAdapter implements AStarAdapter {
+export class RailAdapter implements AStarAdapter {
   private readonly gameMap: GameMap;
   private readonly width: number;
   private readonly height: number;

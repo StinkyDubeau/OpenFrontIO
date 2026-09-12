@@ -22,11 +22,13 @@ import {
   type PersistentWorldQuickChat,
   type PersistentWorldReminderSelection,
 } from "../../core/PersistentWorldSchemas";
+import { issueGuestPlayToken } from "../GuestPlayToken";
 import {
   PersistentWorldRepository,
   PersistentWorldRepositoryError,
   type PersistentWorldArchiveSweep,
 } from "./PersistentWorldRepository";
+import { hashWorldPassword, matchesWorldPassword } from "./WorldPassword";
 
 const MIN_START_DELAY_MS = 60_000;
 const MAX_INVITATION_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
@@ -67,6 +69,8 @@ export interface PersistentWorldServiceOptions {
 export interface PersistentWorldRuntimeCoordinator {
   ensure(world: PersistentWorld): Promise<void>;
   reconcile(): Promise<void>;
+  /** Temporary lifecycle control used by the development world terminator. */
+  stop?(worldId: string): void;
   /** True only while this process has a fully reconstructed authoritative game. */
   isRuntimeReady?(worldId: string): boolean;
 }
@@ -84,6 +88,7 @@ export class PersistentWorldService {
   private readonly minimumStartDelayMs: number;
   private readonly presence = new Map<string, Map<string, number>>();
   private scheduler: NodeJS.Timeout | undefined;
+  private reconciling = false;
 
   constructor(
     readonly repository: PersistentWorldRepository,
@@ -100,6 +105,112 @@ export class PersistentWorldService {
   createGuestSession(inputValue: unknown): NewPersistentWorldControllerSession {
     const input = PersistentWorldSessionRequestSchema.parse(inputValue);
     return this.repository.createGuestIdentity(input);
+  }
+
+  private worldSession(
+    worldId: string,
+    bearerToken: string,
+  ): PersistentWorldControllerSession {
+    const session = this.resumeSession(bearerToken);
+    const identity = this.repository.claimedWorldIdentity(
+      worldId,
+      session.identity.id,
+    );
+    return identity ? { ...session, identity } : session;
+  }
+
+  async unlockWorld(
+    worldId: string,
+    bearerToken: string,
+    password: string,
+    displayName: string,
+  ): Promise<void> {
+    const controller = this.resumeSession(bearerToken);
+    const hash = this.repository.worldPassword(worldId);
+    if (!hash || !(await matchesWorldPassword(password, hash))) {
+      throw new PersistentWorldServiceError(
+        403,
+        "WRONG_WORLD_PASSWORD",
+        "The game password is incorrect.",
+      );
+    }
+    const world = this.requireWorld(worldId);
+    const matches = world.rsvps.filter(
+      (member) => member.identity.displayName === displayName.trim(),
+    );
+    if (matches.length > 1) {
+      throw new PersistentWorldServiceError(
+        409,
+        "AMBIGUOUS_USERNAME",
+        "More than one nation has this username. Ask the host to resolve it.",
+      );
+    }
+    const identity = matches[0]?.identity;
+    if (identity) {
+      const gameplayHash = this.repository.gameplayIdentityHash(identity.id);
+      if (
+        gameplayHash &&
+        gameplayHash !== createHash("sha256").update(identity.id).digest("hex")
+      ) {
+        throw new PersistentWorldServiceError(
+          409,
+          "ACCOUNT_SEAT",
+          "This nation uses a linked account. Sign in with that account to resume it.",
+        );
+      }
+      this.repository.claimWorldIdentity(
+        worldId,
+        controller.identity.id,
+        identity.id,
+      );
+      return;
+    }
+    if (controller.identity.displayName !== displayName.trim()) {
+      throw new PersistentWorldServiceError(
+        400,
+        "USERNAME_MISMATCH",
+        "Use the username you entered when signing in.",
+      );
+    }
+    if (world.phase !== "scheduled") {
+      throw new PersistentWorldServiceError(
+        410,
+        "JOIN_CLOSED",
+        "No nation with that username is in this match.",
+      );
+    }
+    this.repository.claimWorldIdentity(
+      worldId,
+      controller.identity.id,
+      controller.identity.id,
+    );
+  }
+
+  worldPlayToken(worldId: string, bearerToken: string): string {
+    const session = this.worldSession(worldId, bearerToken);
+    const world = this.requireWorld(worldId);
+    const runtime = this.repository.getRuntime(worldId);
+    if (
+      !runtime ||
+      !world.rsvps.some((member) => member.identity.id === session.identity.id)
+    ) {
+      throw new PersistentWorldServiceError(
+        403,
+        "NO_SEAT",
+        "Join this lobby before playing.",
+      );
+    }
+    const hash = this.repository.gameplayIdentityHash(session.identity.id);
+    if (
+      hash !== createHash("sha256").update(session.identity.id).digest("hex")
+    ) {
+      throw new PersistentWorldServiceError(
+        409,
+        "ACCOUNT_SEAT",
+        "Use your linked account to play this nation.",
+      );
+    }
+    return issueGuestPlayToken(session.identity.id, Date.now(), runtime.gameId);
   }
 
   resumeSession(bearerToken: string): PersistentWorldControllerSession {
@@ -163,14 +274,37 @@ export class PersistentWorldService {
     const session = this.resumeSession(bearerToken);
     const input = CreatePersistentWorldRequestSchema.parse(inputValue);
     const now = this.now();
-    if (input.startsAt < now + this.minimumStartDelayMs) {
+    const custom = input.startMode === "host";
+    if (
+      custom
+        ? !input.gamePreset || input.gamePreset === "scheduled-earth"
+        : input.gamePreset && input.gamePreset !== "scheduled-earth"
+    ) {
+      throw new PersistentWorldServiceError(
+        400,
+        "INVALID_PRESET",
+        "Choose a valid mode for this game",
+      );
+    }
+    if (
+      !custom &&
+      (input.mode !== "ffa" || input.targetDuration !== "1d") &&
+      input.startMode === "scheduled"
+    ) {
+      throw new PersistentWorldServiceError(
+        400,
+        "FIXED_MODE",
+        "Scheduled games use the standard Earth rules",
+      );
+    }
+    if (!custom && input.startsAt < now + this.minimumStartDelayMs) {
       throw new PersistentWorldServiceError(
         400,
         "START_TOO_SOON",
         "A world must be scheduled at least one minute in advance",
       );
     }
-    if (input.startsAt > now + MAX_INVITATION_LIFETIME_MS) {
+    if (!custom && input.startsAt > now + MAX_INVITATION_LIFETIME_MS) {
       throw new PersistentWorldServiceError(
         400,
         "START_TOO_LATE",
@@ -181,14 +315,29 @@ export class PersistentWorldService {
     const id = this.randomToken("world", 12);
     const invitationSecret =
       input.access === "private" ? this.randomToken("invite", 32) : null;
-    const { teamId, ...worldInput } = input;
+    const { teamId, password, ...worldInput } = input;
+    if (password && input.access !== "private") {
+      throw new PersistentWorldServiceError(
+        400,
+        "PRIVATE_ONLY",
+        "Passwords are available for private games.",
+      );
+    }
+    const passwordHash = password ? hashWorldPassword(password) : null;
     const world = this.repository.createWorld({
       ...worldInput,
+      startMode: custom ? "host" : "scheduled",
+      gamePreset: custom ? input.gamePreset : "scheduled-earth",
+      startsAt: custom ? now : input.startsAt,
+      ...(!custom
+        ? { targetDuration: "1d" as const, mode: "ffa" as const }
+        : {}),
       id,
       host: session.identity,
-      hostTeamId: teamId,
+      hostTeamId: custom ? teamId : null,
       invitationSecret: invitationSecret ?? undefined,
     });
+    if (passwordHash) this.repository.setWorldPassword(world.id, passwordHash);
     this.touch(world.id, session.identity.id);
     return {
       snapshot: this.snapshotFromWorld(
@@ -207,7 +356,7 @@ export class PersistentWorldService {
   ): PersistentWorldLobbySnapshot {
     const world = this.requireWorld(worldId);
     const session = bearerToken
-      ? this.repository.resumeControllerSession(bearerToken)
+      ? this.worldSession(worldId, bearerToken)
       : undefined;
     this.requireViewAccess(world, session?.identity, invitationSecret);
     if (session) this.touch(world.id, session.identity.id);
@@ -225,9 +374,19 @@ export class PersistentWorldService {
 
   listMine(bearerToken: string): PersistentWorldCard[] {
     const session = this.resumeSession(bearerToken);
-    return this.repository
-      .listWorldsForIdentity(session.identity.id)
-      .map((world) => this.card(world, session.identity));
+    const worlds = new Map(
+      this.repository
+        .listWorldsForIdentity(session.identity.id)
+        .map((world) => [world.id, world]),
+    );
+    for (const id of this.repository.claimedWorldIds(session.identity.id)) {
+      const world = this.requireWorld(id);
+      if (world.phase === "scheduled" || world.phase === "active")
+        worlds.set(id, world);
+    }
+    return [...worlds.values()].map((world) =>
+      this.card(world, this.worldSession(world.id, bearerToken).identity),
+    );
   }
 
   listNotifications(bearerToken: string): PersistentWorldInAppNotification[] {
@@ -256,9 +415,44 @@ export class PersistentWorldService {
     bearerToken: string,
     inputValue: unknown,
   ): PersistentWorldLobbySnapshot {
-    const session = this.resumeSession(bearerToken);
+    const session = this.worldSession(worldId, bearerToken);
     const input = PersistentWorldRsvpRequestSchema.parse(inputValue);
     const world = this.requireWorld(worldId);
+    const isMember = world.rsvps.some(
+      (member) => member.identity.id === session.identity.id,
+    );
+    if (
+      isMember &&
+      world.phase === "active" &&
+      this.repository.getRuntime(worldId)
+    )
+      return this.getSnapshot(worldId, bearerToken);
+    const controller = this.resumeSession(bearerToken);
+    if (
+      !isMember &&
+      this.repository.worldPassword(worldId) &&
+      !this.repository.claimedWorldIdentity(worldId, controller.identity.id)
+    ) {
+      throw new PersistentWorldServiceError(
+        403,
+        "WORLD_PASSWORD_REQUIRED",
+        "Enter the game password to join.",
+      );
+    }
+    if (
+      !isMember &&
+      this.repository.worldPassword(worldId) &&
+      world.rsvps.some(
+        (member) =>
+          member.identity.displayName === session.identity.displayName,
+      )
+    ) {
+      throw new PersistentWorldServiceError(
+        409,
+        "USERNAME_TAKEN",
+        "This username already has a nation. Enter the game password to resume it.",
+      );
+    }
     if (world.phase === "active" && this.repository.getRuntime(worldId)) {
       throw new PersistentWorldServiceError(
         410,
@@ -266,18 +460,23 @@ export class PersistentWorldService {
         "The playable roster was sealed when this world began",
       );
     }
-    this.repository.rsvp({
-      worldId,
-      identity: session.identity,
-      teamId: input.teamId,
-      invitationSecret: input.invitationSecret,
-    });
+    this.repository.rsvp(
+      {
+        worldId,
+        identity: session.identity,
+        teamId: input.teamId,
+        invitationSecret: input.invitationSecret,
+      },
+      Boolean(
+        this.repository.claimedWorldIdentity(worldId, controller.identity.id),
+      ),
+    );
     this.touch(worldId, session.identity.id);
     return this.getSnapshot(worldId, bearerToken, input.invitationSecret);
   }
 
   leave(worldId: string, bearerToken: string): void {
-    const session = this.resumeSession(bearerToken);
+    const session = this.worldSession(worldId, bearerToken);
     if (this.repository.getRuntime(worldId)) {
       throw new PersistentWorldServiceError(
         409,
@@ -294,7 +493,7 @@ export class PersistentWorldService {
     bearerToken: string,
     inputValue: unknown,
   ): PersistentWorldQuickChat {
-    const session = this.resumeSession(bearerToken);
+    const session = this.worldSession(worldId, bearerToken);
     const input = PersistentWorldQuickChatRequestSchema.parse(inputValue);
     if (!lobbyQuickChatKeys.has(input.phraseKey)) {
       throw new PersistentWorldServiceError(
@@ -317,7 +516,14 @@ export class PersistentWorldService {
     bearerToken: string,
     inputValue: unknown,
   ): PersistentWorldReminderSelection {
-    const session = this.resumeSession(bearerToken);
+    const session = this.worldSession(worldId, bearerToken);
+    if (this.requireWorld(worldId).startMode === "host") {
+      throw new PersistentWorldServiceError(
+        400,
+        "NO_SCHEDULE",
+        "Custom games start when the host is ready",
+      );
+    }
     const input = PersistentWorldReminderRequestSchema.parse(inputValue);
     this.touch(worldId, session.identity.id);
     return this.repository.setReminderSelection(
@@ -327,10 +533,35 @@ export class PersistentWorldService {
     );
   }
 
+  startCustomWorld(
+    worldId: string,
+    bearerToken: string,
+  ): PersistentWorldLobbySnapshot {
+    const session = this.worldSession(worldId, bearerToken);
+    const world = this.repository.startCustomWorld(
+      worldId,
+      session.identity.id,
+    );
+    this.queueRuntime(world);
+    return this.snapshotFromWorld(world, session);
+  }
+
   cancel(worldId: string, bearerToken: string): PersistentWorldLobbySnapshot {
-    const session = this.resumeSession(bearerToken);
+    const session = this.worldSession(worldId, bearerToken);
     const world = this.repository.cancelWorld(worldId, session.identity);
     return this.snapshotFromWorld(world, session);
+  }
+
+  /** Temporary dev control; the router keeps this endpoint dev-only. */
+  async endForDevelopment(
+    worldId: string,
+    bearerToken: string,
+  ): Promise<PersistentWorld> {
+    this.resumeSession(bearerToken);
+    const world = this.repository.endForDevelopment(worldId, this.now());
+    this.presence.delete(worldId);
+    this.runtimeCoordinator?.stop?.(worldId);
+    return world;
   }
 
   activateDueWorlds(): PersistentWorld[] {
@@ -384,9 +615,10 @@ export class PersistentWorldService {
       ? world.rsvps.find((rsvp) => rsvp.identity.id === identity.id)
       : undefined;
     const runtime = this.repository.getRuntime(world.id);
-    const reminderOptionsMs = inferredReminderLeadTimes(
-      world.startsAt - world.createdAt,
-    );
+    const reminderOptionsMs =
+      world.startMode === "host"
+        ? []
+        : inferredReminderLeadTimes(world.startsAt - world.createdAt);
     const selectedReminderLeadTimesMs = identity
       ? (this.repository.getReminderSelection(world.id, identity.id)
           ?.leadTimesMs ?? [])
@@ -419,8 +651,11 @@ export class PersistentWorldService {
       world.phase !== "cancelled" &&
       runtime === undefined &&
       (world.access === "public"
-        ? world.phase === "scheduled" && this.now() < world.startsAt
-        : inviteValid && this.now() < world.joinClosesAt);
+        ? world.phase === "scheduled" &&
+          (world.startMode === "host" || this.now() < world.startsAt)
+        : inviteValid &&
+          ((world.startMode === "host" && world.phase === "scheduled") ||
+            this.now() < world.joinClosesAt));
 
     return PersistentWorldLobbySnapshotSchema.parse({
       revision,
@@ -485,6 +720,8 @@ export class PersistentWorldService {
 
   private worldView(world: PersistentWorld) {
     return PersistentWorldViewSchema.parse({
+      startMode: world.startMode,
+      gamePreset: world.gamePreset,
       id: world.id,
       name: world.name,
       targetDuration: world.targetDuration,
@@ -522,6 +759,8 @@ export class PersistentWorldService {
     invitationSecret?: string,
   ): void {
     if (world.access === "public") return;
+    if (identity && this.repository.claimedWorldIdentity(world.id, identity.id))
+      return;
     if (
       identity &&
       world.rsvps.some((rsvp) => rsvp.identity.id === identity.id)
@@ -569,8 +808,14 @@ export class PersistentWorldService {
   }
 
   private queueReconcile(): void {
-    if (!this.runtimeCoordinator) return;
-    void this.runtimeCoordinator.reconcile().catch(this.onRuntimeError);
+    if (!this.runtimeCoordinator || this.reconciling) return;
+    this.reconciling = true;
+    void this.runtimeCoordinator
+      .reconcile()
+      .catch(this.onRuntimeError)
+      .finally(() => {
+        this.reconciling = false;
+      });
   }
 
   private randomToken(prefix: string, bytes: number): string {

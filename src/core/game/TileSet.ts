@@ -38,6 +38,7 @@ export interface ReadonlyTileSet {
  * progress so positions never shift under an iterator.
  */
 export class TileSet implements ReadonlyTileSet {
+  revision = 0;
   private dense: Uint32Array = new Uint32Array(16);
   // Used dense slots, including tombstones; live entries = size_.
   private denseLen = 0;
@@ -65,19 +66,52 @@ export class TileSet implements ReadonlyTileSet {
   }
 
   has(value: TileRef): boolean {
+    return this.positionOf(value) >= 0;
+  }
+
+  /** Current insertion-order slot, not a stable ID. Compaction preserves order;
+   * callers compare fresh positions rather than retaining these indices. */
+  positionOf(value: TileRef): number {
     const table = this.table;
     const dense = this.dense;
     const mask = table.length - 1;
     let slot = TileSet.hash(value) & mask;
     for (;;) {
       const di = table[slot];
-      if (di === EMPTY) return false;
-      if (di !== DELETED && dense[di] === value) return true;
+      if (di === EMPTY) return -1;
+      if (di !== DELETED && dense[di] === value) return di;
       slot = (slot + 1) & mask;
     }
   }
 
   add(value: TileRef): this {
+    if (
+      this.denseLen < this.dense.length &&
+      (this.tableUsed + 1) * 4 <= this.table.length * 3
+    ) {
+      const table = this.table;
+      const dense = this.dense;
+      const mask = table.length - 1;
+      let slot = TileSet.hash(value) & mask;
+      let firstDeleted = -1;
+      for (;;) {
+        const di = table[slot];
+        if (di === EMPTY) {
+          const insertion = firstDeleted < 0 ? slot : firstDeleted;
+          if (firstDeleted < 0) this.tableUsed++;
+          table[insertion] = this.denseLen;
+          dense[this.denseLen++] = value;
+          this.size_++;
+          this.revision++;
+          return this;
+        }
+        if (di === DELETED) {
+          if (firstDeleted < 0) firstDeleted = slot;
+        } else if (dense[di] === value) return this;
+        slot = (slot + 1) & mask;
+      }
+    }
+    // Growth/compaction can relocate slots; retain the general path there.
     if (this.has(value)) return this;
 
     if (this.denseLen === this.dense.length) {
@@ -104,6 +138,7 @@ export class TileSet implements ReadonlyTileSet {
     const di = this.denseLen++;
     this.dense[di] = value;
     this.size_++;
+    this.revision++;
     const table = this.table;
     const mask = table.length - 1;
     let slot = TileSet.hash(value) & mask;
@@ -112,6 +147,30 @@ export class TileSet implements ReadonlyTileSet {
     }
     if (table[slot] === EMPTY) this.tableUsed++;
     table[slot] = di;
+    return this;
+  }
+
+  /** Caller must have proved absence. Conquest first removes the tile from
+   * its previous owner's roster (also on same-owner conquest), so a duplicate
+   * search here would only repeat work already established by map ownership.
+   * Growth/compaction retain the general implementation and its exact order.
+   */
+  addKnownAbsent(value: TileRef): this {
+    if (
+      this.denseLen === this.dense.length ||
+      (this.tableUsed + 1) * 4 > this.table.length * 3
+    )
+      return this.add(value);
+    const table = this.table,
+      mask = table.length - 1;
+    let slot = TileSet.hash(value) & mask;
+    // No need to search beyond the first reusable tombstone for a duplicate.
+    while (table[slot] >= 0) slot = (slot + 1) & mask;
+    if (table[slot] === EMPTY) this.tableUsed++;
+    table[slot] = this.denseLen;
+    this.dense[this.denseLen++] = value;
+    this.size_++;
+    this.revision++;
     return this;
   }
 
@@ -127,6 +186,7 @@ export class TileSet implements ReadonlyTileSet {
         table[slot] = DELETED;
         dense[di] = TOMBSTONE;
         this.size_--;
+        this.revision++;
         // Mostly tombstones? Compact so long-dead players don't pin memory.
         if (
           this.iterDepth === 0 &&
@@ -142,6 +202,7 @@ export class TileSet implements ReadonlyTileSet {
   }
 
   clear(): void {
+    if (this.size_) this.revision++;
     this.dense = new Uint32Array(16);
     this.denseLen = 0;
     this.size_ = 0;

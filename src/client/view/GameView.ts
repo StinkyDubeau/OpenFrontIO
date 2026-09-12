@@ -1,4 +1,5 @@
 import { Config } from "../../core/configuration/Config";
+import { resolveFogTapTarget } from "./FogTapTarget";
 import {
   Cell,
   GameUpdates,
@@ -186,6 +187,9 @@ export class GameView implements GameMap {
       ? new Uint16Array(0)
       : this._map.tileStateBuffer();
     this.lastUpdate = null;
+    // Hide the board before the first authoritative packet, including rejoin.
+    // The server explicitly opens static terrain for an unspawned player.
+    this.fogEnabled = _config.gameConfig().fogOfWar === "v0.2";
     this.unitGrid = new UnitGrid(this._map);
     this._cosmetics = new Map(
       humans.map((h) => [h.clientID, h.cosmetics ?? {}]),
@@ -217,6 +221,7 @@ export class GameView implements GameMap {
     // prevent reassignment, not mutation through the reference.
     // events: fresh arrays we own; cleared and repopulated each tick.
     this._frame = {
+      fogEnabled: this.fogEnabled,
       tick: 0,
       inSpawnPhase: true,
       tileState: this.renderTileState,
@@ -310,7 +315,44 @@ export class GameView implements GameMap {
     return (this.lastUpdate?.pendingTurns ?? 0) > 1;
   }
 
+  private fogHiddenPlayers = new Set<number>();
+  private fogEnabled = false;
+  private fogGlobal = false;
+
+  isTileVisible(tile: TileRef): boolean {
+    return this.isValidRef(tile) && (!this.fogEnabled || this.fogGlobal || (this._map.tileState(tile) & 0x8000) !== 0);
+  }
+
+  public resolveFogTap(tile: TileRef): TileRef | null {
+    const player = this.myPlayer();
+    return player ? resolveFogTapTarget(tile, this, player.smallID()) : null;
+  }
+
   public update(gu: GameUpdateViewData) {
+    if (gu.fog) {
+      this.fogEnabled = gu.fog.enabled;
+      this.fogGlobal = gu.fog.global;
+      this.fogHiddenPlayers = new Set(gu.fog.hiddenPlayers);
+      this._namesDirty = true;
+      const forget = gu.fog.resetUnits ? [...this._units.keys()] : gu.fog.forgottenUnits;
+      for (const id of forget) {
+        const unit = this._units.get(id);
+        if (unit) this.unitGrid.removeUnit(unit);
+        this._units.delete(id);
+        this._unitStates.delete(id);
+        this._mobileUnitStates.delete(id);
+        this._structureUnitStates.delete(id);
+        this._trailUnitIds.delete(id);
+        this._nukeUnitIds.delete(id);
+        this._transportUnitIds.delete(id);
+        if (unit) this._updatedUnits.delete(unit);
+        if (this.unitMotionPlans.delete(id)) this.markMotionPlannedUnitIdsDirty();
+        this.clearTrainPlanForUnit(id);
+        this.toDelete.delete(id);
+        this._structuresDirty = true;
+        this._unitsByOwnerStale = true;
+      }
+    }
     this.toDelete.forEach((id) => {
       this._units.delete(id);
       this._unitStates.delete(id);
@@ -400,9 +442,17 @@ export class GameView implements GameMap {
         const pv = this._players.get(id);
         if (pv !== undefined && pv.state.isAlive) {
           pv.nameData = gu.playerNameViewData[id];
+          const name = this._names.get(id);
+          if (name) {
+            name.x = pv.nameData.x;
+            name.y = pv.nameData.y;
+            name.size = pv.nameData.size;
+          }
         }
       }
-      this._namesDirty = true;
+      // Staggered placements update existing entries in place. Rebuilding the
+      // entire label map per small delta would move the server's saved work
+      // onto phones. Player creation/fog changes still request a full rebuild.
     }
 
     // Pass 1: ensure every player exists with up-to-date PlayerState. We need
@@ -654,6 +704,7 @@ export class GameView implements GameMap {
       this._namesDirty = false;
       this._names.clear();
       for (const p of this._players.values()) {
+        if (this.fogHiddenPlayers.has(p.smallID())) continue;
         this._names.set(p.id(), {
           playerID: p.id(),
           x: p.nameData?.x ?? 0,
@@ -674,6 +725,7 @@ export class GameView implements GameMap {
       -readonly [K in keyof FrameData]: FrameData[K];
     };
     f.tick = gu.tick;
+    f.fogEnabled = this.fogEnabled && !this.fogGlobal;
     f.inSpawnPhase = this.startTick === null;
     f.railroadDirty = this.railroadCache.railroadDirty;
     f.railroadDirtyTiles = this.railroadCache.dirtyTiles;
@@ -1127,7 +1179,7 @@ export class GameView implements GameMap {
   }
 
   players(): PlayerView[] {
-    return Array.from(this._players.values());
+    return Array.from(this._players.values()).filter(player => !this.fogHiddenPlayers.has(player.smallID()));
   }
 
   /**

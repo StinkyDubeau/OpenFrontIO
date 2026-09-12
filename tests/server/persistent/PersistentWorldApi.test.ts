@@ -49,6 +49,40 @@ describe("persistent-world HTTP API", () => {
   let baseUrl: string;
   let now: number;
 
+  it("exposes an authenticated, host-only start endpoint for public custom rooms", async () => {
+    const host = service.createGuestSession({ displayName: "Custom Host" });
+    const guest = service.createGuestSession({ displayName: "Custom Guest" });
+    const created = service.createWorld(host.bearerToken, {
+      name: "Public custom game",
+      startMode: "host",
+      gamePreset: "great-lakes",
+      targetDuration: "1d",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now,
+    });
+    const url = baseUrl + "/" + created.snapshot.world.id + "/start";
+    const start = (token: string) =>
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: "{}",
+      });
+    expect((await start(guest.bearerToken)).status).toBe(403);
+    const response = await start(host.bearerToken);
+    expect(response.status).toBe(200);
+    expect((await response.json()).world).toMatchObject({
+      phase: "active",
+      startMode: "host",
+      gamePreset: "great-lakes",
+    });
+    expect((await start(host.bearerToken)).status).toBe(200);
+  });
+
   beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), "openfront-world-api-test-"));
     now = 2_000_000_000_000;
@@ -155,6 +189,52 @@ describe("persistent-world HTTP API", () => {
     expect(response.status, JSON.stringify(body)).toBe(201);
     return body as CreatedWorldResponse;
   }
+
+  it("lets separate devices on the same IP unlock and reclaim a nation", async () => {
+    const laptop = await createSession("Captain");
+    const created = await jsonRequest("/", {
+      method: "POST",
+      headers: authenticatedJson(laptop.bearerToken),
+      body: JSON.stringify({
+        name: "LAN friends",
+        password: "party",
+        access: "private",
+        targetDuration: "1d",
+        mode: "ffa",
+        maxHumans: 8,
+        startsAt: now + 120_000,
+      }),
+    });
+    expect(created.response.status).toBe(201);
+    const id = created.body.snapshot.world.id;
+    const phone = await createSession("Captain");
+    const unlock = await jsonRequest(`/${id}/unlock`, {
+      method: "POST",
+      headers: authenticatedJson(phone.bearerToken),
+      body: JSON.stringify({ password: "party", displayName: "Captain" }),
+    });
+    expect(unlock.response.status).toBe(200);
+    const view = await jsonRequest(`/${id}`, {
+      headers: authenticatedJson(phone.bearerToken),
+    });
+    expect(view.response.status).toBe(200);
+    expect(view.body.viewer.identity.id).toBe(laptop.session.identity.id);
+    expect(view.body.members).toHaveLength(1);
+    const friend = await createSession("Friend");
+    expect(
+      (
+        await jsonRequest(`/${id}`, {
+          headers: authenticatedJson(friend.bearerToken),
+        })
+      ).response.status,
+    ).toBe(403);
+    const bad = await jsonRequest(`/${id}/unlock`, {
+      method: "POST",
+      headers: authenticatedJson(friend.bearerToken),
+      body: JSON.stringify({ password: "wrong", displayName: "Captain" }),
+    });
+    expect(bad.response.status).toBe(403);
+  });
 
   it("keeps private invitations out of URLs and lobby identity data", async () => {
     const formSession = await jsonRequest("/session", {

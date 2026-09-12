@@ -1,3 +1,4 @@
+import { CoastalBorderIndex } from "../../game/CoastalBorderIndex";
 import { Game, Player, PlayerType } from "../../game/Game";
 
 /**
@@ -19,7 +20,11 @@ export class SharedWaterCache {
   private tick: number = -Infinity;
   private byPlayer: Map<Player, Set<number> | null> | null = null;
 
-  constructor(private game: Game) {}
+  private readonly coasts: CoastalBorderIndex;
+
+  constructor(private game: Game) {
+    this.coasts = new CoastalBorderIndex(game);
+  }
 
   get(player: Player): Set<number> | null {
     const tick = this.game.ticks();
@@ -59,8 +64,7 @@ export class SharedWaterCache {
         const comp = game.getWaterComponent(neighbor);
         if (comp !== null) lakes.add(comp);
       };
-      for (const tile of player.borderTiles()) {
-        if (!game.isShore(tile)) continue;
+      for (const tile of this.coasts.tiles(player)) {
         game.forEachNeighbor(tile, visit);
       }
       playerToWater.set(player, { hasOcean, lakes });

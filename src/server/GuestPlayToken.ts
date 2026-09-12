@@ -31,10 +31,11 @@ function sign(payload: string): string {
 export function issueGuestPlayToken(
   identityId: string,
   now: number = Date.now(),
+  gameId?: string,
 ): string {
   const identity = PersistentWorldIdentityIdSchema.parse(identityId);
   const payload = Buffer.from(
-    `${identity}.${now + TOKEN_TTL_MS}`,
+    `${identity}.${now + TOKEN_TTL_MS}${gameId ? `.${gameId}` : ""}`,
     "utf8",
   ).toString("base64url");
   return `${TOKEN_PREFIX}${payload}_${sign(payload)}`;
@@ -43,6 +44,7 @@ export function issueGuestPlayToken(
 export function verifyGuestPlayToken(
   token: string,
   now: number = Date.now(),
+  gameId?: string,
 ): string | null {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
   // Underscores are legal in both base64url fields. SHA-256's unpadded
@@ -75,10 +77,11 @@ export function verifyGuestPlayToken(
   } catch {
     return null;
   }
-  const separator = decoded.lastIndexOf(".");
-  if (separator <= 0) return null;
-  const identityId = decoded.slice(0, separator);
-  const expiresAt = Number(decoded.slice(separator + 1));
+  const fields = decoded.split(".");
+  if (fields.length !== 2 && fields.length !== 3) return null;
+  const [identityId, expiry, scope] = fields;
+  if (scope !== undefined && scope !== gameId) return null;
+  const expiresAt = Number(expiry);
   if (
     !PersistentWorldIdentityIdSchema.safeParse(identityId).success ||
     !Number.isSafeInteger(expiresAt) ||

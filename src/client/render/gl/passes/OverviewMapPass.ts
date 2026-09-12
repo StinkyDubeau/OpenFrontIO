@@ -1,5 +1,6 @@
 import type { GameMap } from "../../../../core/game/GameMap";
 import type { RenderSettings } from "../RenderSettings";
+import { FOG_SHADER } from "./FogShader";
 import { createBoardMaterialTexture } from "../utils/BoardMaterialTexture";
 import {
   createMapQuad,
@@ -14,11 +15,20 @@ const DETAIL_PAGE_CAPACITY = 96;
 
 const VERTEX_SOURCE = `#version 300 es
 precision highp float;
+precision highp int;
 layout(location = 0) in vec2 aPos;
 uniform mat3 uCamera;
 uniform vec2 uWorldSize;
+uniform highp int uFogEnabled;
 out vec2 vWorldPos;
 void main() {
+  if (uFogEnabled != 0) {
+    vec2 corners[6] = vec2[6](vec2(-1,-1),vec2(1,-1),vec2(-1,1),vec2(-1,1),vec2(1,-1),vec2(1,1));
+    vec2 clip = corners[gl_VertexID];
+    gl_Position = vec4(clip, 0, 1);
+    vWorldPos = (inverse(uCamera) * vec3(clip, 1)).xy;
+    return;
+  }
   vec3 clip = uCamera * vec3(aPos, 1.0);
   gl_Position = vec4(clip.xy, 0.0, 1.0);
   vWorldPos = aPos;
@@ -26,6 +36,7 @@ void main() {
 
 const FRAGMENT_SOURCE = `#version 300 es
 precision highp float;
+precision highp int;
 precision highp usampler2D;
 in vec2 vWorldPos;
 uniform highp usampler2D uTerrain;
@@ -36,6 +47,14 @@ uniform highp usampler2D uPageTable;
 uniform sampler2D uPalette;
 uniform ivec2 uRasterSize;
 uniform ivec2 uPageGrid;
+uniform int uOverviewStride;
+uniform int uDetailStride;
+uniform int uDetailEnabled;
+uniform vec3 uOceanColor;
+uniform vec3 uSandColor;
+uniform vec3 uPlainsColor;
+uniform vec3 uHighlandColor;
+uniform vec3 uMountainColor;
 uniform vec2 uWorldSize;
 uniform uint uHighlightOwner;
 uniform float uTerritoryAlpha;
@@ -45,7 +64,11 @@ uniform float uMineralScale;
 uniform float uMineralVeinStrength;
 uniform float uMineralGrainStrength;
 uniform sampler2D uBoardMaterial;
+uniform highp int uFogEnabled;
+uniform float uFogTime;
 out vec4 outColor;
+
+${FOG_SHADER}
 
 vec3 mineralSurface(vec3 base, vec2 worldPos, float seed, bool water) {
   float scale = max(0.25, uMineralScale);
@@ -78,21 +101,28 @@ vec3 mineralSurface(vec3 base, vec2 worldPos, float seed, bool water) {
 
 vec3 terrainColor(uint t) {
   bool land = (t & 128u) != 0u;
-  if (!land) return vec3(0.255, 0.518, 0.690);
-  uint magnitude = t & 31u;
-  if (magnitude >= 31u) return vec3(0.267, 0.267, 0.267);
-  if (magnitude < 10u) return vec3(0.694, 0.788, 0.541);
-  if (magnitude < 20u) return vec3(0.588, 0.680, 0.455);
-  return vec3(0.465, 0.533, 0.376);
+  bool shore = (t & 64u) != 0u;
+  float magnitude = float(t & 31u);
+  // Same byte-to-colour contract as terrain.frag.glsl, including riverbanks
+  // and all existing magnitude steps; no separate distant-map palette.
+  vec3 color;
+  if (land && magnitude == 31.0) color = vec3(60.0);
+  else if (land && shore) color = uSandColor;
+  else if (land && magnitude < 10.0) color = uPlainsColor + vec3(0.0, -2.0 * magnitude, 0.0);
+  else if (land && magnitude < 20.0) color = min(vec3(255.0), uHighlandColor + vec3(2.0 * (magnitude - 10.0)));
+  else if (land) color = min(vec3(255.0), uMountainColor + vec3(floor(magnitude / 2.0)));
+  else if (shore) color = floor(0.7 * uOceanColor + vec3(77.0));
+  else color = max(vec3(0.0), uOceanColor - vec3(min(magnitude, 10.0)));
+  return color / 255.0;
 }
 
 ivec2 overviewPos(ivec2 world) {
-  vec2 uv = (vec2(world) + vec2(0.5)) / uWorldSize;
-  return clamp(ivec2(uv * vec2(uRasterSize)), ivec2(0), uRasterSize - ivec2(1));
+  return clamp(world / uOverviewStride, ivec2(0), uRasterSize - ivec2(1));
 }
 
 uint detailLayer(ivec2 world) {
-  ivec2 page = world / ${DETAIL_PAGE_SIZE};
+  if (uDetailEnabled == 0) return 0u;
+  ivec2 page = world / (${DETAIL_PAGE_SIZE} * uDetailStride);
   if (any(lessThan(page, ivec2(0))) || any(greaterThanEqual(page, uPageGrid))) return 0u;
   return texelFetch(uPageTable, page, 0).r;
 }
@@ -100,7 +130,7 @@ uint detailLayer(ivec2 world) {
 uint terrainAt(ivec2 world) {
   uint layer = detailLayer(world);
   if (layer != 0u) {
-    ivec2 local = world - (world / ${DETAIL_PAGE_SIZE}) * ${DETAIL_PAGE_SIZE};
+    ivec2 local = (world / uDetailStride) % ${DETAIL_PAGE_SIZE};
     return texelFetch(uDetailTerrain, ivec3(local, int(layer - 1u)), 0).r;
   }
   return texelFetch(uTerrain, overviewPos(world), 0).r;
@@ -109,7 +139,7 @@ uint terrainAt(ivec2 world) {
 uint tileAt(ivec2 world) {
   uint layer = detailLayer(world);
   if (layer != 0u) {
-    ivec2 local = world - (world / ${DETAIL_PAGE_SIZE}) * ${DETAIL_PAGE_SIZE};
+    ivec2 local = (world / uDetailStride) % ${DETAIL_PAGE_SIZE};
     return texelFetch(uDetailTiles, ivec3(local, int(layer - 1u)), 0).r;
   }
   return texelFetch(uTiles, overviewPos(world), 0).r;
@@ -126,9 +156,20 @@ bool landAt(ivec2 world) {
 }
 
 void main() {
+  if (uFogEnabled != 0 && (any(lessThan(vWorldPos, vec2(0))) || any(greaterThanEqual(vWorldPos, uWorldSize)))) {
+    outColor = vec4(pixelCloud(vWorldPos, uFogTime), 1);
+    return;
+  }
   ivec2 world = clamp(ivec2(vWorldPos), ivec2(0), ivec2(uWorldSize) - ivec2(1));
   uint terrain = terrainAt(world);
   uint tile = tileAt(world);
+  if (uFogEnabled != 0 && (tile & 32768u) == 0u) {
+    vec3 cloud = pixelCloud(vWorldPos, uFogTime);
+    // Charted geography remains muted; no stale nation coloration is used.
+    if ((tile & 4096u) != 0u) cloud = mix(cloud, terrainColor(terrain) * 0.55, 0.30);
+    outColor = vec4(cloud, 1.0);
+    return;
+  }
   uint owner = tile & 4095u;
   bool isLand = (terrain & 128u) != 0u;
   vec3 color = terrainColor(terrain);
@@ -203,14 +244,15 @@ export function chooseOverviewRasterSize(
     worldWidth / OVERVIEW_MAX_EDGE,
     worldHeight / OVERVIEW_MAX_EDGE,
   );
-  const scale = Math.max(1, scaleForBudget, scaleForEdge);
+  const scale =
+    2 ** Math.ceil(Math.log2(Math.max(1, scaleForBudget, scaleForEdge)));
   const width = Math.max(1, Math.ceil(worldWidth / scale));
   const height = Math.max(1, Math.ceil(worldHeight / scale));
   return {
     width,
     height,
-    scaleX: worldWidth / width,
-    scaleY: worldHeight / height,
+    scaleX: scale,
+    scaleY: scale,
   };
 }
 
@@ -233,12 +275,29 @@ export class OverviewMapPass {
   private readonly pageGridWidth: number;
   private readonly pageGridHeight: number;
   private readonly detailCapacity: number;
-  private readonly resident = new Map<number, { slot: number; used: number }>();
+  private readonly resident = new Map<
+    number,
+    {
+      slot: number;
+      used: number;
+      terrain: Uint8Array;
+      tiles: Uint16Array;
+      minY: number;
+      maxY: number;
+    }
+  >();
+  private readonly dirtyDetailPages = new Set<number>();
   private clock = 0;
+  private detailStride = 1;
+  private detailEnabled = false;
   private readonly program: WebGLProgram;
   private readonly vao: WebGLVertexArrayObject;
   private readonly uCamera: WebGLUniformLocation;
   private readonly uHighlightOwner: WebGLUniformLocation;
+  private readonly uFogEnabled: WebGLUniformLocation;
+  private readonly uFogTime: WebGLUniformLocation;
+  private fogEnabled = false;
+  private fogTime = 0;
   private highlightOwner = 0;
   private pendingCells = new Set<number>();
   private fullUploadPending = true;
@@ -305,11 +364,23 @@ export class OverviewMapPass {
     this.program = createProgram(gl, VERTEX_SOURCE, FRAGMENT_SOURCE);
     this.vao = createMapQuad(gl, map.width(), map.height());
     this.uCamera = gl.getUniformLocation(this.program, "uCamera")!;
+    this.uFogEnabled = gl.getUniformLocation(this.program, "uFogEnabled")!;
+    this.uFogTime = gl.getUniformLocation(this.program, "uFogTime")!;
     this.uHighlightOwner = gl.getUniformLocation(
       this.program,
       "uHighlightOwner",
     )!;
     gl.useProgram(this.program);
+    for (const [name, hex] of Object.entries(settings.terrain)) {
+      const value = Number.parseInt(hex.replace("#", ""), 16);
+      const uniform = "u" + name[0].toUpperCase() + name.slice(1);
+      gl.uniform3f(
+        gl.getUniformLocation(this.program, uniform),
+        (value >> 16) & 255,
+        (value >> 8) & 255,
+        value & 255,
+      );
+    }
     gl.uniform1i(gl.getUniformLocation(this.program, "uTerrain"), 0);
     gl.uniform1i(gl.getUniformLocation(this.program, "uTiles"), 1);
     gl.uniform1i(gl.getUniformLocation(this.program, "uPalette"), 2);
@@ -326,6 +397,10 @@ export class OverviewMapPass {
       gl.getUniformLocation(this.program, "uRasterSize"),
       this.raster.width,
       this.raster.height,
+    );
+    gl.uniform1i(
+      gl.getUniformLocation(this.program, "uOverviewStride"),
+      this.raster.scaleX,
     );
     gl.uniform2i(
       gl.getUniformLocation(this.program, "uPageGrid"),
@@ -379,8 +454,11 @@ export class OverviewMapPass {
         Math.floor(y / this.raster.scaleY),
       );
       const index = ry * this.raster.width + rx;
+      const oldTerrain = this.terrain[index];
+      const oldTile = this.tiles[index];
       this.sampleCell(rx, ry, index);
-      this.pendingCells.add(index);
+      if (oldTerrain !== this.terrain[index] || oldTile !== this.tiles[index])
+        this.pendingCells.add(index);
       this.uploadResidentTile(ref, x, y);
     }
   }
@@ -398,31 +476,64 @@ export class OverviewMapPass {
     viewportHeight: number,
   ): void {
     if (zoom <= 0 || viewportWidth <= 0 || viewportHeight <= 0) return;
+    this.detailEnabled = false;
     const halfW = viewportWidth / (2 * zoom);
     const halfH = viewportHeight / (2 * zoom);
-    const minPageX = Math.max(
-      0,
-      Math.floor((centerX - halfW) / DETAIL_PAGE_SIZE) - 1,
-    );
+    // One globally aligned LOD across the viewport. Never leave islands of
+    // previously resident full-resolution pages in a distant overview.
+    let stride = 1;
+    while (
+      stride < this.raster.scaleX &&
+      (Math.ceil((2 * halfW) / (DETAIL_PAGE_SIZE * stride)) + 4) *
+        (Math.ceil((2 * halfH) / (DETAIL_PAGE_SIZE * stride)) + 4) >
+        this.detailCapacity
+    )
+      stride *= 2;
+    if (stride >= this.raster.scaleX && stride > 1) return;
+    if (stride !== this.detailStride) {
+      this.detailStride = stride;
+      this.resident.clear();
+      this.dirtyDetailPages.clear();
+      this.pageTable.fill(0);
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, this.pageTableTex);
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        this.pageGridWidth,
+        this.pageGridHeight,
+        gl.RED_INTEGER,
+        gl.UNSIGNED_SHORT,
+        this.pageTable,
+      );
+    }
+    const pageSpan = DETAIL_PAGE_SIZE * stride;
+    const minPageX = Math.max(0, Math.floor((centerX - halfW) / pageSpan) - 1);
     const maxPageX = Math.min(
-      this.pageGridWidth - 1,
-      Math.floor((centerX + halfW) / DETAIL_PAGE_SIZE) + 1,
+      Math.ceil(this.map.width() / pageSpan) - 1,
+      Math.floor((centerX + halfW) / pageSpan) + 1,
     );
-    const minPageY = Math.max(
-      0,
-      Math.floor((centerY - halfH) / DETAIL_PAGE_SIZE) - 1,
-    );
+    const minPageY = Math.max(0, Math.floor((centerY - halfH) / pageSpan) - 1);
     const maxPageY = Math.min(
-      this.pageGridHeight - 1,
-      Math.floor((centerY + halfH) / DETAIL_PAGE_SIZE) + 1,
+      Math.ceil(this.map.height() / pageSpan) - 1,
+      Math.floor((centerY + halfH) / pageSpan) + 1,
     );
     const count = (maxPageX - minPageX + 1) * (maxPageY - minPageY + 1);
     if (count > this.detailCapacity) return;
+    // Protect all visible cached pages before choosing eviction victims.
+    for (let y = minPageY; y <= maxPageY; y++)
+      for (let x = minPageX; x <= maxPageX; x++) {
+        const page = this.resident.get(y * this.pageGridWidth + x);
+        if (page) page.used = ++this.clock;
+      }
     for (let pageY = minPageY; pageY <= maxPageY; pageY++) {
       for (let pageX = minPageX; pageX <= maxPageX; pageX++) {
         this.ensureResident(pageX, pageY);
       }
     }
+    this.detailEnabled = true;
   }
 
   private createArrayTexture(
@@ -469,6 +580,7 @@ export class OverviewMapPass {
       }
       if (oldestPage >= 0) {
         this.resident.delete(oldestPage);
+        this.dirtyDetailPages.delete(oldestPage);
         this.pageTable[oldestPage] = 0;
         this.uploadPageTableEntry(oldestPage);
       }
@@ -476,14 +588,28 @@ export class OverviewMapPass {
 
     const terrain = new Uint8Array(DETAIL_PAGE_SIZE * DETAIL_PAGE_SIZE);
     const tiles = new Uint16Array(DETAIL_PAGE_SIZE * DETAIL_PAGE_SIZE);
-    const originX = pageX * DETAIL_PAGE_SIZE;
-    const originY = pageY * DETAIL_PAGE_SIZE;
-    const width = Math.min(DETAIL_PAGE_SIZE, this.map.width() - originX);
-    const height = Math.min(DETAIL_PAGE_SIZE, this.map.height() - originY);
+    const stride = this.detailStride;
+    const originX = pageX * DETAIL_PAGE_SIZE * stride;
+    const originY = pageY * DETAIL_PAGE_SIZE * stride;
+    const width = Math.min(
+      DETAIL_PAGE_SIZE,
+      Math.ceil((this.map.width() - originX) / stride),
+    );
+    const height = Math.min(
+      DETAIL_PAGE_SIZE,
+      Math.ceil((this.map.height() - originY) / stride),
+    );
     for (let localY = 0; localY < height; localY++) {
       for (let localX = 0; localX < width; localX++) {
-        const worldX = originX + localX;
-        const ref = (originY + localY) * this.map.width() + worldX;
+        const worldX = Math.min(
+          this.map.width() - 1,
+          originX + localX * stride + Math.floor(stride / 2),
+        );
+        const worldY = Math.min(
+          this.map.height() - 1,
+          originY + localY * stride + Math.floor(stride / 2),
+        );
+        const ref = worldY * this.map.width() + worldX;
         const target = localY * DETAIL_PAGE_SIZE + localX;
         terrain[target] = this.map.terrainByte(ref);
         tiles[target] = this.map.tileState(ref);
@@ -518,7 +644,14 @@ export class OverviewMapPass {
       gl.UNSIGNED_SHORT,
       tiles,
     );
-    this.resident.set(pageIndex, { slot, used: ++this.clock });
+    this.resident.set(pageIndex, {
+      slot,
+      used: ++this.clock,
+      terrain,
+      tiles,
+      minY: Infinity,
+      maxY: -1,
+    });
     this.pageTable[pageIndex] = slot + 1;
     this.uploadPageTableEntry(pageIndex);
   }
@@ -541,44 +674,35 @@ export class OverviewMapPass {
   }
 
   private uploadResidentTile(ref: number, x: number, y: number): void {
+    const stride = this.detailStride;
+    const sampleX = Math.min(
+      this.map.width() - 1,
+      Math.floor(x / stride) * stride + Math.floor(stride / 2),
+    );
+    const sampleY = Math.min(
+      this.map.height() - 1,
+      Math.floor(y / stride) * stride + Math.floor(stride / 2),
+    );
+    if (sampleX !== x || sampleY !== y) return;
+    x = Math.floor(x / stride);
+    y = Math.floor(y / stride);
     const pageX = Math.floor(x / DETAIL_PAGE_SIZE);
     const pageY = Math.floor(y / DETAIL_PAGE_SIZE);
-    const record = this.resident.get(pageY * this.pageGridWidth + pageX);
+    const pageIndex = pageY * this.pageGridWidth + pageX;
+    const record = this.resident.get(pageIndex);
     if (!record) return;
     const localX = x - pageX * DETAIL_PAGE_SIZE;
     const localY = y - pageY * DETAIL_PAGE_SIZE;
-    const terrain = new Uint8Array([this.map.terrainByte(ref)]);
-    const tile = new Uint16Array([this.map.tileState(ref)]);
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.detailTerrainTex);
-    gl.texSubImage3D(
-      gl.TEXTURE_2D_ARRAY,
-      0,
-      localX,
-      localY,
-      record.slot,
-      1,
-      1,
-      1,
-      gl.RED_INTEGER,
-      gl.UNSIGNED_BYTE,
-      terrain,
-    );
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.detailTileTex);
-    gl.texSubImage3D(
-      gl.TEXTURE_2D_ARRAY,
-      0,
-      localX,
-      localY,
-      record.slot,
-      1,
-      1,
-      1,
-      gl.RED_INTEGER,
-      gl.UNSIGNED_SHORT,
-      tile,
-    );
-    record.used = ++this.clock;
+    const index = localY * DETAIL_PAGE_SIZE + localX;
+    const terrain = this.map.terrainByte(ref),
+      tile = this.map.tileState(ref);
+    if (record.terrain[index] === terrain && record.tiles[index] === tile)
+      return;
+    record.terrain[index] = terrain;
+    record.tiles[index] = tile;
+    record.minY = Math.min(record.minY, localY);
+    record.maxY = Math.max(record.maxY, localY);
+    this.dirtyDetailPages.add(pageIndex);
   }
 
   applyTerrainDelta(refs: readonly number[]): void {
@@ -615,6 +739,47 @@ export class OverviewMapPass {
   private flush(): void {
     const gl = this.gl;
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    // At most two transfers per dirty resident page, not per changed tile.
+    // Persistent CPU mirrors make contiguous row spans safe to upload without
+    // changing untouched cells or allocating thousands of one-element arrays.
+    for (const pageIndex of this.dirtyDetailPages) {
+      const record = this.resident.get(pageIndex);
+      if (!record || record.maxY < record.minY) continue;
+      const start = record.minY * DETAIL_PAGE_SIZE;
+      const end = (record.maxY + 1) * DETAIL_PAGE_SIZE;
+      const height = record.maxY - record.minY + 1;
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.detailTerrainTex);
+      gl.texSubImage3D(
+        gl.TEXTURE_2D_ARRAY,
+        0,
+        0,
+        record.minY,
+        record.slot,
+        DETAIL_PAGE_SIZE,
+        height,
+        1,
+        gl.RED_INTEGER,
+        gl.UNSIGNED_BYTE,
+        record.terrain.subarray(start, end),
+      );
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.detailTileTex);
+      gl.texSubImage3D(
+        gl.TEXTURE_2D_ARRAY,
+        0,
+        0,
+        record.minY,
+        record.slot,
+        DETAIL_PAGE_SIZE,
+        height,
+        1,
+        gl.RED_INTEGER,
+        gl.UNSIGNED_SHORT,
+        record.tiles.subarray(start, end),
+      );
+      record.minY = Infinity;
+      record.maxY = -1;
+    }
+    this.dirtyDetailPages.clear();
     if (this.fullUploadPending) {
       gl.bindTexture(gl.TEXTURE_2D, this.terrainTex);
       gl.texSubImage2D(
@@ -641,49 +806,67 @@ export class OverviewMapPass {
         this.tiles,
       );
       this.fullUploadPending = false;
+      this.pendingCells.clear();
       return;
     }
     if (this.pendingCells.size === 0) return;
-    const terrainOne = new Uint8Array(1);
-    const tileOne = new Uint16Array(1);
+    let firstRow = Infinity,
+      lastRow = -1;
     for (const index of this.pendingCells) {
-      const x = index % this.raster.width;
-      const y = (index - x) / this.raster.width;
-      terrainOne[0] = this.terrain[index];
-      tileOne[0] = this.tiles[index];
-      gl.bindTexture(gl.TEXTURE_2D, this.terrainTex);
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        x,
-        y,
-        1,
-        1,
-        gl.RED_INTEGER,
-        gl.UNSIGNED_BYTE,
-        terrainOne,
-      );
-      gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        x,
-        y,
-        1,
-        1,
-        gl.RED_INTEGER,
-        gl.UNSIGNED_SHORT,
-        tileOne,
-      );
+      const row = Math.floor(index / this.raster.width);
+      firstRow = Math.min(firstRow, row);
+      lastRow = Math.max(lastRow, row);
     }
+    const start = firstRow * this.raster.width;
+    const end = (lastRow + 1) * this.raster.width;
+    const height = lastRow - firstRow + 1;
+    gl.bindTexture(gl.TEXTURE_2D, this.terrainTex);
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      firstRow,
+      this.raster.width,
+      height,
+      gl.RED_INTEGER,
+      gl.UNSIGNED_BYTE,
+      this.terrain.subarray(start, end),
+    );
+    gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      firstRow,
+      this.raster.width,
+      height,
+      gl.RED_INTEGER,
+      gl.UNSIGNED_SHORT,
+      this.tiles.subarray(start, end),
+    );
     this.pendingCells.clear();
+  }
+
+  setFogRendering(enabled: boolean, seconds: number): void {
+    this.fogEnabled = enabled;
+    this.fogTime = seconds;
   }
 
   draw(camera: Float32Array): void {
     this.flush();
     const gl = this.gl;
     gl.useProgram(this.program);
+    gl.uniform1i(this.uFogEnabled, this.fogEnabled ? 1 : 0);
+    gl.uniform1f(this.uFogTime, this.fogTime);
     gl.uniformMatrix3fv(this.uCamera, false, camera);
+    gl.uniform1i(
+      gl.getUniformLocation(this.program, "uDetailStride"),
+      this.detailStride,
+    );
+    gl.uniform1i(
+      gl.getUniformLocation(this.program, "uDetailEnabled"),
+      this.detailEnabled ? 1 : 0,
+    );
     gl.uniform1ui(this.uHighlightOwner, this.highlightOwner);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.terrainTex);

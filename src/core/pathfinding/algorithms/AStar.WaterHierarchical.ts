@@ -399,6 +399,9 @@ export class AStarWaterHierarchical implements PathFinder<number> {
 // Helper class for resolving tiles to abstract nodes
 // Assumes tiles are already water and component-filtered (by transformer pipeline)
 class SourceResolver {
+  // Bound memory independently of world size. WaterManager replaces this
+  // resolver with its graph whenever terrain connectivity is rebuilt.
+  private readonly nodeCache = new Map<TileRef, AbstractNode | null>();
   constructor(
     private map: GameMap,
     private graph: AbstractGraph,
@@ -434,6 +437,16 @@ class SourceResolver {
   }
 
   private getClusterNode(tile: TileRef): AbstractNode | null {
+    if (this.nodeCache.has(tile)) return this.nodeCache.get(tile)!;
+    const node = this.findClusterNode(tile);
+    if (this.nodeCache.size >= 4096) {
+      this.nodeCache.delete(this.nodeCache.keys().next().value!);
+    }
+    this.nodeCache.set(tile, node);
+    return node;
+  }
+
+  private findClusterNode(tile: TileRef): AbstractNode | null {
     const x = this.map.x(tile);
     const y = this.map.y(tile);
     const clusterX = Math.floor(x / this.graph.clusterSize);

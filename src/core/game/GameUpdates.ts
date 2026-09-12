@@ -18,6 +18,14 @@ import {
 import { TileRef } from "./GameMap";
 
 export interface GameUpdateViewData {
+  /** Authoritative presentation visibility; never supplied by the client. */
+  fog?: {
+    enabled: true;
+    global: boolean;
+    hiddenPlayers: Uint16Array;
+    forgottenUnits: Uint32Array;
+    resetUnits?: boolean;
+  };
   tick: number;
   updates: GameUpdates;
   /**
@@ -74,11 +82,9 @@ export interface GameUpdateViewData {
    */
   packedAttackUpdates?: Float64Array;
   /**
-   * Name placement per player. Only present on ticks where the worker
-   * recomputed placements (spawn ticks, the first ticks, every 30th tick,
-   * spawn end) — between those the values wouldn't change, so the record is
-   * omitted instead of re-cloned every tick. Consumers keep the last applied
-   * values.
+   * Changed name placements only. Each live player's normal 30-tick refresh
+   * is staggered by smallID; initial/spawn-end placements are immediate.
+   * Consumers merge entries and retain omitted players' previous values.
    */
   playerNameViewData?: Record<string, NameViewData>;
   tickExecutionDuration?: number;
@@ -163,6 +169,8 @@ export interface RailroadConstructionUpdate {
   type: GameUpdateType.RailroadConstructionEvent;
   id: number;
   tiles: TileRef[];
+  /** Existing track discovered through fog, not a newly constructed railroad. */
+  revealed?: boolean;
 }
 
 export interface RailroadDestructionUpdate {

@@ -120,6 +120,18 @@ export function persistentWorldShareUrl(
 export class PersistentWorldApi {
   constructor(private readonly basePath = "/api/worlds") {}
 
+  rememberGameWorld(gameId: string, worldId: string): void {
+    safeStorage(window.localStorage, (storage) =>
+      storage.setItem(`idlefront.game-world.${gameId}`, worldId),
+    );
+  }
+
+  worldForGame(gameId: string): string | null {
+    return safeStorage(window.localStorage, (storage) =>
+      storage.getItem(`idlefront.game-world.${gameId}`),
+    ) as string | null;
+  }
+
   sessionToken(): string | null {
     return (
       (safeStorage(window.localStorage, (storage) =>
@@ -221,6 +233,34 @@ export class PersistentWorldApi {
     );
   }
 
+  unlockWorld(
+    worldId: string,
+    password: string,
+    displayName: string,
+  ): Promise<{ unlocked: true }> {
+    return this.request(
+      `/${encodeURIComponent(worldId)}/unlock`,
+      z.object({ unlocked: z.literal(true) }),
+      {
+        method: "POST",
+        body: { password, displayName },
+        authenticated: true,
+      },
+    );
+  }
+
+  worldPlayToken(worldId: string): Promise<{ playToken: string }> {
+    return this.request(
+      `/${encodeURIComponent(worldId)}/play-token`,
+      z.object({ playToken: z.string() }),
+      {
+        method: "POST",
+        body: {},
+        authenticated: true,
+      },
+    );
+  }
+
   rsvp(
     worldId: string,
     teamId?: string | null,
@@ -274,11 +314,27 @@ export class PersistentWorldApi {
     );
   }
 
+  startCustomWorld(worldId: string): Promise<PersistentWorldLobbySnapshot> {
+    return this.request(
+      `/${encodeURIComponent(worldId)}/start`,
+      PersistentWorldLobbySnapshotSchema,
+      { method: "POST", body: {}, authenticated: true },
+    );
+  }
+
   cancel(worldId: string): Promise<PersistentWorldLobbySnapshot> {
     return this.request(
       `/${encodeURIComponent(worldId)}/cancel`,
       PersistentWorldLobbySnapshotSchema,
-      { method: "POST", authenticated: true },
+      { method: "POST", body: {}, authenticated: true },
+    );
+  }
+
+  /** Temporary development control; only the dev server exposes this route. */
+  devEndWorld(worldId: string): Promise<void> {
+    return this.requestWithoutResponse(
+      `/${encodeURIComponent(worldId)}/dev-end`,
+      { method: "POST", body: {}, authenticated: true },
     );
   }
 

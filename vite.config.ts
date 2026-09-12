@@ -109,6 +109,25 @@ function legacyIdlePreviewRedirect(): Plugin {
   };
 }
 
+// Keep the isolated renderer study out of the normal app's HTML rewrite.
+function fogStudyPreview(): Plugin {
+  return {
+    name: "fog-study-preview",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const requested =
+          (req as { originalUrl?: string }).originalUrl ?? req.url ?? "";
+        if (requested.split("?")[0] !== "/fog-preview.html") return next();
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(
+          fs.readFileSync(path.join(__dirname, "fog-preview.html"), "utf8"),
+        );
+      });
+    },
+  };
+}
+
 // Vite snapshots publicDir when the dev server starts. Generated maps can be
 // added by a branch checkout or regeneration while that process stays alive,
 // leaving a newly-added manifest outside Vite's cached public-file set even
@@ -361,6 +380,7 @@ export default defineConfig(({ mode }) => {
       ...(!isProduction
         ? [
             devMapManifestMiddleware(resourcesDir),
+            fogStudyPreview(),
             liveDevBootstrap(),
             randomWorkerCreateProxy(() => devNumWorkers),
             legacyIdlePreviewRedirect(),
@@ -424,6 +444,7 @@ export default defineConfig(({ mode }) => {
 
     server: {
       port: 9000,
+      watch: { ignored: ["**/.data/**", "**/.dev-logs/**"] },
       host: process.env.VITE_HOST === "lan",
       // Automatically open the browser when the server starts
       open: process.env.SKIP_BROWSER_OPEN !== "true",

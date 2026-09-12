@@ -1,5 +1,11 @@
 import { TileRef } from "../../game/GameMap";
 
+export interface FlatBinaryHeapState {
+  capacity: number;
+  priorities: Float32Array;
+  tiles: Uint32Array;
+}
+
 /**
  * Lightweight min-heap specialised for (priority:number, tile:TileRef) pairs.
  * - priorities stored in a contiguous Float32Array
@@ -24,6 +30,30 @@ export class FlatBinaryHeap {
   /** current heap size */
   size(): number {
     return this.len;
+  }
+
+  /** Preserve internal tie order and Float32 values; never rebuild by enqueue. */
+  snapshot(): FlatBinaryHeapState {
+    return {
+      capacity: this.pri.length,
+      priorities: this.pri.slice(0, this.len),
+      tiles: Uint32Array.from(this.tiles.slice(0, this.len)),
+    };
+  }
+
+  static fromSnapshot(state: FlatBinaryHeapState): FlatBinaryHeap {
+    if (
+      !Number.isSafeInteger(state.capacity) ||
+      state.capacity < 1 ||
+      state.priorities.length !== state.tiles.length ||
+      state.priorities.length > state.capacity
+    )
+      throw new Error("Invalid heap checkpoint");
+    const heap = new FlatBinaryHeap(state.capacity);
+    heap.pri.set(state.priorities);
+    heap.len = state.tiles.length;
+    for (let i = 0; i < heap.len; i++) heap.tiles[i] = state.tiles[i];
+    return heap;
   }
 
   //insert tiles

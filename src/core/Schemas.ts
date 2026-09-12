@@ -320,6 +320,10 @@ export const DoomsdayClockConfigSchema = z.object({
 export const GameConfigSchema = z.object({
   // Transport/runtime selection only; executions continue using the same rules.
   serverSimulation: z.boolean().optional(),
+  // Version-pinned discovery rules; absent on existing worlds.
+  fogOfWar: z.literal("v0.2").optional(),
+  /** Experimental remote-bot frontier scheduling; never applies without fog. */
+  fogBotActivity: z.literal("v0.2").optional(),
   // Internal stress-playtest control. One raises both the trade-fleet
   // saturation point and launch frequency without changing ship rewards.
   tradeShipTrafficMultiplier: z.number().int().min(1).max(100).optional(),

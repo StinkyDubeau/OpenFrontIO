@@ -243,8 +243,8 @@ describe("PathFinding.Water", () => {
     });
   });
 
-  describe("Known bugs", () => {
-    it("path can cross 1-tile land barrier", () => {
+  describe("Full-resolution barrier regressions", () => {
+    it("cannot cross 1-tile land barriers", () => {
       const syntheticGame = createGame({
         width: 10,
         height: 1,
@@ -257,10 +257,10 @@ describe("PathFinding.Water", () => {
         syntheticGame.ref(9, 0),
       );
 
-      expect(path).not.toBeNull();
+      expect(path).toBeNull();
     });
 
-    it("path can cross diagonal land barrier", () => {
+    it("cannot cross a diagonal land barrier", () => {
       const syntheticGame = createGame({
         width: 2,
         height: 2,
@@ -273,7 +273,7 @@ describe("PathFinding.Water", () => {
         syntheticGame.ref(1, 1),
       );
 
-      expect(path).not.toBeNull();
+      expect(path).toBeNull();
     });
   });
 

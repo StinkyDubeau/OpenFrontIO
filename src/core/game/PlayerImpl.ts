@@ -54,6 +54,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { OrderedRoster } from "./OrderedRoster";
 import { ReadonlyTileSet, TileSet } from "./TileSet";
 import {
   bestShoreDeploymentSource,
@@ -120,7 +121,12 @@ export class PlayerImpl implements Player {
 
   public _borderTiles = new TileSet();
 
-  public _units: Unit[] = [];
+  private readonly ownedUnits = new OrderedRoster<Unit>();
+  private get _units(): Unit[] {
+    return this.ownedUnits.snapshot();
+  }
+  private unitsByType = new Map<UnitType, Set<Unit>>();
+  private ownedUnitLevels = new Map<UnitType, number>();
   public _tiles = new TileSet();
 
   public pastOutgoingAllianceRequests: AllianceRequest[] = [];
@@ -381,6 +387,38 @@ export class PlayerImpl implements Player {
     return this.playerInfo.playerType;
   }
 
+  /** Maintain insertion order on build, capture and deletion. Typed queries
+   * return copies; the index is never exposed to callers that sort results. */
+  addOwnedUnit(unit: Unit): void {
+    this.ownedUnits.add(unit);
+    const type = unit.type();
+    const bucket = this.unitsByType.get(type);
+    if (bucket) bucket.add(unit);
+    else this.unitsByType.set(type, new Set([unit]));
+    this.ownedUnitLevels.set(type, this.unitCount(type) + unit.level());
+  }
+
+  removeOwnedUnit(unit: Unit): void {
+    this.ownedUnits.delete(unit);
+    const type = unit.type(),
+      bucket = this.unitsByType.get(type);
+    if (!bucket?.delete(unit)) return;
+    this.ownedUnitLevels.set(type, this.unitCount(type) - unit.level());
+  }
+
+  onOwnedUnitLevelChanged(unit: Unit, delta: number): void {
+    if (this.unitsByType.get(unit.type())?.has(unit))
+      this.ownedUnitLevels.set(
+        unit.type(),
+        this.unitCount(unit.type()) + delta,
+      );
+  }
+
+  appendUnitsOfType(type: UnitType, output: Unit[]): void {
+    const bucket = this.unitsByType.get(type);
+    if (bucket) for (const unit of bucket) output.push(unit);
+  }
+
   units(): Unit[];
   units(types: readonly UnitType[]): Unit[];
   units(type: UnitType, type2?: UnitType, type3?: UnitType): Unit[];
@@ -392,6 +430,8 @@ export class PlayerImpl implements Player {
     if (first === undefined) {
       return this._units;
     }
+    if (!Array.isArray(first) && second === undefined)
+      return Array.from(this.unitsByType.get(first as UnitType) ?? []);
 
     // Hot path. Matches are gathered into a reusable scratch buffer and
     // copied out with an exact-size slice, so each call allocates exactly
@@ -450,25 +490,17 @@ export class PlayerImpl implements Player {
 
   // Count of units owned by the player, not including construction
   unitCount(type: UnitType): number {
-    let total = 0;
-    for (const unit of this._units) {
-      if (unit.type() === type) {
-        total += unit.level();
-      }
-    }
-    return total;
+    return this.ownedUnitLevels.get(type) ?? 0;
   }
 
   // Count of units owned by the player, including construction
   unitsOwned(type: UnitType): number {
     let total = 0;
-    for (const unit of this._units) {
-      if (unit.type() === type) {
-        if (unit.isUnderConstruction()) {
-          total++;
-        } else {
-          total += unit.level();
-        }
+    for (const unit of this.unitsByType.get(type) ?? []) {
+      if (unit.isUnderConstruction()) {
+        total++;
+      } else {
+        total += unit.level();
       }
     }
     return total;
@@ -502,25 +534,11 @@ export class PlayerImpl implements Player {
   }
 
   nearby(): (Player | TerraNullius)[] {
-    const ns: Set<Player | TerraNullius> = new Set();
-    const map = this.mg.map();
-    const smallID = this.smallID();
-    const visit = (neighbor: TileRef) => {
-      if (map.isLand(neighbor) && !map.isImpassable(neighbor)) {
-        if (!map.hasOwner(neighbor) && map.hasFallout(neighbor)) {
-          return;
-        }
-        const owner = map.ownerID(neighbor);
-        if (owner !== smallID) {
-          ns.add(
-            this.mg.playerBySmallID(owner) satisfies Player | TerraNullius,
-          );
-        }
-      }
-    };
-    for (const border of this.borderTiles()) {
-      map.forEachNeighbor(border, visit);
-    }
+    const ns = new Set<Player | TerraNullius>(
+      this.mg
+        .nearbyOwnerIDs(this.smallID())
+        .map((id) => this.mg.playerBySmallID(id)),
+    );
     for (const n of this.shoreReachableNeighbors()) {
       ns.add(n);
     }
@@ -534,12 +552,19 @@ export class PlayerImpl implements Player {
     const ns: Set<Player | TerraNullius> = new Set();
     const map = this.mg.map();
 
-    let shoreIdx = 0;
-    for (const border of this.borderTiles()) {
-      if (!map.isShore(border)) continue;
-      // Visit every 10th shore tile.
-      if (shoreIdx++ % 10 !== 0) continue;
-
+    if (
+      this.shoreBorderRevision !== this._borderTiles.revision ||
+      this.shoreTerrainRevision !== this.mg.nearbyTerrainRevision
+    ) {
+      this.sampledShoreTiles = [];
+      let shoreIdx = 0;
+      for (const border of this.borderTiles())
+        if (map.isShore(border) && shoreIdx++ % 10 === 0)
+          this.sampledShoreTiles.push(border);
+      this.shoreBorderRevision = this._borderTiles.revision;
+      this.shoreTerrainRevision = this.mg.nearbyTerrainRevision;
+    }
+    for (const border of this.sampledShoreTiles) {
       const bx = map.x(border);
       const by = map.y(border);
 
@@ -571,6 +596,10 @@ export class PlayerImpl implements Player {
 
     return ns;
   }
+
+  private sampledShoreTiles: TileRef[] = [];
+  private shoreBorderRevision = -1;
+  private shoreTerrainRevision = -1;
 
   isPlayer(): this is Player {
     return true as const;
@@ -1248,7 +1277,7 @@ export class PlayerImpl implements Player {
       this,
       params,
     );
-    this._units.push(b);
+    this.addOwnedUnit(b);
     this.recordUnitConstructed(type);
     this.removeGold(cost);
     this.removeTroops("troops" in params ? (params.troops ?? 0) : 0);

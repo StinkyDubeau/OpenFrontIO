@@ -6,6 +6,10 @@ import { PlayerImpl } from "./PlayerImpl";
 export class AttackImpl implements Attack {
   private _isActive = true;
   private _borderSize = 0;
+  private _planningVersion = 0;
+
+  /** Mutation stamp only; not simulation state, serialized data or a hash. */
+  planningVersion(): number { return this._planningVersion; }
   public _retreating = false;
   public _retreated = false;
 
@@ -33,6 +37,7 @@ export class AttackImpl implements Attack {
     return this._troops;
   }
   setTroops(troops: number) {
+    this._planningVersion++;
     this._troops = Math.max(0, troops);
   }
 
@@ -45,6 +50,7 @@ export class AttackImpl implements Attack {
   }
 
   delete() {
+    this._planningVersion++;
     if (this._target.isPlayer()) {
       (this._target as PlayerImpl)._incomingAttacks = (
         this._target as PlayerImpl
@@ -59,10 +65,12 @@ export class AttackImpl implements Attack {
   }
 
   orderRetreat() {
+    this._planningVersion++;
     this._retreating = true;
   }
 
   executeRetreat() {
+    this._planningVersion++;
     this._retreated = true;
   }
 
@@ -78,13 +86,20 @@ export class AttackImpl implements Attack {
     return this._borderSize;
   }
 
+  /** Detached insertion-ordered data for read-only planning/shadow checks. */
+  borderSnapshot(): { tiles: TileRef[]; size: number } {
+    return { tiles: [...this._border], size: this._borderSize };
+  }
+
   clearBorder(): void {
+    this._planningVersion++;
     this._borderSize = 0;
     this._border.clear();
   }
 
   addBorderTile(tile: TileRef): void {
     if (!this._border.has(tile)) {
+      this._planningVersion++;
       this._borderSize += 1;
       this._border.add(tile);
     }
@@ -92,6 +107,7 @@ export class AttackImpl implements Attack {
 
   removeBorderTile(tile: TileRef): void {
     if (this._border.has(tile)) {
+      this._planningVersion++;
       this._borderSize -= 1;
       this._border.delete(tile);
     }

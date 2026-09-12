@@ -43,6 +43,26 @@ function snapshot(map: GameMap) {
 }
 
 describe("PagedGameMap", () => {
+  it("preserves neighbor order at every edge and page seam", () => {
+    for (const [width, height] of [
+      [1, 1],
+      [1, 5],
+      [5, 1],
+      [7, 5],
+    ]) {
+      const { classic, paged } = maps(width, height);
+      for (let ref = 0; ref < width * height; ref++) {
+        const out: number[] = [];
+        const count = paged.neighbors4(ref, out);
+        expect(out.slice(0, count)).toEqual(classic.neighbors(ref));
+        const expected: number[] = [];
+        const actual: number[] = [];
+        classic.forEachNeighborWithDiag(ref, (n) => expected.push(n));
+        paged.forEachNeighborWithDiag(ref, (n) => actual.push(n));
+        expect(actual).toEqual(expected);
+      }
+    }
+  });
   it("matches stock map behavior across horizontal and vertical seams", () => {
     const { classic, paged } = maps();
     const seamRefs = [

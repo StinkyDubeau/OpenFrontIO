@@ -7,9 +7,11 @@ import type {
   PersistentWorldLobbySnapshot,
   PersistentWorldQuickChatView,
 } from "../../../core/PersistentWorldSchemas";
+import { WORLD_PRESETS } from "../../../core/WorldPresets";
 import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import { translateText } from "../../Utils";
 import "../ProductWordmark";
+import { worldModeSummary } from "./WorldModeSummary";
 
 @customElement("idlefront-wordmark")
 export class IdleFrontWordmark extends LitElement {
@@ -140,7 +142,7 @@ export class PersistentWorldInvitationCard extends LitElement {
           </div>
           <h1>${world.name}</h1>
           <p class="pw-invitation-card__date">
-            ${formatWorldDate(world.startsAt)}
+            ${world.startMode === "host" && world.phase === "scheduled" ? "Starts when the host is ready" : formatWorldDate(world.startsAt)}
           </p>
           ${
             world.phase === "active" && snapshot.viewer.isMember
@@ -167,16 +169,22 @@ export class PersistentWorldInvitationCard extends LitElement {
                     }</span
                   >
                 </button>`
-              : html`<persistent-world-countdown
-                  .startsAt=${world.startsAt}
-                  .serverTime=${snapshot.serverTime}
-                  .phase=${world.phase}
-                ></persistent-world-countdown>`
+              : world.startMode === "host" && world.phase === "scheduled"
+                ? html`<div class="pw-countdown" role="status">
+                    Waiting for the host
+                  </div>`
+                : html`<persistent-world-countdown
+                    .startsAt=${world.startsAt}
+                    .serverTime=${snapshot.serverTime}
+                    .phase=${world.phase}
+                  ></persistent-world-countdown>`
           }
           <dl class="pw-invitation-card__facts">
             <div>
-              <dt>Pace</dt>
-              <dd>${formatWorldDuration(world.targetDuration)}</dd>
+              <dt>${world.gamePreset ? "World" : "Pace"}</dt>
+              <dd>
+                ${world.gamePreset ? WORLD_PRESETS[world.gamePreset].label : formatWorldDuration(world.targetDuration)}
+              </dd>
             </div>
             <div>
               <dt>Commanders</dt>
@@ -187,7 +195,21 @@ export class PersistentWorldInvitationCard extends LitElement {
               <dd>${world.mode === "ffa" ? "Free for all" : "Teams"}</dd>
             </div>
           </dl>
+          ${worldModeSummary(world.gamePreset)}
         </div>
+        ${
+          world.phase === "scheduled" || world.phase === "active"
+            ? html`<button
+                class="pw-text-button pw-text-button--danger pw-dev-end"
+                type="button"
+                ?disabled=${!this.snapshot?.viewer.identity}
+                title="Temporary development control"
+                @click=${this.endWorldForDevelopment}
+              >
+                DEV · End world
+              </button>`
+            : nothing
+        }
         <button
           class="pw-button pw-button--share"
           type="button"
@@ -243,6 +265,15 @@ export class PersistentWorldInvitationCard extends LitElement {
     this.dispatchEvent(
       new CustomEvent("world-enter-runtime", {
         detail: { gameId: runtimeGameId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private endWorldForDevelopment() {
+    this.dispatchEvent(
+      new CustomEvent("world-dev-end", {
         bubbles: true,
         composed: true,
       }),
@@ -661,16 +692,18 @@ export class PersistentWorldList extends LitElement {
           class="pw-world-card__status pw-world-card__status--${
             card.viewerEliminated ? "eliminated" : world.phase
           }"
-          >${card.viewerEliminated ? "Eliminated" : world.phase}</span
+          >${card.viewerEliminated ? "Eliminated" : world.startMode === "host" && world.phase === "scheduled" ? "Waiting" : world.phase}</span
         >
         <span class="pw-world-card__copy">
           <strong>${world.name}</strong>
           <small
             >Hosted by ${card.host.displayName} ·
-            ${formatWorldDate(world.startsAt)}${
+            ${world.startMode === "host" && world.phase === "scheduled" ? "Host starts when ready" : formatWorldDate(world.startsAt)}${
               card.viewerEliminated ? " · Spectate only" : ""
             }</small
           >
+          ${world.gamePreset ? html`<small>${WORLD_PRESETS[world.gamePreset].label}</small>` : nothing}
+          ${worldModeSummary(world.gamePreset)}
         </span>
         <span class="pw-world-card__facts">
           <span>${formatWorldDuration(world.targetDuration)}</span>

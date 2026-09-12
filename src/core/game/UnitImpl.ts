@@ -235,9 +235,9 @@ export class UnitImpl implements Unit {
         break;
     }
     this._lastOwner = this._owner;
-    this._lastOwner._units = this._lastOwner._units.filter((u) => u !== this);
+    this._lastOwner.removeOwnedUnit(this);
     this._owner = newOwner;
-    this._owner._units.push(this);
+    this._owner.addOwnedUnit(this);
     this.mg.addUpdate(this.toUpdate());
   }
 
@@ -310,7 +310,7 @@ export class UnitImpl implements Unit {
     this._wasDestroyedByEnemy = destroyer !== undefined;
     this._destroyer = destroyer ?? undefined;
 
-    this._owner._units = this._owner._units.filter((b) => b !== this);
+    this._owner.removeOwnedUnit(this);
     this._active = false;
     this.mg.addUpdate(this.toUpdate());
     this.mg.removeUnit(this);
@@ -672,6 +672,8 @@ export class UnitImpl implements Unit {
 
   increaseLevel(): void {
     this._level++;
+    this._owner.onOwnedUnitLevelChanged(this, 1);
+    this.mg.onUnitLevelChanged(this, 1);
     if ([UnitType.MissileSilo, UnitType.SAMLauncher].includes(this.type())) {
       this._missileTimerQueue.push(this.mg.ticks());
     }
@@ -680,6 +682,8 @@ export class UnitImpl implements Unit {
 
   decreaseLevel(destroyer?: Player): void {
     this._level--;
+    this._owner.onOwnedUnitLevelChanged(this, -1);
+    this.mg.onUnitLevelChanged(this, -1);
     if ([UnitType.MissileSilo, UnitType.SAMLauncher].includes(this.type())) {
       this._missileTimerQueue.pop();
     }

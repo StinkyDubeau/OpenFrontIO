@@ -46,6 +46,8 @@ export async function createGameRunner(
     false, // Worker never renders layers — skip image loading to save memory.
   );
   const random = new PseudoRandom(simpleHash(gameStart.gameID));
+  gameMap.gameMap =
+    mapLoader.prepareSimulationMap?.(gameMap.gameMap) ?? gameMap.gameMap;
 
   const humans = gameStart.players.map((p) => {
     return new PlayerInfo(
@@ -76,6 +78,7 @@ export async function createGameRunner(
     config,
     gameMap.teamGameSpawnAreas,
   );
+  mapLoader.prepareSimulationGame?.(game);
 
   const gr = new GameRunner(
     game,
@@ -95,8 +98,6 @@ export class GameRunner {
   private turns: Turn[] = [];
   private currTurn = 0;
   private isExecuting = false;
-
-  private playerViewData: Record<PlayerID, NameViewData> = {};
 
   constructor(
     public game: Game,
@@ -180,6 +181,7 @@ export class GameRunner {
     // thread doesn't structured-clone an identical ~all-players record on
     // every other tick.
     let viewDataChanged = false;
+    const playerViewData: Record<PlayerID, NameViewData> = {};
     const anonymousNames =
       this.game.config().gameConfig().anonymizeNames === true;
     if (this.game.inSpawnPhase()) {
@@ -188,25 +190,22 @@ export class GameRunner {
           continue;
         }
         if (p.spawnTile() === undefined) continue;
-        this.playerViewData[p.id()] = placeSpawnName(
-          this.game,
-          p,
-          anonymousNames,
-        );
+        playerViewData[p.id()] = placeSpawnName(this.game, p, anonymousNames);
         viewDataChanged = true;
       }
     }
 
     const spawnJustEnded = wasInSpawnPhase && !this.game.inSpawnPhase();
-    if (
-      spawnJustEnded ||
-      this.game.ticks() < 3 ||
-      this.game.ticks() % 30 === 0
-    ) {
+    const refreshAllNames = spawnJustEnded || this.game.ticks() < 3;
+    if (refreshAllNames || !this.game.inSpawnPhase()) {
       for (const p of this.game.players()) {
-        this.playerViewData[p.id()] = placeName(this.game, p, anonymousNames);
+        // Pure view metadata, not simulation state. Keep each country's 30-tick
+        // cadence without synchronizing thousands of label-grid searches.
+        if (!refreshAllNames && this.game.ticks() % 30 !== p.smallID() % 30)
+          continue;
+        playerViewData[p.id()] = placeName(this.game, p, anonymousNames);
+        viewDataChanged = true;
       }
-      viewDataChanged = true;
     }
 
     const packedTileUpdates = this.game.drainPackedTileUpdates();
@@ -225,7 +224,7 @@ export class GameRunner {
       ...(packedAttackUpdates ? { packedAttackUpdates } : {}),
       ...(packedNukeImpacts ? { packedNukeImpacts } : {}),
       updates: updates,
-      ...(viewDataChanged ? { playerNameViewData: this.playerViewData } : {}),
+      ...(viewDataChanged ? { playerNameViewData: playerViewData } : {}),
       tickExecutionDuration: tickExecutionDuration,
       pendingTurns: pendingTurns ?? 0,
     });

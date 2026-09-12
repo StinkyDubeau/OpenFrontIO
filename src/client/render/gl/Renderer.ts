@@ -85,6 +85,7 @@ import {
   type GPUResources,
 } from "./utils/GpuResources";
 import { HeatManager } from "./utils/HeatManager";
+import { NativeFogPass } from "./passes/NativeFogPass";
 
 /** Ghost types that trigger SAM radius overlay (matches upstream SAMRadiusLayer). */
 const SAM_RADIUS_GHOST_TYPES = new Set([
@@ -105,6 +106,13 @@ const SAM_RADIUS_HIGHLIGHT_TYPES = new Set([
 const GRID_VIEW_KEY = "renderer:grid_view_enabled";
 
 export class GPURenderer {
+  private fogPass?: NativeFogPass;
+  private fogEnabled = false;
+  private readonly fogReducedMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  setFog(enabled: boolean): void {
+    this.fogEnabled = enabled;
+    if (enabled) this.fogPass ??= new NativeFogPass(this.gl, this.mapW, this.mapH, this.res.tileTex);
+  }
   private gl: WebGL2RenderingContext;
   private camera: Camera;
   private res: GPUResources;
@@ -1345,6 +1353,7 @@ export class GPURenderer {
     this.spawnOverlayPass.draw(cam);
     if (pe.borderStamp) this.borderStampPass.draw(cam);
     if (pe.railroad) this.railroadPass.draw(cam, zoom);
+    if (this.fogEnabled) this.fogPass?.draw(cam, this.fogReducedMotion ? 0 : performance.now() / 1000);
     if (pe.unit) this.unitPass.drawGround(cam);
     if (pe.falloutBloom) this.bloomPass.draw(cam, this.frameTick);
     this.samRadiusPass.draw(cam);
@@ -1479,6 +1488,7 @@ export class GPURenderer {
     this.samRadiusPass.dispose();
     this.crosshairPass.dispose();
     this.structurePass.dispose();
+    this.fogPass?.dispose();
     this.structureLevelPass.dispose();
     this.unitPass.dispose();
     this.namePass.dispose();

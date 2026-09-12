@@ -4,6 +4,7 @@ import http from "node:http";
 import { isIP } from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { createExpoPreviewProxy } from "./idle-expo-proxy.mjs";
 
 const COOKIE_NAME = "__Host-pressure_atlas_preview";
 const LOGIN_PATH = "/__preview/login";
@@ -264,6 +265,7 @@ export function createPreviewGateway(options = {}) {
       path.resolve(process.cwd(), "resources/idle"),
   );
   const expectedCookie = cookieValue(accessToken);
+  const proxyExpo = createExpoPreviewProxy(accessToken);
   const failedLogins = new Map();
 
   function authenticated(req) {
@@ -495,6 +497,8 @@ export function createPreviewGateway(options = {}) {
       return;
     }
     const pathname = requestUrl.pathname;
+
+    if (proxyExpo(req, res, requestUrl)) return;
 
     if (pathname === LOGIN_PATH && method === "GET") {
       send(res, 200, loginDocument(), {

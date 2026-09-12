@@ -49,6 +49,19 @@ export class PagedGameMap implements GameMap {
   private readonly pageRowBaseByY: Uint32Array;
   private readonly localYByY: Uint32Array;
   private falloutTiles = 0;
+  private stateObservers = new Set<(tile: TileRef) => void>();
+  private stateObserver?: (tile: TileRef) => void;
+
+  observeState(listener: (tile: TileRef) => void): () => void {
+    this.stateObservers.add(listener);
+    const refresh = () => {
+      this.stateObserver = this.stateObservers.size === 0 ? undefined :
+        this.stateObservers.size === 1 ? this.stateObservers.values().next().value :
+        (tile) => { for (const callback of this.stateObservers) callback(tile); };
+    };
+    refresh();
+    return () => { this.stateObservers.delete(listener); refresh(); };
+  }
 
   constructor(
     private readonly width_: number,
@@ -278,6 +291,11 @@ export class PagedGameMap implements GameMap {
     return true;
   }
 
+  /** Non-allocating fresh-map check for the server's initial storage choice. */
+  hasAllocatedState(): boolean {
+    return this.pages.some((page) => page.state !== null);
+  }
+
   private location(ref: TileRef): { page: InternalTilePage; offset: number } {
     if (!this.isValidRef(ref)) throw new Error(`Invalid tile ref ${ref}`);
     const x = ref % this.width_;
@@ -299,7 +317,15 @@ export class PagedGameMap implements GameMap {
 
   private setTerrainByte(ref: TileRef, value: number): void {
     const { page, offset } = this.location(ref);
+    if (page.terrain[offset] === value) return;
     page.terrain[offset] = value;
+    for (const listener of this.terrainObservers) listener(ref);
+  }
+
+  private terrainObservers = new Set<(tile: TileRef) => void>();
+  observeTerrain(listener: (tile: TileRef) => void): () => void {
+    this.terrainObservers.add(listener);
+    return () => this.terrainObservers.delete(listener);
   }
 
   tileState(ref: TileRef): number {
@@ -316,6 +342,7 @@ export class PagedGameMap implements GameMap {
     const { page, offset } = this.location(ref);
     if (value === 0 && page.state === null) return;
     (page.state ??= new Uint16Array(page.width * page.height))[offset] = value;
+    this.stateObserver?.(ref);
   }
 
   isLand(ref: TileRef): boolean {
@@ -405,6 +432,7 @@ export class PagedGameMap implements GameMap {
     if (playerId === 0 && page.state === null) return;
     const state = (page.state ??= new Uint16Array(page.width * page.height));
     state[offset] = (state[offset] & ~PagedGameMap.PLAYER_ID_MASK) | playerId;
+    this.stateObserver?.(ref);
   }
 
   hasFallout(ref: TileRef): boolean {
@@ -422,6 +450,7 @@ export class PagedGameMap implements GameMap {
       ? state[offset] | (1 << PagedGameMap.FALLOUT_BIT)
       : state[offset] & ~(1 << PagedGameMap.FALLOUT_BIT);
     this.falloutTiles += value ? 1 : -1;
+    this.stateObserver?.(ref);
   }
 
   hasDefenseBonus(ref: TileRef): boolean {
@@ -435,6 +464,7 @@ export class PagedGameMap implements GameMap {
     state[offset] = value
       ? state[offset] | (1 << PagedGameMap.DEFENSE_BONUS_BIT)
       : state[offset] & ~(1 << PagedGameMap.DEFENSE_BONUS_BIT);
+    this.stateObserver?.(ref);
   }
 
   isOnEdgeOfMap(ref: TileRef): boolean {
@@ -447,11 +477,15 @@ export class PagedGameMap implements GameMap {
 
   isBorder(ref: TileRef): boolean {
     const owner = this.ownerID(ref);
-    let border = false;
-    this.forEachNeighbor(ref, (neighbor) => {
-      border ||= this.ownerID(neighbor) !== owner;
-    });
-    return border;
+    const width = this.width_;
+    const x = ref % width;
+    return (
+      (ref >= width && this.ownerID(ref - width) !== owner) ||
+      (ref < (this.height_ - 1) * width &&
+        this.ownerID(ref + width) !== owner) ||
+      (x !== 0 && this.ownerID(ref - 1) !== owner) ||
+      (x !== width - 1 && this.ownerID(ref + 1) !== owner)
+    );
   }
 
   neighbors(ref: TileRef): TileRef[] {
@@ -471,9 +505,12 @@ export class PagedGameMap implements GameMap {
 
   neighbors4(ref: TileRef, out: TileRef[]): number {
     let count = 0;
-    this.forEachNeighbor(ref, (neighbor) => {
-      out[count++] = neighbor;
-    });
+    const width = this.width_;
+    const x = ref % width;
+    if (ref >= width) out[count++] = ref - width;
+    if (ref < (this.height_ - 1) * width) out[count++] = ref + width;
+    if (x !== 0) out[count++] = ref - 1;
+    if (x !== width - 1) out[count++] = ref + 1;
     return count;
   }
 
@@ -481,17 +518,22 @@ export class PagedGameMap implements GameMap {
     ref: TileRef,
     callback: (neighbor: TileRef) => void,
   ): void {
-    const x = ref % this.width_;
-    const y = (ref - x) / this.width_;
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && nx < this.width_ && ny >= 0 && ny < this.height_) {
-          callback(ny * this.width_ + nx);
-        }
-      }
+    // Preserve the original dx-major order: conquest/AI can depend on it.
+    const width = this.width_;
+    const x = ref % width;
+    const up = ref >= width;
+    const down = ref < (this.height_ - 1) * width;
+    if (x !== 0) {
+      if (up) callback(ref - width - 1);
+      callback(ref - 1);
+      if (down) callback(ref + width - 1);
+    }
+    if (up) callback(ref - width);
+    if (down) callback(ref + width);
+    if (x !== width - 1) {
+      if (up) callback(ref - width + 1);
+      callback(ref + 1);
+      if (down) callback(ref + width + 1);
     }
   }
 
@@ -599,17 +641,20 @@ export class PagedGameMap implements GameMap {
       existingState & (1 << PagedGameMap.FALLOUT_BIT),
     );
     if (state !== 0 || page.state !== null) {
-      (page.state ??= new Uint16Array(page.width * page.height))[offset] = state;
+      (page.state ??= new Uint16Array(page.width * page.height))[offset] =
+        state;
     }
     const newFallout = Boolean(state & (1 << PagedGameMap.FALLOUT_BIT));
     if (existingFallout !== newFallout)
       this.falloutTiles += newFallout ? 1 : -1;
+    this.stateObserver?.(ref);
 
     const previousTerrain = page.terrain[offset];
     if (previousTerrain === terrain) return false;
     const wasLand = Boolean(previousTerrain & (1 << PagedGameMap.IS_LAND_BIT));
     const isLand = Boolean(terrain & (1 << PagedGameMap.IS_LAND_BIT));
     page.terrain[offset] = terrain;
+    for (const listener of this.terrainObservers) listener(ref);
     if (wasLand !== isLand) this.landTiles_ += isLand ? 1 : -1;
     return true;
   }

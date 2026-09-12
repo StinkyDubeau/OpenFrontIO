@@ -17,6 +17,7 @@ import {
   WorkerManagedGameStats,
   WorkerManagedGameTurns,
   WorkerMessageSchema,
+  type MasterEndManagedGame,
   type WorkerDeploymentDrainStatus,
 } from "./IPCBridgeSchema";
 import { logger } from "./Logger";
@@ -298,6 +299,21 @@ export class MasterLobbyService {
       );
     }
     return promise;
+  }
+
+  /** Instruct the owning worker to close a managed simulation immediately. */
+  endManagedGame(gameID: string): void {
+    const worker = this.workers.get(ServerEnv.workerIndex(gameID));
+    if (!worker) return;
+    const message: MasterEndManagedGame = { type: "endManagedGame", gameID };
+    worker.send(message, (error) => {
+      if (error) {
+        this.log.warn("Failed to end managed game on worker", {
+          gameID,
+          error: error.message,
+        });
+      }
+    });
   }
 
   private handleManagedGameReady(

@@ -146,7 +146,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     }
 
     const tile = this.game.ref(worldCoord.x, worldCoord.y);
-    if (!tile) return;
+    if (!this.game.isTileVisible(tile)) return;
 
     const owner = this.game.owner(tile);
 

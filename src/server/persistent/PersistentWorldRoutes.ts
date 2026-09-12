@@ -59,6 +59,8 @@ export interface PersistentWorldRouterOptions {
   gameplayIdentityVerifier?: (playToken: string) => string | Promise<string>;
   /** Mints a short-lived worker-verifiable credential for guest playtesting. */
   guestGameplayTokenFactory?: (identityId: string) => string;
+  /** Temporary public dev control; never enable this in staging or prod. */
+  allowPublicDevControls?: boolean;
 }
 
 function requireJson(req: Request): void {
@@ -293,6 +295,40 @@ export function createPersistentWorldRouter(
     }),
   );
 
+  router.post(
+    "/:id/unlock",
+    route(async (req, res) => {
+      requireNoQuery(req);
+      requireJson(req);
+      const input = z
+        .object({
+          password: z.string().min(1).max(128),
+          displayName: z.string().trim().min(1).max(80),
+        })
+        .strict()
+        .parse(req.body);
+      await service.unlockWorld(
+        worldId(req),
+        bearerToken(req, true),
+        input.password,
+        input.displayName,
+      );
+      res.json({ unlocked: true });
+    }),
+  );
+
+  router.post(
+    "/:id/play-token",
+    route((req, res) => {
+      requireNoQuery(req);
+      requireJson(req);
+      EmptyBodySchema.parse(req.body);
+      res.json({
+        playToken: service.worldPlayToken(worldId(req), bearerToken(req, true)),
+      });
+    }),
+  );
+
   router.put(
     "/:id/rsvp",
     route((req, res) => {
@@ -361,6 +397,39 @@ export function createPersistentWorldRouter(
       requireJson(req);
       EmptyBodySchema.parse(req.body);
       res.json(service.cancel(worldId(req), bearerToken(req, true)));
+    }),
+  );
+
+  // TODO(remove-after-playtests): intentionally visible to every development
+  // client so a broken world can be cleared without database access.
+  router.post(
+    "/:id/dev-end",
+    route(async (req, res) => {
+      requireNoQuery(req);
+      requireJson(req);
+      EmptyBodySchema.parse(req.body);
+      if (!options.allowPublicDevControls) {
+        throw new PersistentWorldHttpError(
+          404,
+          "DEV_CONTROL_UNAVAILABLE",
+          "Development controls are unavailable on this server",
+        );
+      }
+      const world = await service.endForDevelopment(
+        worldId(req),
+        bearerToken(req, true),
+      );
+      res.json({ ended: true, phase: world.phase });
+    }),
+  );
+
+  router.post(
+    "/:id/start",
+    route((req, res) => {
+      requireNoQuery(req);
+      requireJson(req);
+      EmptyBodySchema.parse(req.body);
+      res.json(service.startCustomWorld(worldId(req), bearerToken(req, true)));
     }),
   );
 

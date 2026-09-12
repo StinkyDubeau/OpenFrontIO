@@ -203,7 +203,7 @@ describe("headless simulation and rendering parity", () => {
             id: "query1",
             playerID: reference.game.playerByClientID("human001")!.id(),
             units: null,
-          })
+          }, "human001")
         ).bytes.buffer as ArrayBuffer,
       );
       expect(actions.kind).toBe("result");

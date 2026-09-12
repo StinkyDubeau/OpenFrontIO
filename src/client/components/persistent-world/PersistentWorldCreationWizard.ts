@@ -6,11 +6,14 @@ import type {
   PersistentWorldDuration,
   PersistentWorldMode,
 } from "../../../core/PersistentWorldSchemas";
-import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import {
-  formatWorldDate,
-  formatWorldDuration,
-} from "./PersistentWorldComponents";
+  CUSTOM_WORLD_PRESETS,
+  WORLD_PRESETS,
+  type WorldPreset,
+} from "../../../core/WorldPresets";
+import { placeholderCopy } from "../../copy/PlaceholderCopy";
+import { formatWorldDate } from "./PersistentWorldComponents";
+import { worldModeSummary } from "./WorldModeSummary";
 
 interface SchedulePreset {
   id: string;
@@ -56,11 +59,15 @@ const SCHEDULE_PRESETS: SchedulePreset[] = [
 @customElement("persistent-world-creation-wizard")
 export class PersistentWorldCreationWizard extends LitElement {
   @property({ type: Boolean }) submitting = false;
+  @property({ type: Boolean }) departing = false;
+  @property({ type: Boolean }) customGame = false;
+  @state() private gamePreset: WorldPreset = "great-lakes";
   @property() error = "";
   @state() private step = 0;
   @state() private name = "";
   @state() private duration: PersistentWorldDuration = "1d";
   @state() private access: PersistentWorldAccess = "private";
+  @state() private password = "";
   @state() private mode: PersistentWorldMode = "ffa";
   @state() private maxHumans = 8;
   @state() private teamId = "team-1";
@@ -72,6 +79,14 @@ export class PersistentWorldCreationWizard extends LitElement {
     return this;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    const preset = new URLSearchParams(window.location.search).get("preset");
+    if (CUSTOM_WORLD_PRESETS.some((id) => id === preset)) {
+      this.gamePreset = preset as WorldPreset;
+    }
+  }
+
   render() {
     const stepTitles = [
       placeholderCopy.wizard.worldTitle,
@@ -81,7 +96,11 @@ export class PersistentWorldCreationWizard extends LitElement {
     ];
     const stepNames = ["World", "Players", "Start", "Invitation"];
     return html`
-      <section class="pw-wizard" aria-labelledby="pw-wizard-title">
+      <section
+        class="pw-wizard ${this.departing ? "is-departing" : ""}"
+        aria-labelledby="pw-wizard-title"
+        aria-busy=${this.submitting || this.departing ? "true" : "false"}
+      >
         <header class="pw-wizard__header">
           <button
             class="pw-icon-button"
@@ -153,7 +172,7 @@ export class PersistentWorldCreationWizard extends LitElement {
             class="pw-button pw-button--secondary"
             type="button"
             @click=${this.back}
-            ?disabled=${this.submitting}
+            ?disabled=${this.submitting || this.departing}
           >
             ${this.step === 0 ? "Cancel" : "Back"}
           </button>
@@ -161,7 +180,7 @@ export class PersistentWorldCreationWizard extends LitElement {
             class="pw-button pw-button--primary"
             type="button"
             @click=${this.next}
-            ?disabled=${this.submitting || !this.canContinue()}
+            ?disabled=${this.submitting || this.departing || !this.canContinue()}
           >
             ${
               this.submitting
@@ -183,10 +202,10 @@ export class PersistentWorldCreationWizard extends LitElement {
           <span class="pw-step-number">01</span>
           <div>
             <h2 data-copy-slot="wizard.worldHeading">
-              ${placeholderCopy.wizard.worldHeading}
+              ${this.customGame ? "Choose a world" : "Enormous Earth · 4×"}
             </h2>
             <p data-copy-slot="wizard.worldInstructions">
-              ${placeholderCopy.wizard.worldInstructions}
+              ${this.customGame ? "Choose your map and economy." : "One shared game mode. Choose who joins and when it begins."}
             </p>
           </div>
         </div>
@@ -202,33 +221,30 @@ export class PersistentWorldCreationWizard extends LitElement {
               (this.name = (event.currentTarget as HTMLInputElement).value)}
           />
         </label>
-        <fieldset class="pw-choice-grid pw-choice-grid--three">
-          <legend>${placeholderCopy.wizard.paceLabel}</legend>
-          ${(["1h", "1d", "7d"] as const).map(
-            (duration) => html`
-              <label
-                class="pw-choice-card ${
-                  this.duration === duration ? "is-selected" : ""
-                }"
+        ${
+          this.customGame
+            ? html`<fieldset class="pw-choice-grid pw-world-options">
+                <legend>World</legend>
+                ${CUSTOM_WORLD_PRESETS.map(
+            (id) =>
+              html` <label
+                class="pw-choice-card ${this.gamePreset === id ? "is-selected" : ""}"
               >
                 <input
                   type="radio"
-                  name="duration"
-                  value=${duration}
-                  .checked=${this.duration === duration}
-                  @change=${() => (this.duration = duration)}
+                  name="game-preset"
+                  value=${id}
+                  .checked=${this.gamePreset === id}
+                  @change=${() => (this.gamePreset = id)}
                 />
-                <span class="pw-choice-card__icon" aria-hidden="true"
-                  >${
-                    duration === "1h" ? "◷" : duration === "1d" ? "◑" : "✦"
-                  }</span
-                >
-                <strong>${formatWorldDuration(duration)}</strong>
-                <small>${placeholderCopy.wizard.paceDescriptions[duration]}</small>
-              </label>
-            `,
+                <strong>${WORLD_PRESETS[id].label}</strong>
+                ${worldModeSummary(id)}
+                ${id === "hd-earth-9x" ? html`<small>Experimental terrain · boats may clip riverbanks</small>` : nothing}
+              </label>`,
           )}
-        </fieldset>
+              </fieldset>`
+            : worldModeSummary("scheduled-earth")
+        }
         <p class="pw-disclosure" data-copy-slot="wizard.pacingDisclosure">
           ${placeholderCopy.wizard.pacingDisclosure}
         </p>
@@ -267,9 +283,11 @@ export class PersistentWorldCreationWizard extends LitElement {
               "access",
             )}
           </fieldset>
-          <fieldset class="pw-choice-grid">
-            <legend>Diplomacy</legend>
-            ${this.binaryChoices(
+          ${
+            this.customGame
+              ? html`<fieldset class="pw-choice-grid">
+                  <legend>Diplomacy</legend>
+                  ${this.binaryChoices(
               [
                 [
                   "ffa",
@@ -282,8 +300,30 @@ export class PersistentWorldCreationWizard extends LitElement {
               (value) => (this.mode = value as PersistentWorldMode),
               "mode",
             )}
-          </fieldset>
+                </fieldset>`
+              : html`<div class="pw-schedule-confirmation">
+                  <span>Diplomacy</span><strong>Free for all</strong>
+                </div>`
+          }
         </div>
+        ${
+          this.access === "private"
+            ? html`<label class="pw-field"
+                ><span>Game password</span>
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength="128"
+                  .value=${this.password}
+                  @input=${(event: Event) => (this.password = (event.target as HTMLInputElement).value)}
+                />
+                <small
+                  >Share this password and the invitation. Use the same username
+                  to resume on another device.</small
+                >
+              </label>`
+            : nothing
+        }
         <div class="pw-stepper-field">
           <div>
             <span>${placeholderCopy.wizard.playerCountLabel}</span
@@ -334,6 +374,21 @@ export class PersistentWorldCreationWizard extends LitElement {
   }
 
   private renderScheduleStep() {
+    if (this.customGame)
+      return html` <div class="pw-wizard-step">
+        <div class="pw-wizard-step__intro">
+          <span class="pw-step-number">03</span>
+          <div>
+            <h2>Start when ready</h2>
+            <p>You control when this game begins.</p>
+          </div>
+        </div>
+        <div class="pw-schedule-confirmation">
+          <span>Host-controlled start</span>
+          <strong>Invite players, then press Start game in the lobby.</strong>
+          <small>No automatic countdown. You can also start on your own.</small>
+        </div>
+      </div>`;
     return html`
       <div class="pw-wizard-step">
         <div class="pw-wizard-step__intro">
@@ -402,49 +457,47 @@ export class PersistentWorldCreationWizard extends LitElement {
   private renderInvitationStep() {
     return html`
       <div class="pw-wizard-step pw-wizard-step--review">
-        <div class="pw-review-seal" aria-hidden="true"><span>IV</span></div>
-        <div class="pw-wizard-step__intro pw-wizard-step__intro--centered">
-          <div>
-            <h2 data-copy-slot="wizard.stepHeading">
-              ${placeholderCopy.wizard.stepHeading}
-            </h2>
-            <p data-copy-slot="wizard.stepInstructions">
-              ${placeholderCopy.wizard.stepInstructions}
+        <article class="pw-invitation-card pw-invitation-card--draft">
+          <div class="pw-invitation-card__seal" aria-hidden="true">
+            <span>IF</span>
+          </div>
+          <div class="pw-invitation-card__body">
+            <div class="pw-eyebrow">
+              ${this.access === "private" ? "Private invitation" : "Open world"}
+            </div>
+            <h1>${this.name.trim()}</h1>
+            <p class="pw-invitation-card__date">
+              ${this.customGame ? "Starts when the host is ready" : formatWorldDate(this.startsAt)}
             </p>
+            <div class="pw-invitation-card__draft-status">
+              <span aria-hidden="true"></span>
+              Invitation ready to create
+            </div>
+            <dl class="pw-invitation-card__facts">
+              <div>
+                <dt>World</dt>
+                <dd>
+                  ${WORLD_PRESETS[this.customGame ? this.gamePreset : "scheduled-earth"].label}
+                </dd>
+              </div>
+              <div>
+                <dt>Commanders</dt>
+                <dd>0/${this.maxHumans}</dd>
+              </div>
+              <div>
+                <dt>Format</dt>
+                <dd>${this.mode === "ffa" ? "Free for all" : "Teams"}</dd>
+              </div>
+            </dl>
+            ${worldModeSummary(this.customGame ? this.gamePreset : "scheduled-earth")}
           </div>
-        </div>
-        <dl class="pw-review-grid">
-          <div>
-            <dt>World</dt>
-            <dd>${this.name.trim()}</dd>
+          <div class="pw-invitation-card__draft-note">
+            <strong
+              >${this.access === "private" ? "Invitation only" : "Public listing"}</strong
+            >
+            <span>${this.maxHumans} player slots</span>
           </div>
-          <div>
-            <dt>Starts</dt>
-            <dd>${formatWorldDate(this.startsAt)}</dd>
-          </div>
-          <div>
-            <dt>Pace</dt>
-            <dd>${formatWorldDuration(this.duration)}</dd>
-          </div>
-          <div>
-            <dt>Seats</dt>
-            <dd>${this.maxHumans} humans</dd>
-          </div>
-          <div>
-            <dt>Access</dt>
-            <dd>
-              ${
-                this.access === "private" ? "Invitation only" : "Public listing"
-              }
-            </dd>
-          </div>
-          <div>
-            <dt>Format</dt>
-            <dd>
-              ${this.mode === "ffa" ? "Free for all" : "Player-chosen teams"}
-            </dd>
-          </div>
-        </dl>
+        </article>
         <div
           class="pw-disclosure pw-disclosure--emphasis"
           data-copy-slot="wizard.reviewDisclosure"
@@ -507,6 +560,7 @@ export class PersistentWorldCreationWizard extends LitElement {
   }
 
   private hasValidSchedule(): boolean {
+    if (this.customGame) return true;
     return (
       this.startsAt >= Date.now() + 60_000 &&
       this.startsAt <= Date.now() + 14 * 24 * 60 * 60 * 1000
@@ -514,7 +568,7 @@ export class PersistentWorldCreationWizard extends LitElement {
   }
 
   private canOpenStep(index: number): boolean {
-    if (this.submitting) return false;
+    if (this.submitting || this.departing) return false;
     if (index <= this.step) return true;
     if (index > 0 && this.name.trim().length === 0) return false;
     if (index > 2 && !this.hasValidSchedule()) return false;
@@ -534,13 +588,18 @@ export class PersistentWorldCreationWizard extends LitElement {
       return;
     }
     const input: CreatePersistentWorldRequest = {
+      startMode: this.customGame ? "host" : "scheduled",
+      gamePreset: this.customGame ? this.gamePreset : "scheduled-earth",
       name: this.name.trim(),
       targetDuration: this.duration,
       access: this.access,
-      mode: this.mode,
+      ...(this.access === "private" && this.password
+        ? { password: this.password }
+        : {}),
+      mode: this.customGame ? this.mode : "ffa",
       maxHumans: this.maxHumans,
       startsAt: this.startsAt,
-      teamId: this.mode === "teams" ? this.teamId : null,
+      teamId: this.customGame && this.mode === "teams" ? this.teamId : null,
     };
     this.dispatchEvent(
       new CustomEvent("world-create", {

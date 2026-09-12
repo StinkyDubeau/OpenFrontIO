@@ -5,7 +5,7 @@ import express, {
   type Request,
   type Response,
 } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -115,6 +115,17 @@ app.use(
   rateLimit({
     windowMs: 60_000,
     max: 300,
+    keyGenerator: (req) => {
+      const token = req
+        .get("authorization")
+        ?.match(/^Bearer ([A-Za-z0-9_-]{32,512})$/)?.[1];
+      const session = token
+        ? persistentWorldService?.repository.resumeControllerSession(token)
+        : undefined;
+      return session
+        ? `world-controller:${session.identity.id}`
+        : ipKeyGenerator(req.ip ?? "unknown");
+    },
     standardHeaders: true,
     legacyHeaders: false,
   }),
@@ -157,7 +168,10 @@ app.use(
     max: 20, // 20 requests per IP per second
     // The route-specific ceilings above protect transport resources. Beneath
     // those ceilings, every validly authenticated tap reaches the watchdog.
-    skip: (req) => req.path === "/api/idle/tap",
+    skip: (req) =>
+      req.path === "/api/idle/tap" ||
+      req.path.startsWith("/api/worlds/") ||
+      req.path === "/api/worlds",
   }),
 );
 
@@ -236,6 +250,7 @@ export async function startMaster() {
     persistentWorldRepository,
     playlist,
     (command) => lobbyService.createManagedGame(command),
+    (gameID) => lobbyService.endManagedGame(gameID),
   );
   lobbyService.setManagedGameTurnHandler((message) =>
     persistentWorldRuntimeBridge!.persistTurns(message),
@@ -287,6 +302,7 @@ export async function startMaster() {
   );
   persistentWorldNotificationTimer.unref?.();
   persistentWorldRouter = createPersistentWorldRouter(persistentWorldService, {
+    allowPublicDevControls: ServerEnv.env() === GameEnv.Dev,
     onInternalError: (error) =>
       log.error("Persistent-world request failed", error),
     gameplayIdentityVerifier: async (playToken) => {

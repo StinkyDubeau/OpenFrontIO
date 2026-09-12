@@ -85,15 +85,17 @@ export class MainRadialMenu implements Controller {
       if (this.game.myPlayer() === null) {
         return;
       }
-      this.clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
+      this.clickedTile = this.game.resolveFogTap(this.game.ref(worldCoords.x, worldCoords.y));
+      if (this.clickedTile === null) return;
+      const selectedTile = this.clickedTile;
       this.game
         .myPlayer()!
-        .actions(this.clickedTile)
+        .actions(selectedTile)
         .then((actions) => {
           this.updatePlayerActions(
             this.game.myPlayer()!,
             actions,
-            this.clickedTile!,
+            selectedTile,
             event.x,
             event.y,
           );

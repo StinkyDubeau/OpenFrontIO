@@ -1,4 +1,5 @@
 import { Config } from "../configuration/Config";
+import { collectBorderClusters } from "../game/BorderClusters";
 import {
   Cell,
   Execution,
@@ -336,32 +337,11 @@ export class PlayerExecution implements Execution {
   }
 
   private calculateClusters(): TileRef[][] {
-    const borderTiles = this.player.borderTiles();
-    if (borderTiles.size === 0) return [];
-
-    const state = this.traversalState();
-    const currentGen = this.bumpGeneration();
-
-    const clusters: TileRef[][] = [];
-
-    // Set.forEach instead of for..of: iterating a large Set allocates an
-    // iterator-result object per element, and border sets can be huge.
-    const neighborFn = (tile: TileRef, cb: (neighbor: TileRef) => void) =>
-      this.mg.forEachNeighborWithDiag(tile, cb);
-    const includeFn = (tile: TileRef) => borderTiles.has(tile);
-    borderTiles.forEach((startTile) => {
-      if (state.has(startTile, currentGen)) return;
-
-      const cluster = this.floodFillWithGen(
-        currentGen,
-        state,
-        [startTile],
-        neighborFn,
-        includeFn,
-      );
-      clusters.push(cluster);
-    });
-    return clusters;
+    return collectBorderClusters(
+      this.map,
+      this.player.borderTiles(),
+      this.traversalState(),
+    );
   }
 
   owner(): Player {

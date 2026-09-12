@@ -333,8 +333,10 @@ describe("GameView.update — packed channels", () => {
     // A new record updates the placement (alice is alive).
     const gu3 = makeEmptyGu(3);
     gu3.playerNameViewData = { alice: { x: 11, y: 13, size: 4 } };
+    const existingLabel = game.frameData().names.get("alice");
     game.update(gu3);
     expect(game.frameData().names.get("alice")).toMatchObject({ x: 11, y: 13 });
+    expect(game.frameData().names.get("alice")).toBe(existingLabel);
   });
 
   it("dead players keep their last name placement (freeze at death)", () => {

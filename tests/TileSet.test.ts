@@ -109,6 +109,17 @@ describe("TileSet", () => {
     expect([...s]).toEqual([7]);
   });
 
+  it("reports fresh insertion-order positions across compaction and reinsertion", () => {
+    const set = new TileSet(Array.from({ length: 300 }, (_, i) => i));
+    for (let i = 0; i < 250; i++) set.delete(i);
+    set.delete(260);
+    set.add(260);
+    const positions = [...set].map((tile) => set.positionOf(tile));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(set.positionOf(3)).toBe(-1);
+    expect(set.positionOf(260)).toBeGreaterThan(set.positionOf(299));
+  });
+
   it("handles large tile refs (up to the 65535x65535 map bound)", () => {
     const big = 65535 * 65535 - 1;
     const s = new TileSet([big, 0, big - 1]);

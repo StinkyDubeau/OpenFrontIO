@@ -20,6 +20,7 @@ NOTES.md
 src/assets/
 
 # Debug / Log Outputs
+.dev-logs/
 *.log
 *debug*.txt
 eslint_out.txt

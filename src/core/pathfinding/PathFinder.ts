@@ -12,15 +12,27 @@ import { StationPathFinder } from "./PathFinder.Station";
 import { PathFinderBuilder } from "./PathFinderBuilder";
 import { PathFinderStepper, StepperConfig } from "./PathFinderStepper";
 import { ComponentCheckTransformer } from "./transformers/ComponentCheckTransformer";
+import { ExactRouteCache } from "./transformers/ExactRouteCache";
+import { FailedRouteCache } from "./transformers/FailedRouteCache";
 import { MiniMapTransformer } from "./transformers/MiniMapTransformer";
 import { ShoreCoercingTransformer } from "./transformers/ShoreCoercingTransformer";
 import { SmoothingWaterTransformer } from "./transformers/SmoothingWaterTransformer";
+import { WaterRefinementTransformer } from "./transformers/WaterRefinementTransformer";
 import {
   PathFinder,
   PathResult,
   PathStatus,
   SteppingPathFinder,
 } from "./types";
+import {
+  takeWaterPreparation,
+  type WaterRouteExecutor,
+} from "./WaterRoutePreparation";
+
+const railSearches = new WeakMap<GameMap, AStarRail>();
+export function railSearchMetrics(game: Game) {
+  return railSearches.get(game.miniMap())?.metrics;
+}
 
 /**
  * Pathfinders that work with GameMap - usable in both simulation and UI layers
@@ -41,29 +53,52 @@ export class UniversalPathFinding {
 // Single-threaded worker + stamp-based scratch invalidation makes sharing safe.
 const _waterChainCache = new WeakMap<
   Game,
-  { version: number; chain: PathFinder<TileRef> }
+  {
+    version: number;
+    chain: PathFinder<TileRef>;
+    exact: ExactRouteCache;
+    refinement: WaterRefinementTransformer;
+  }
 >();
 
-function buildWaterChain(game: Game): PathFinder<TileRef> {
+// One observer per game, not per ship or graph rebuild. Conversions invalidate
+// failures immediately, including the interval BEFORE a throttled graph rebuild.
+const waterTerrainEpochs = new WeakMap<Game, { value: number }>();
+function waterTerrainEpoch(game: Game): { value: number } {
+  let epoch = waterTerrainEpochs.get(game);
+  if (!epoch) {
+    epoch = { value: 0 };
+    const observed = epoch;
+    game.observeWaterConversions(() => {
+      observed.value++;
+    });
+    waterTerrainEpochs.set(game, epoch);
+  }
+  return epoch;
+}
+
+function buildWaterChain(game: Game): WaterRefinementTransformer {
   const hpa = game.miniWaterHPA();
   const graph = game.miniWaterGraph();
   const miniMap = game.miniMap();
 
   if (!hpa || !graph || graph.nodeCount < 100) {
     const simple = new AStarWater(miniMap);
-    return PathFinderBuilder.create(simple)
+    const coarse = PathFinderBuilder.create(simple)
       .wrap((pf) => new ShoreCoercingTransformer(pf, miniMap))
       .wrap((pf) => new MiniMapTransformer(pf, game.map(), miniMap))
       .build();
+    return new WaterRefinementTransformer(coarse, game.map());
   }
 
   const componentCheckFn = (t: TileRef) => graph.getComponentId(t);
-  return PathFinderBuilder.create(hpa)
+  const coarse = PathFinderBuilder.create(hpa)
     .wrap((pf) => new ComponentCheckTransformer(pf, componentCheckFn))
     .wrap((pf) => new SmoothingWaterTransformer(pf, miniMap))
     .wrap((pf) => new ShoreCoercingTransformer(pf, miniMap))
     .wrap((pf) => new MiniMapTransformer(pf, game.map(), miniMap))
     .build();
+  return new WaterRefinementTransformer(coarse, game.map());
 }
 
 function sharedWaterChain(game: Game): PathFinder<TileRef> {
@@ -72,9 +107,40 @@ function sharedWaterChain(game: Game): PathFinder<TileRef> {
   if (cached && cached.version === version) {
     return cached.chain;
   }
-  const chain = buildWaterChain(game);
-  _waterChainCache.set(game, { version, chain });
+  const epoch = waterTerrainEpoch(game);
+  const revision = () => `${epoch.value}:${game.waterGraphVersion()}`;
+  const refinement = buildWaterChain(game);
+  const exact = new ExactRouteCache(refinement, revision);
+  const chain = new FailedRouteCache(exact, revision);
+  _waterChainCache.set(game, { version, chain, exact, refinement });
   return chain;
+}
+
+/** Only pure route calculations run ahead. The normal tick still validates
+ * spawns, ownership, targets and costs, and consumes results in its old order. */
+export async function prepareWaterRoutes(
+  game: Game,
+  execute: WaterRouteExecutor,
+): Promise<void> {
+  const hints = takeWaterPreparation(game);
+  if (!hints.length) return;
+  sharedWaterChain(game);
+  const state = _waterChainCache.get(game)!;
+  const revision = `${waterTerrainEpoch(game).value}:${game.waterGraphVersion()}`;
+  const jobs = hints
+    .filter((q) => !state.exact.has(q.from, q.to))
+    .map((q) => ({ ...q, route: state.refinement.coarsePath(q.from, q.to) }));
+  if (!jobs.length) return;
+  const results = await execute(jobs);
+  if (results.length !== jobs.length)
+    throw new Error("Incomplete navigation batch");
+  if (
+    revision !== `${waterTerrainEpoch(game).value}:${game.waterGraphVersion()}`
+  )
+    return;
+  // Explicit job ordering, regardless of worker completion order.
+  for (let i = 0; i < jobs.length; i++)
+    state.exact.store(jobs[i].from, jobs[i].to, results[i]);
 }
 
 /**
@@ -96,7 +162,8 @@ export class PathFinding {
 
   static Rail(game: Game): SteppingPathFinder<TileRef> {
     const miniMap = game.miniMap();
-    const pf = new AStarRail(miniMap);
+    let pf = railSearches.get(miniMap);
+    if (!pf) railSearches.set(miniMap, (pf = new AStarRail(miniMap)));
 
     return PathFinderBuilder.create(pf)
       .wrap((pf) => new MiniMapTransformer(pf, game.map(), miniMap))

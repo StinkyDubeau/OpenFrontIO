@@ -15,10 +15,17 @@ import { GameMap, TileRef } from "../game/GameMap";
 import { PseudoRandom } from "../PseudoRandom";
 import { assertNever } from "../Util";
 import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
+import { Config } from "../configuration/Config";
+import { AttackImpl } from "../game/AttackImpl";
+import type { WildernessAttackInput } from "./planning/WildernessAttackState";
+import type { WildernessAttackPlan } from "./planning/WildernessAttackPlanner";
 
 const malusForRetreat = 25;
 export class AttackExecution implements Execution {
   private active: boolean = true;
+  // init/tick own every heap/PRNG mutation; the attack separately versions its
+  // externally mutable troops, retreat flags and border set.
+  private executionVersion = 0;
   private toConquer = new FlatBinaryHeap();
 
   private random = new PseudoRandom(123);
@@ -50,11 +57,116 @@ export class AttackExecution implements Execution {
     return this._targetID;
   }
 
+  /** Read-only, opt-in planning checkpoint. Existing tick execution does not
+   * call this. Unsupported policy/configuration paths remain authoritative.
+   */
+  wildernessPlanningInput(tick: number): WildernessAttackInput | null {
+    if (!this.active || !this.target || this.target.isPlayer() ||
+        !(this.attack instanceof AttackImpl) || !this.attack.isActive() ||
+        this.attack.retreated() || this.attack.retreating() ||
+        this.mg.hasAttackActivityPolicy?.() !== false)
+      return null;
+    const config = this.mg.config();
+    if (Object.getPrototypeOf(config) !== Config.prototype || config.gameConfig().fogOfWar ||
+        config.attackLogic !== Config.prototype.attackLogic ||
+        config.attackTilesPerTick !== Config.prototype.attackTilesPerTick ||
+        config.falloutDefenseModifier !== Config.prototype.falloutDefenseModifier)
+      return null;
+    return {
+      state: {
+        attackID: this.attack.id(), ownerSmallID: this.ownerSmallID,
+        ownerType: this._owner.type(), troops: this.attack.troops(),
+        border: this.attack.borderSnapshot(), random: this.random.snapshot(),
+        heap: this.toConquer.snapshot(),
+      },
+      map: this.map, config, tick: this.mg.ticks(), executionTick: tick,
+    };
+  }
+
+  /** Authority-local guard, never sent to workers. Checks no heap/border arrays.
+   * A caller still needs coherent tile revisions and must validate immediately
+   * before applying a plan at this execution's original position.
+   */
+  wildernessPlanningCheckpoint(tick: number): {
+    execution: AttackExecution;
+    input: WildernessAttackInput;
+    unchanged: (executionTick: number) => boolean;
+  } | null {
+    const input = this.wildernessPlanningInput(tick);
+    if (!input) return null;
+    const attack = this.attack as AttackImpl;
+    const attackVersion = attack.planningVersion();
+    const executionVersion = this.executionVersion;
+    if (!Number.isSafeInteger(attackVersion) || !Number.isSafeInteger(executionVersion))
+      return null;
+    const config = input.config;
+    const configJSON = JSON.stringify(config.gameConfig());
+    const logic = config.attackLogic, pace = config.attackTilesPerTick,
+      falloutModifier = config.falloutDefenseModifier;
+    const land = this.map.numLandTiles(), fallout = this.map.numTilesWithFallout();
+    return { execution: this, input, unchanged: (executionTick) =>
+      executionTick === input.executionTick && this.mg.ticks() === input.tick &&
+      this.active && this.executionVersion === executionVersion &&
+      this.attack === attack && attack.planningVersion() === attackVersion &&
+      attack.isActive() && !attack.retreating() && !attack.retreated() &&
+      this.ownerSmallID === input.state.ownerSmallID && this._owner.type() === input.state.ownerType &&
+      this.map === input.map && this.mg.config() === config &&
+      this.mg.hasAttackActivityPolicy?.() === false &&
+      config.attackLogic === logic && config.attackTilesPerTick === pace &&
+      config.falloutDefenseModifier === falloutModifier &&
+      this.map.numLandTiles() === land && this.map.numTilesWithFallout() === fallout &&
+      JSON.stringify(config.gameConfig()) === configJSON,
+    };
+  }
+
+  /** Internal authority API. Caller supplies coherent world-dependency
+   * validation, never a client callback. Currently exercised by replay tools
+   * only. Heap/PRNG checkpoints are private planning state; ordinary observers
+   * still see the original ordered border/troop/conquest effects.
+   */
+  tryApplyWildernessPlan(
+    checkpoint: NonNullable<ReturnType<AttackExecution["wildernessPlanningCheckpoint"]>>,
+    plan: WildernessAttackPlan,
+    tick: number,
+    tilesUnchanged: () => boolean,
+  ): boolean {
+    if (checkpoint.execution !== this || plan.kind !== "shadow-plan" ||
+        !checkpoint.unchanged(tick) || !tilesUnchanged() ||
+        plan.state.attackID !== checkpoint.input.state.attackID ||
+        plan.state.ownerSmallID !== this.ownerSmallID ||
+        plan.state.ownerType !== this._owner.type()) return false;
+    // Validate/allocate the replacement buffers BEFORE any authoritative write.
+    let heap: FlatBinaryHeap, random: PseudoRandom;
+    try {
+      heap = FlatBinaryHeap.fromSnapshot(plan.state.heap);
+      random = PseudoRandom.fromSnapshot(plan.state.random);
+    } catch { return false; }
+    for (const effect of plan.effects) {
+      if (effect.type === "troops") {
+        if (!Number.isFinite(effect.troops) || effect.troops < 0) return false;
+      } else if (!(effect.type === "border-add" || effect.type === "border-remove" || effect.type === "conquer") ||
+          !this.map.isValidRef(effect.tile)) return false;
+    }
+    this.executionVersion++;
+    for (const effect of plan.effects) {
+      switch (effect.type) {
+        case "border-add": this.attack!.addBorderTile(effect.tile); break;
+        case "border-remove": this.attack!.removeBorderTile(effect.tile); break;
+        case "troops": this.attack!.setTroops(effect.troops); break;
+        case "conquer": this._owner.conquer(effect.tile); break;
+      }
+    }
+    this.toConquer = heap;
+    this.random = random;
+    return true;
+  }
+
   activeDuringSpawnPhase(): boolean {
     return false;
   }
 
   init(mg: Game, ticks: number) {
+    this.executionVersion++;
     if (!this.active) {
       return;
     }
@@ -228,6 +340,7 @@ export class AttackExecution implements Execution {
   }
 
   tick(ticks: number) {
+    this.executionVersion++;
     if (this.attack === null) {
       throw new Error("Attack not initialized");
     }
@@ -260,6 +373,12 @@ export class AttackExecution implements Execution {
       return;
     }
 
+    // Keep cancellation, death and diplomacy responsive on every tick. Only
+    // the expensive remote bot frontier expansion may use the fog scheduler.
+    // Never accumulate skipped work into a burst when a human approaches.
+    const expansionBudget = this.mg.attackExpansionBudget(this._owner, this.target, ticks);
+    if (expansionBudget <= 0) return;
+
     let numTilesPerTick = this.mg
       .config()
       .attackTilesPerTick(
@@ -268,6 +387,8 @@ export class AttackExecution implements Execution {
         this.target,
         this.attack.borderSize() + this.random.nextInt(0, 5),
       );
+
+    numTilesPerTick = Math.min(numTilesPerTick, expansionBudget);
 
     while (numTilesPerTick > 0) {
       if (troopCount < 1) {
@@ -342,9 +463,10 @@ export class AttackExecution implements Execution {
     const numNeighbors = this.map.neighbors4(tile, this.nbuf);
     for (let i = 0; i < numNeighbors; i++) {
       const neighbor = this.nbuf[i];
+      const terrain = this.map.terrainType(neighbor);
       if (
-        this.map.isWater(neighbor) ||
-        this.map.isImpassable(neighbor) ||
+        terrain === TerrainType.Ocean ||
+        terrain === TerrainType.Impassable ||
         this.map.ownerID(neighbor) !== this.targetSmallID
       ) {
         continue;
@@ -359,7 +481,7 @@ export class AttackExecution implements Execution {
       }
 
       let mag: number;
-      switch (this.map.terrainType(neighbor)) {
+      switch (terrain) {
         case TerrainType.Plains:
           mag = 1;
           break;

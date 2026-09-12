@@ -54,6 +54,9 @@ import { createTexture2D } from "./utils/GlUtils";
  * is fixed-size and native-resolution detail is supplied by an LRU page atlas.
  */
 export class PagedRenderer {
+  private fogEnabled = false;
+  private readonly fogReducedMotion = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  setFog(enabled: boolean): void { this.fogEnabled = enabled; }
   private readonly gl: WebGL2RenderingContext;
   private readonly camera: Camera;
   private readonly overviewPass: OverviewMapPass;
@@ -128,7 +131,10 @@ export class PagedRenderer {
     // Expanded Earth maps retain the 4108-wide upstream world's geography
     // while increasing logical resolution. Normalize zoom-sensitive overlays
     // so they appear at the same geographic scale.
-    this.resolutionScale = Math.max(1, header.mapWidth / 4108);
+    // Map enlargement adds tiles, not larger pixels. Scaling detail by total
+    // map width inflated structures, rails and wakes ~5.2x on Pixel Earth 27x.
+    // Match the ordinary renderer's camera zoom and native tile proportions.
+    this.resolutionScale = 1;
     this.camera = new Camera(header.mapWidth, header.mapHeight);
     this.cameraX = header.mapWidth / 2;
     this.cameraY = header.mapHeight / 2;
@@ -454,6 +460,7 @@ export class PagedRenderer {
     gl.disable(gl.BLEND);
     gl.clearColor(60 / 255, 60 / 255, 60 / 255, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    this.overviewPass.setFogRendering(this.fogEnabled, this.fogReducedMotion ? 0 : performance.now() / 1000);
     this.overviewPass.draw(cam);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

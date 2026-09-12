@@ -1,7 +1,8 @@
 import WebSocket from "ws";
 
 interface Frame {
-  bytes: Uint8Array;
+  packets: Array<Uint8Array | undefined>;
+  index: number;
   tick: number;
 }
 /** Bounded application-acknowledged window. RTT never gates one game tick. */
@@ -41,17 +42,25 @@ export class ViewConnection {
     this.pump();
   }
   enqueue(bytes: Uint8Array, tick: number): void {
+    this.enqueueBatch([bytes], tick);
+  }
+  /** A bounded logical update may contain many mobile-sized reveal fragments. */
+  enqueueBatch(packets: readonly Uint8Array[], tick: number): void {
     if (this.closed) return;
+    if (!packets.length) return;
+    const size = packets.reduce((sum, bytes) => sum + bytes.byteLength, 0);
     if (
       this.queue.length >= 1_024 ||
-      this.queuedBytes + bytes.byteLength > 128 * 1024 * 1024
+      packets.length > 16_384 ||
+      this.queuedBytes + size > 128 * 1024 * 1024
     ) {
       this.stop();
       this.onSlow();
       return;
     }
-    this.queue.push({ bytes, tick });
-    this.queuedBytes += bytes.byteLength;
+    // Own the outer list: other players/devices may share immutable buffers.
+    this.queue.push({ packets: [...packets], index: 0, tick });
+    this.queuedBytes += size;
     this.pump();
   }
   acknowledge(sequence: number): void {
@@ -82,9 +91,11 @@ export class ViewConnection {
           this.snapshot = null;
         }
       } else {
-        const frame = this.queue.shift();
+        const frame = this.queue[0];
         if (!frame) break;
-        bytes = frame.bytes;
+        bytes = frame.packets[frame.index]!;
+        frame.packets[frame.index++] = undefined;
+        if (frame.index === frame.packets.length) this.queue.shift();
         this.queuedBytes -= bytes.byteLength;
       }
       const header = Buffer.alloc(4);

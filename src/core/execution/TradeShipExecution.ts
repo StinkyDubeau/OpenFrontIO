@@ -10,7 +10,9 @@ import {
 import { TileRef } from "../game/GameMap";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
+import { queueWaterPreparation } from "../pathfinding/WaterRoutePreparation";
 import { findClosestBy } from "../Util";
+import { routeDiagnostic } from "../utilities/RateLimitedDiagnostic";
 
 export class TradeShipExecution implements Execution {
   private active = true;
@@ -35,6 +37,9 @@ export class TradeShipExecution implements Execution {
     const stagger =
       TradeShipExecution._staggerCounter++ % WaterPathFinder.STAGGER_SPREAD;
     this.pathFinder = new WaterPathFinder(mg, stagger);
+    // Trade ships spawn at their source port. This hint changes neither spawn
+    // validation nor routing if the port/terrain changes before the next tick.
+    queueWaterPreparation(mg, this.srcPort.tile(), this._dstPort.tile());
   }
 
   tick(ticks: number): void {
@@ -161,7 +166,7 @@ export class TradeShipExecution implements Execution {
         this.complete();
         return;
       case PathStatus.NOT_FOUND:
-        console.warn("captured trade ship cannot find route");
+        routeDiagnostic("captured trade ship cannot find route");
         if (this.tradeShip.isActive()) {
           this.tradeShip.delete(false);
         }

@@ -238,6 +238,16 @@ export class DebugQuickLaunch extends LitElement {
                       : "Enormous Earth"
                   }
                 </button>
+                <button
+                  type="button"
+                  ?disabled=${this.action !== null}
+                  @click=${() => this.run("hd-earth-9x")}
+                >
+                  ${this.action === "hd-earth-9x" ? "Joining…" : "9× HD Earth"}
+                </button>
+                <p>
+                  9× HD Earth: experimental terrain. Boats may clip riverbanks.
+                </p>
               </div>`
             : null
         }

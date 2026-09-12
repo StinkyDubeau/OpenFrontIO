@@ -191,6 +191,20 @@ export class WorkerLobbyService {
         }
         break;
       }
+      case "endManagedGame": {
+        const game = this.gm.game(msg.gameID);
+        if (!game) break;
+        this.log.info("Ending managed game from development control", {
+          gameID: msg.gameID,
+        });
+        void game.end().catch((error) =>
+          this.log.error("Failed to end managed game", {
+            gameID: msg.gameID,
+            error,
+          }),
+        );
+        break;
+      }
       case "updateLobby": {
         const game = this.gm.game(msg.gameID);
         if (!game) {

@@ -4,9 +4,19 @@ import {
   type GameUpdateViewData,
   type RailroadConstructionUpdate,
 } from "../../core/game/GameUpdates";
+import {
+  packMotionPlans,
+  unpackMotionPlans,
+  type MotionPlanRecord,
+} from "../../core/game/MotionPlans";
 import { PlayerImpl } from "../../core/game/PlayerImpl";
 import type { GameRunner } from "../../core/GameRunner";
-import { encodeViewPacket } from "../../core/network/ViewProtocol";
+import {
+  decodeViewPacket,
+  encodeViewPacket,
+} from "../../core/network/ViewProtocol";
+import { projectFogTerrain } from "./FogTileProjection";
+import type { FogViewProjection } from "./FogViewProjection";
 
 // A packet expands to at most this many client-side tile writes. Keeping the
 // work bounded gives mobile Safari/Expo a regular event-loop yield for input,
@@ -39,6 +49,7 @@ export class ViewSnapshot {
   private names: GameUpdateViewData["playerNameViewData"];
   private startTick: number | undefined;
   private win: GameUpdates[GameUpdateType.Win] = [];
+  private motionPlans = new Map<number, MotionPlanRecord>();
   constructor(private runner: GameRunner) {
     const map = runner.game.map();
     this.changed = new Uint32Array(
@@ -46,6 +57,19 @@ export class ViewSnapshot {
     );
   }
   record(update: GameUpdateViewData): void {
+    if (update.packedMotionPlans) {
+      for (const plan of unpackMotionPlans(update.packedMotionPlans)) {
+        this.motionPlans.set(
+          plan.kind === "grid" ? plan.unitId : plan.engineUnitId,
+          plan,
+        );
+      }
+    }
+    for (const unit of update.updates[GameUpdateType.Unit]) {
+      if (!unit.isActive) this.motionPlans.delete(unit.id);
+    }
+    // Bound retained state by ongoing journeys, not the age of the world.
+    if (update.tick % 100 === 0) this.pruneMotionPlans(update.tick);
     if (update.packedNukeImpacts?.length) {
       this.destroyedLayerTiles ??= new Uint32Array(this.changed.length);
       for (const tile of update.packedNukeImpacts)
@@ -55,7 +79,12 @@ export class ViewSnapshot {
       const tile = update.packedTileUpdates[i];
       this.changed[tile >>> 5] |= 1 << (tile & 31);
     }
-    this.names = update.playerNameViewData ?? this.names;
+    // Live packets contain bounded label deltas. Rejoining viewers still need
+    // the complete latest placement record, including unchanged countries.
+    if (update.playerNameViewData) {
+      this.names ??= {};
+      Object.assign(this.names, update.playerNameViewData);
+    }
     this.startTick =
       update.updates[GameUpdateType.SpawnPhaseEnd][0]?.startTick ??
       this.startTick;
@@ -79,9 +108,116 @@ export class ViewSnapshot {
     if (update.updates[GameUpdateType.Win].length)
       this.win = update.updates[GameUpdateType.Win];
   }
+  private pruneMotionPlans(tick: number): void {
+    for (const [id, plan] of this.motionPlans) {
+      const duration =
+        plan.kind === "grid"
+          ? (plan.path.length - 1) * Math.max(1, plan.ticksPerStep)
+          : Math.ceil((plan.path.length - 1) / Math.max(1, plan.speed));
+      if (tick > plan.startTick + duration) this.motionPlans.delete(id);
+    }
+  }
+  fogPackets(projection: FogViewProjection): Uint8Array<ArrayBuffer>[] {
+    const game = this.runner.game,
+      tick = game.ticks();
+    const source = emptyView(tick);
+    source.updates[GameUpdateType.Player] = game
+      .allPlayers()
+      .map((p) => (p as PlayerImpl).toFullUpdate());
+    source.updates[GameUpdateType.Unit] = game
+      .units()
+      .map((unit) => unit.toUpdate());
+    source.updates[GameUpdateType.RailroadConstructionEvent] = [
+      ...this.rails.values(),
+    ];
+    this.pruneMotionPlans(tick);
+    source.packedMotionPlans = packMotionPlans([...this.motionPlans.values()]);
+    source.playerNameViewData = this.names;
+    if (this.startTick !== undefined)
+      source.updates[GameUpdateType.SpawnPhaseEnd] = [
+        { type: GameUpdateType.SpawnPhaseEnd, startTick: this.startTick },
+      ];
+    const projected = projection.project(source);
+    if (projection.fog.global) {
+      const packets = this.packets();
+      for (const index of [0, packets.length - 1]) {
+        const packet = decodeViewPacket(packets[index].buffer);
+        if (packet.kind === "update")
+          packet.update.fog = {
+            ...projected.fog!,
+            global: index !== 0,
+            resetUnits: index === 0,
+          };
+        packets[index] = encodeViewPacket(packet);
+      }
+      return packets;
+    }
+    const begin = emptyView(tick);
+    begin.fog = { ...projected.fog!, resetUnits: true };
+    begin.pendingTurns = 2;
+    begin.updates[GameUpdateType.SpawnPhaseEnd] =
+      projected.updates[GameUpdateType.SpawnPhaseEnd];
+    const packets = [
+      encodeViewPacket({ kind: "update", snapshot: "begin", update: begin }),
+    ];
+    const append = (part: GameUpdateViewData) => {
+      part.pendingTurns = 2;
+      packets.push(
+        encodeViewPacket({ kind: "update", snapshot: "part", update: part }),
+      );
+    };
+    for (const type of [
+      GameUpdateType.Player,
+      GameUpdateType.Unit,
+      GameUpdateType.RailroadConstructionEvent,
+    ] as const) {
+      const values = projected.updates[type];
+      for (let offset = 0; offset < values.length; offset += 64) {
+        const part = emptyView(tick);
+        part.updates[type] = values.slice(offset, offset + 64) as never;
+        append(part);
+      }
+    }
+    if (projected.playerNameViewData) {
+      const entries = Object.entries(projected.playerNameViewData);
+      for (let offset = 0; offset < entries.length; offset += 128) {
+        const part = emptyView(tick);
+        part.playerNameViewData = Object.fromEntries(
+          entries.slice(offset, offset + 128),
+        );
+        append(part);
+      }
+    }
+    for (const plan of unpackMotionPlans(
+      projected.packedMotionPlans ?? packMotionPlans([]),
+    )) {
+      const part = emptyView(tick);
+      part.packedMotionPlans = packMotionPlans([plan]);
+      append(part);
+    }
+    for (const runs of projection.explorationSnapshot()) {
+      const part = emptyView(tick);
+      part.packedTileRuns = runs;
+      part.packedTerrainUpdates = projectFogTerrain(
+        game.map(),
+        projection.fog,
+        runs,
+      );
+      append(part);
+    }
+    const end = emptyView(tick);
+    end.fog = projected.fog;
+    end.updates[GameUpdateType.Win] = this.win;
+    packets.push(
+      encodeViewPacket({ kind: "update", snapshot: "end", update: end }),
+    );
+    return packets;
+  }
+
   packets(): Uint8Array<ArrayBuffer>[] {
     const game = this.runner.game;
     const tick = game.ticks();
+    this.pruneMotionPlans(tick);
     const begin = emptyView(tick);
     begin.pendingTurns = 2;
     const players = game
@@ -158,6 +294,11 @@ export class ViewSnapshot {
         part.updates[GameUpdateType.RailroadConstructionEvent] = chunk;
       },
     );
+    // Position alone is insufficient: plan-driven units intentionally omit
+    // per-tick position deltas. Late viewers need the in-flight paths too.
+    appendParts([...this.motionPlans.values()], 1, (part, chunk) => {
+      part.packedMotionPlans = packMotionPlans(chunk);
+    });
     let runs: number[] = [];
     let expandedTiles = 0;
     const flushRuns = () => {

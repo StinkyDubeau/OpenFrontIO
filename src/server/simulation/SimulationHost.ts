@@ -6,10 +6,19 @@ import type { ViewQuery } from "../../core/network/ViewProtocol";
 
 export interface TickResult {
   bytes: Uint8Array;
+  views?: { clientID: string; bytes: Uint8Array; packets?: Uint8Array[] }[];
   tick: number;
   duration: number;
   coreDuration: number;
   encodingDuration: number;
+  navigationPreparationMs?: number;
+  navigationMetrics?: {
+    batches: number;
+    jobs: number;
+    errors: number;
+    workers: number;
+    totalMs: number;
+  };
   tileDeltaCount: number;
   motionPlanBytes: number;
   unitUpdateCount: number;
@@ -118,8 +127,10 @@ export class SimulationHost {
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.requests.delete(id);
-        reject(new Error("Server simulation request timed out"));
+        // The worker may still be executing the command. Continuing after a
+        // timed-out turn would diverge from the durable turn journal, and a
+        // wedged worker must not consume CPU indefinitely in the background.
+        this.stop(new Error("Server simulation request timed out"));
       }, 30_000);
       this.requests.set(id, { resolve, reject, timer });
       this.worker.postMessage({ ...command, id });
@@ -128,14 +139,28 @@ export class SimulationHost {
   turn(turn: Turn): Promise<TickResult> {
     return this.request({ type: "turn", turn });
   }
-  snapshot(): Promise<{ tick: number; packets: Uint8Array[] }> {
-    return this.request({ type: "snapshot" });
+  snapshot(
+    viewerClientID?: string,
+  ): Promise<{ tick: number; packets: Uint8Array[] }> {
+    return this.request({ type: "snapshot", viewerClientID });
   }
-  query(query: ViewQuery): Promise<{ bytes: Uint8Array }> {
-    return this.request({ type: "query", query });
+  forgetViewer(viewerClientID: string): Promise<void> {
+    return this.request({ type: "forget_viewer", viewerClientID });
   }
-  stop(): void {
+  query(
+    query: ViewQuery,
+    viewerClientID: string,
+  ): Promise<{ bytes: Uint8Array }> {
+    return this.request({ type: "query", query, viewerClientID });
+  }
+  stop(error = new Error("Simulation stopped")): void {
+    if (this.stopped) return;
     this.stopped = true;
+    for (const request of this.requests.values()) {
+      clearTimeout(request.timer);
+      request.reject(error);
+    }
+    this.requests.clear();
     void this.worker.terminate();
   }
 }

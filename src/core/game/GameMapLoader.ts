@@ -1,8 +1,14 @@
-import { GameMapType } from "./Game";
+import { GameMapType, type Game } from "./Game";
+import type { GameMap } from "./GameMap";
 import { MapManifest } from "./TerrainMapLoader";
 
 export interface GameMapLoader {
   getMapData(map: GameMapType): MapData;
+  /** Optional host-only storage policy. Called on a fresh simulation map,
+   * never the browser's rendering map; must preserve every terrain byte. */
+  prepareSimulationMap?(map: GameMap): GameMap;
+  /** Optional host-only preparation before the first simulation tick. */
+  prepareSimulationGame?(game: Game): void;
 }
 
 export interface MapData {

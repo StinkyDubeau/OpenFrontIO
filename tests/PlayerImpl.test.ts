@@ -37,6 +37,80 @@ describe("PlayerImpl", () => {
     expect(buCity!.canUpgrade).toBe(city.id());
   });
 
+  test("ordered type indexes and level counts match full scans after captures, upgrades and deletions", () => {
+    const types = [UnitType.City, UnitType.Factory, UnitType.DefensePost];
+    let seed = 19;
+    const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0);
+    for (let step = 0; step < 300; step++) {
+      const owner = step % 2 ? player : other;
+      const all = game.units();
+      const unit = all.length ? all[random() % all.length] : undefined;
+      switch (random() % 5) {
+        case 0:
+          if (unit) unit.setOwner(unit.owner() === player ? other : player);
+          break;
+        case 1:
+          unit?.increaseLevel();
+          break;
+        case 2:
+          unit?.decreaseLevel();
+          break;
+        case 3:
+          unit?.delete(false);
+          break;
+        default:
+          owner.buildUnit(
+            types[random() % types.length],
+            game.ref(step % 50, 2),
+            {},
+          );
+      }
+      for (const type of types) {
+        for (const p of [player, other]) {
+          const expected = p.units().filter((u) => u.type() === type);
+          expect(p.units(type)).toEqual(expected);
+          expect(p.unitCount(type)).toBe(
+            expected.reduce((n, u) => n + u.level(), 0),
+          );
+          expect(p.unitsOwned(type)).toBe(
+            expected.reduce(
+              (n, u) => n + (u.isUnderConstruction() ? 1 : u.level()),
+              0,
+            ),
+          );
+          // The indexed results must not become mutable internal storage.
+          p.units(type).reverse().pop();
+          expect(p.units(type)).toEqual(expected);
+        }
+        expect(game.units(type)).toEqual(
+          game.units().filter((u) => u.type() === type),
+        );
+        expect(game.unitCount(type)).toBe(
+          game.units(type).reduce((n, u) => n + u.level(), 0),
+        );
+      }
+    }
+  });
+
+  test("deleting and capturing during roster iteration preserves every original entry", () => {
+    const city = player.buildUnit(UnitType.City, game.ref(1, 1), {});
+    const factory = player.buildUnit(UnitType.Factory, game.ref(2, 1), {});
+    const defense = player.buildUnit(UnitType.DefensePost, game.ref(3, 1), {});
+    const initial = player.units();
+    const visited: number[] = [];
+    for (const unit of initial) {
+      visited.push(unit.id());
+      if (unit === factory) other.captureUnit(unit);
+      else unit.delete(false);
+    }
+    expect(visited).toEqual([city.id(), factory.id(), defense.id()]);
+    expect(initial).toEqual([city, factory, defense]);
+    expect(player.units()).toEqual([]);
+    expect(other.units()).toEqual([factory]);
+    expect(player.units([UnitType.City, UnitType.Factory])).toEqual([]);
+    expect(game.units(UnitType.Factory)).toEqual([factory]);
+  });
+
   test("DefensePost cannot be upgraded", () => {
     player.buildUnit(UnitType.DefensePost, game.ref(0, 0), {});
     const buDefensePost = player

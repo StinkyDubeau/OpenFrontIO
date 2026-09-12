@@ -40,6 +40,12 @@ export interface GameMap {
   isShoreline(ref: TileRef): boolean;
   magnitude(ref: TileRef): number;
   terrainByte(ref: TileRef): number;
+  /** Terrain-only notifications; ownership changes do not invalidate geometry. */
+  observeTerrain?(listener: (tile: TileRef) => void): () => void;
+  /** Packed state mutations, including owner/fallout/defense and updateTile.
+   * Raw page/state buffers must not be written while observers are installed.
+   */
+  observeState?(listener: (tile: TileRef) => void): () => void;
   // Terrain setters
   setWater(ref: TileRef): void;
   setShorelineBit(ref: TileRef): void;
@@ -152,6 +158,31 @@ export class GameMapImpl implements GameMap {
   // the division costs.
   private readonly yToRef: Int32Array;
   private readonly page: GameMapTilePage;
+  private terrainObservers = new Set<(tile: TileRef) => void>();
+  private stateObservers = new Set<(tile: TileRef) => void>();
+  private stateObserver?: (tile: TileRef) => void;
+
+  observeState(listener: (tile: TileRef) => void): () => void {
+    this.stateObservers.add(listener);
+    const refresh = () => {
+      this.stateObserver = this.stateObservers.size === 0 ? undefined :
+        this.stateObservers.size === 1 ? this.stateObservers.values().next().value :
+        (tile) => { for (const callback of this.stateObservers) callback(tile); };
+    };
+    refresh();
+    return () => { this.stateObservers.delete(listener); refresh(); };
+  }
+
+  observeTerrain(listener: (tile: TileRef) => void): () => void {
+    this.terrainObservers.add(listener);
+    return () => this.terrainObservers.delete(listener);
+  }
+
+  private writeTerrain(tile: TileRef, value: number): void {
+    if (this.terrain[tile] === value) return;
+    this.terrain[tile] = value;
+    for (const listener of this.terrainObservers) listener(tile);
+  }
 
   // Terrain bits (Uint8Array)
   private static readonly IS_LAND_BIT = 7;
@@ -175,6 +206,7 @@ export class GameMapImpl implements GameMap {
     height: number,
     terrainData: Uint8Array,
     private numLandTiles_: number,
+    initialState?: { state: Uint16Array; falloutTiles: number },
   ) {
     if (terrainData.length !== width * height) {
       throw new Error(
@@ -184,7 +216,15 @@ export class GameMapImpl implements GameMap {
     this.width_ = width;
     this.height_ = height;
     this.terrain = terrainData;
-    this.state = new Uint16Array(width * height);
+    if (initialState && initialState.state.length !== width * height)
+      throw new Error("State data length does not match map dimensions");
+    if (initialState && (!Number.isSafeInteger(initialState.falloutTiles) ||
+        initialState.falloutTiles < 0 || initialState.falloutTiles > width * height))
+      throw new Error("Invalid initial fallout count");
+    // Optional backing storage supports read-only computational worker views.
+    // Default simulation construction remains an empty, owned state buffer.
+    this.state = initialState?.state ?? new Uint16Array(width * height);
+    this._numTilesWithFallout = initialState?.falloutTiles ?? 0;
     this.yToRef = new Int32Array(height);
     for (let y = 0; y < height; y++) {
       this.yToRef[y] = y * width;
@@ -295,26 +335,34 @@ export class GameMapImpl implements GameMap {
 
   setWater(ref: TileRef): void {
     if (!this.isLand(ref) || this.isImpassable(ref)) return;
-    this.terrain[ref] = 0; // Lake water: no land, no ocean, no shoreline, magnitude 0
+    this.writeTerrain(ref, 0); // Lake water: no land, no ocean, no shoreline, magnitude 0
     this.numLandTiles_--;
   }
 
   setShorelineBit(ref: TileRef): void {
-    this.terrain[ref] |= 1 << GameMapImpl.SHORELINE_BIT;
+    this.writeTerrain(
+      ref,
+      this.terrain[ref] | (1 << GameMapImpl.SHORELINE_BIT),
+    );
   }
 
   clearShorelineBit(ref: TileRef): void {
-    this.terrain[ref] &= ~(1 << GameMapImpl.SHORELINE_BIT);
+    this.writeTerrain(
+      ref,
+      this.terrain[ref] & ~(1 << GameMapImpl.SHORELINE_BIT),
+    );
   }
 
   setOcean(ref: TileRef): void {
-    this.terrain[ref] |= 1 << GameMapImpl.OCEAN_BIT;
+    this.writeTerrain(ref, this.terrain[ref] | (1 << GameMapImpl.OCEAN_BIT));
   }
 
   setMagnitude(ref: TileRef, value: number): void {
-    this.terrain[ref] =
+    this.writeTerrain(
+      ref,
       (this.terrain[ref] & ~GameMapImpl.MAGNITUDE_MASK) |
-      (value & GameMapImpl.MAGNITUDE_MASK);
+        (value & GameMapImpl.MAGNITUDE_MASK),
+    );
   }
 
   // State getters and setters (mutable)
@@ -334,6 +382,7 @@ export class GameMapImpl implements GameMap {
     }
     this.state[ref] =
       (this.state[ref] & ~GameMapImpl.PLAYER_ID_MASK) | playerId;
+    this.stateObserver?.(ref);
   }
 
   hasFallout(ref: TileRef): boolean {
@@ -346,11 +395,13 @@ export class GameMapImpl implements GameMap {
       if (!existingFallout) {
         this._numTilesWithFallout++;
         this.state[ref] |= 1 << GameMapImpl.FALLOUT_BIT;
+        this.stateObserver?.(ref);
       }
     } else {
       if (existingFallout) {
         this._numTilesWithFallout--;
         this.state[ref] &= ~(1 << GameMapImpl.FALLOUT_BIT);
+        this.stateObserver?.(ref);
       }
     }
   }
@@ -386,6 +437,7 @@ export class GameMapImpl implements GameMap {
     } else {
       this.state[ref] &= ~(1 << GameMapImpl.DEFENSE_BONUS_BIT);
     }
+    this.stateObserver?.(ref);
   }
 
   // Helper methods
@@ -584,12 +636,13 @@ export class GameMapImpl implements GameMap {
     if (!existingFallout && newFallout) {
       this._numTilesWithFallout++;
     }
+    this.stateObserver?.(tile);
 
     // Update terrain if the packed value includes a terrain byte that differs
     const terrainChanged = this.terrain[tile] !== terrainByte;
     if (terrainChanged) {
       const wasLand = this.isLand(tile);
-      this.terrain[tile] = terrainByte;
+      this.writeTerrain(tile, terrainByte);
       const isNowLand = Boolean(terrainByte & (1 << GameMapImpl.IS_LAND_BIT));
       if (wasLand && !isNowLand) this.numLandTiles_--;
       else if (!wasLand && isNowLand) this.numLandTiles_++;

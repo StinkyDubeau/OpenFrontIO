@@ -50,6 +50,11 @@ export class HoverHighlightController implements Controller {
     let ownerID = 0;
 
     const ref = this.game.ref(cell.x, cell.y);
+    if (!this.game.isTileVisible(ref)) {
+      this.lastOwnerID = 0;
+      this.view.setHighlightOwner(0);
+      return;
+    }
     if (this.game.isLand(ref)) {
       ownerID = this.game.tileState(ref) & OWNER_MASK;
     } else if (this.navalHighlightEnabled()) {

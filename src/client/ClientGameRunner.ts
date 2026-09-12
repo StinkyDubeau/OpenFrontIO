@@ -918,7 +918,7 @@ export class ClientGameRunner {
         this.eventBus.emit(new SendHashEvent(hu.tick, hu.hash));
       });
       const mainThreadStartedAt = performance.now();
-      this.catchupCamera.update(gu.pendingTurns ?? 0);
+      this.catchupCamera.update(gu.pendingTurns ?? 0, gu.snapshotPhase);
       const viewUpdateStartedAt = mainThreadStartedAt;
       this.gameView.update(gu);
       const viewUpdateDuration = performance.now() - viewUpdateStartedAt;
@@ -1149,7 +1149,7 @@ export class ClientGameRunner {
       return;
     }
     console.log(`clicked cell ${cell}`);
-    const tile = this.gameView.ref(cell.x, cell.y);
+    let tile = this.gameView.ref(cell.x, cell.y);
     if (this.gameView.inSpawnPhase()) {
       const isLand = this.gameView.isLand(tile);
       const hasOwner = this.gameView.hasOwner(tile);
@@ -1181,6 +1181,9 @@ export class ClientGameRunner {
       if (myPlayer === null) return;
       this.myPlayer = myPlayer;
     }
+    const target = this.gameView.resolveFogTap(tile);
+    if (target === null) return;
+    tile = target;
     this.myPlayer.actions(tile, [UnitType.TransportShip]).then((actions) => {
       if (actions.canAttack) {
         this.eventBus.emit(
@@ -1531,12 +1534,21 @@ function showErrorModal(
 
   const modal = document.createElement("div");
   modal.id = "error-modal";
+  modal.setAttribute("role", "alertdialog");
+  modal.setAttribute("aria-labelledby", "connection-error-heading");
+  modal.setAttribute("aria-describedby", "connection-error-message");
+  const title = document.createElement("h2");
+  title.id = "connection-error-heading";
+  title.textContent = translateText(heading);
+  const description = document.createElement("p");
+  description.id = "connection-error-message";
+  description.textContent = displayError;
 
   const content = [
     showDiscord ? translateText("error_modal.paste_discord") : null,
     translateText(heading),
     `game id: ${gameID}`,
-    `client id: ${clientID}`,
+    clientID ? `client id: ${clientID}` : null,
     `Error: ${displayError}`,
     message ? `Message: ${message}` : null,
   ]
@@ -1560,7 +1572,11 @@ function showErrorModal(
   });
 
   // Add to modal
-  modal.appendChild(pre);
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = "Technical details";
+  details.append(summary, pre);
+  modal.append(title, description, details);
   modal.appendChild(button);
   if (closable) {
     const closeButton = document.createElement("button");

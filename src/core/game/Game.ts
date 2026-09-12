@@ -758,6 +758,16 @@ export interface Game extends GameMap {
   player(id: PlayerID): Player;
   players(): Player[];
   allPlayers(): Player[];
+  /** Derived-state observer; called after ownership changes, in simulation order. */
+  observeTerritory(listener: (tile: TileRef, previousOwner: number, owner: number) => void): () => void;
+  observeUnitLocations(listener: (unit: Unit, removed: boolean) => void): () => void;
+  observeWaterConversions(listener: (tile: TileRef) => void): () => void;
+  /** Authority-only activity scheduling; ordinary matches always expand. */
+  setAttackActivityPolicy(policy: ((attacker: Player, target: Player | TerraNullius, tick: Tick) => number) | undefined): void;
+  shouldExpandAttack(attacker: Player, target: Player | TerraNullius, tick: Tick): boolean;
+  attackExpansionBudget(attacker: Player, target: Player | TerraNullius, tick: Tick): number;
+  /** Optional pure capability check; planners must not probe a stateful policy. */
+  hasAttackActivityPolicy?(): boolean;
   playerByClientID(id: ClientID): Player | null;
   playerBySmallID(id: number): Player | TerraNullius;
   hasPlayer(id: PlayerID): boolean;

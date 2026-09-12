@@ -20,24 +20,21 @@ export function tileTraversalScratch(game: Game): TileTraversalScratch {
   let scratch = scratches.get(game);
   if (scratch) return scratch;
 
-  const pageStamps: Array<Uint32Array | undefined> = new Array(
-    game.tilePages().length,
-  );
+  // Scratch has no spatial-page semantics. Linear 4K-tile blocks avoid the
+  // coordinate division, object allocation and two page lookups per visit.
+  const pageStamps: Array<Uint32Array | undefined> = [];
   scratch = {
     stack: [],
     gen: 0,
     has(tile, generation) {
-      const { pageIndex, offset } = game.tilePageLocation(tile);
-      return pageStamps[pageIndex]?.[offset] === generation;
+      return pageStamps[tile >>> 12]?.[tile & 4095] === generation;
     },
     mark(tile, generation) {
-      const { pageIndex, offset } = game.tilePageLocation(tile);
+      const pageIndex = tile >>> 12;
       const stamps =
         pageStamps[pageIndex] ??
-        (pageStamps[pageIndex] = new Uint32Array(
-          game.tilePages()[pageIndex].state.length,
-        ));
-      stamps[offset] = generation;
+        (pageStamps[pageIndex] = new Uint32Array(4096));
+      stamps[tile & 4095] = generation;
     },
     clear() {
       for (const page of pageStamps) page?.fill(0);

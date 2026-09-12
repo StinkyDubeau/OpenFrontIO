@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Config } from "../../../src/core/configuration/Config";
 import {
   DEBUG_ENORMOUS_EARTH_PREFIX,
+  DEBUG_HD_EARTH_PREFIX,
   DEBUG_QUICK_START_PREFIX,
 } from "../../../src/core/DebugPlaytest";
 import {
@@ -80,7 +81,38 @@ describe("persistent-world runtime bridge", () => {
     return { host, gameplayHash, world };
   }
 
-  it("selects the XL board for new runtimes without changing already-persisted maps", async () => {
+  it("shares scheduler reconciliation and recovers old worlds sequentially", async () => {
+    const { world } = setup();
+    const second = { ...world, id: "second-world" };
+    vi.spyOn(repository, "listActiveWithoutRuntime").mockReturnValue([
+      world,
+      second,
+    ]);
+    const bridge = new PersistentWorldRuntimeBridge(
+      repository,
+      {} as never,
+      vi.fn(),
+    );
+    let release!: () => void;
+    const ensure = vi
+      .spyOn(bridge, "ensure")
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const first = bridge.reconcile();
+    expect(bridge.reconcile()).toBe(first);
+    expect(ensure).toHaveBeenCalledTimes(1);
+    release();
+    await first;
+    expect(ensure).toHaveBeenCalledTimes(2);
+    expect(ensure.mock.calls[1][0].id).toBe(second.id);
+  });
+
+  it("pins scheduled worlds to 4x area regardless of operator scale, retaining persisted maps", async () => {
     const { world } = setup();
     const dispatch = vi.fn(
       async (
@@ -103,7 +135,7 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorldLarge,
+      GameMapType.ExpandedGiantWorld,
     );
     vi.stubEnv("IDLE_WORLD_MAP_SCALE", "2");
     await new PersistentWorldRuntimeBridge(
@@ -112,11 +144,11 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(dispatch.mock.calls[1][0].gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorldLarge,
+      GameMapType.ExpandedGiantWorld,
     );
   });
 
-  it("selects the full-resolution ultra board for new scale-4 runtimes", async () => {
+  it("does not let the scale-4 environment change scheduled mode", async () => {
     const { world } = setup();
     const dispatch = vi.fn(
       async (
@@ -139,11 +171,11 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorldUltra,
+      GameMapType.ExpandedGiantWorld,
     );
   });
 
-  it("gives debug quick start the Great Lakes 5x trade preset", async () => {
+  it("gives custom Great Lakes 10x ships and trains with normal attacks", async () => {
     const host = service.createGuestSession({ displayName: "Trade Tester" });
     service.bindGameplayIdentity(
       host.bearerToken,
@@ -151,6 +183,8 @@ describe("persistent-world runtime bridge", () => {
     );
     const created = service.createWorld(host.bearerToken, {
       name: `${DEBUG_QUICK_START_PREFIX}12:00 PM`,
+      startMode: "host",
+      gamePreset: "great-lakes",
       targetDuration: "1h",
       access: "public",
       mode: "ffa",
@@ -158,7 +192,10 @@ describe("persistent-world runtime bridge", () => {
       startsAt: now + MINUTE,
     });
     now += MINUTE;
-    const world = repository.markActive(created.snapshot.world.id, now);
+    const world = repository.startCustomWorld(
+      created.snapshot.world.id,
+      host.session.identity.id,
+    );
     const dispatch = vi.fn(
       async (
         command: MasterCreateManagedGame,
@@ -178,20 +215,26 @@ describe("persistent-world runtime bridge", () => {
 
     expect(repository.getRuntime(world.id)?.gameConfig).toMatchObject({
       gameMap: GameMapType.GreatLakes,
-      tradeShipTrafficMultiplier: 5,
-      trainTrafficMultiplier: 5,
-      territoryAttackSpeedDivisor: 15,
+      tradeShipTrafficMultiplier: 10,
+      trainTrafficMultiplier: 10,
+      territoryAttackSpeedDivisor: 1,
     });
   });
 
-  it("gives the enormous-earth button the Ultra map and same pacing preset", async () => {
+  it.each([
+    [DEBUG_ENORMOUS_EARTH_PREFIX, GameMapType.ExpandedGiantWorldUltra],
+    [DEBUG_HD_EARTH_PREFIX, GameMapType.ExpandedGiantWorldLargeHDv1],
+  ])("selects the exact Earth preset for %s", async (prefix, expectedMap) => {
     const host = service.createGuestSession({ displayName: "Earth Tester" });
     service.bindGameplayIdentity(
       host.bearerToken,
       createHash("sha256").update("earth-play-identity").digest("hex"),
     );
     const created = service.createWorld(host.bearerToken, {
-      name: `${DEBUG_ENORMOUS_EARTH_PREFIX}12:01 PM`,
+      name: `${prefix}12:01 PM`,
+      startMode: "host",
+      gamePreset:
+        prefix === DEBUG_HD_EARTH_PREFIX ? "hd-earth-9x" : "enormous-earth",
       targetDuration: "1h",
       access: "public",
       mode: "ffa",
@@ -199,7 +242,10 @@ describe("persistent-world runtime bridge", () => {
       startsAt: now + MINUTE,
     });
     now += MINUTE;
-    const world = repository.markActive(created.snapshot.world.id, now);
+    const world = repository.startCustomWorld(
+      created.snapshot.world.id,
+      host.session.identity.id,
+    );
     const dispatch = vi.fn(
       async (
         command: MasterCreateManagedGame,
@@ -218,10 +264,10 @@ describe("persistent-world runtime bridge", () => {
     ).ensure(world);
 
     expect(repository.getRuntime(world.id)?.gameConfig).toMatchObject({
-      gameMap: GameMapType.ExpandedGiantWorldUltra,
+      gameMap: expectedMap,
       tradeShipTrafficMultiplier: 5,
       trainTrafficMultiplier: 5,
-      territoryAttackSpeedDivisor: 15,
+      territoryAttackSpeedDivisor: 1,
     });
   });
 

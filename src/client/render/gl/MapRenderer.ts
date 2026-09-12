@@ -37,6 +37,8 @@ import { PagedRenderer } from "./PagedRenderer";
 import type { RenderSettings } from "./RenderSettings";
 
 export class MapRenderer {
+  private fogEnabled = false;
+  setFog(enabled: boolean): void { this.fogEnabled = enabled; this.renderer?.setFog(enabled); }
   private renderer: GPURenderer | PagedRenderer | null = null;
   private resizeObs: ResizeObserver | null = null;
   // Stored layer data for context-restore re-creation.
@@ -112,6 +114,7 @@ export class MapRenderer {
         );
 
     const rect = this.canvas.getBoundingClientRect();
+    this.renderer.setFog(this.fogEnabled);
     if (rect.width > 0) this.renderer.resize(rect.width, rect.height);
   };
 
