@@ -32,8 +32,19 @@ describe("control-panel layout", () => {
     const text = panel.textContent!.replace(/\s+/g, " ");
     expect(text).toContain("+12.5/sec");
     expect(
-      panel.querySelector('[aria-label="Total population"] em')?.textContent,
+      panel.querySelector('[aria-label="Population growth per second"]')
+        ?.textContent,
     ).toContain("+12.5/sec");
+    expect(
+      panel.querySelector('[aria-label="Total population"]')?.textContent,
+    ).not.toContain("/sec");
+    player.pressure.growthPerSecond = 245000;
+    panel.requestUpdate();
+    await panel.updateComplete;
+    expect(
+      panel.querySelector('[aria-label="Population growth per second"]')
+        ?.textContent,
+    ).toContain("+24.5k/sec");
     expect(text).not.toContain("Civilians");
     expect(text).not.toContain("Available 1.61K");
     const compact = panel.querySelector(".atlas-mobilisation-compact")!;

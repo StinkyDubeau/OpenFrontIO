@@ -10,6 +10,28 @@ export class StructureDragEvent {
   ) {}
 }
 
+/** The HUD's edge margins are reserved too, even when hit testing sees canvas. */
+export function isStructureDropOnMap(x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight)
+    return false;
+  for (const selector of [
+    ".atlas-control-deck",
+    ".atlas-top-command-surface",
+  ]) {
+    const element = document.querySelector(selector);
+    if (!element) continue;
+    const rect = element.getBoundingClientRect();
+    if (!rect.width || !rect.height) continue;
+    if (selector === ".atlas-control-deck" ? y >= rect.top : y <= rect.bottom)
+      return false;
+  }
+  // The native renderer routes input through this transparent div above the
+  // WebGL canvas. It is map space, not a HUD obstruction.
+  return !!document
+    .elementFromPoint(x, y)
+    ?.closest("#game-input-overlay, canvas");
+}
+
 /** Captures only this gesture; a second pointer nudges the ghost at quarter speed. */
 export function startStructureDrag(
   event: PointerEvent,
@@ -32,6 +54,18 @@ export function startStructureDrag(
     fine = false;
   const originX = x,
     originY = y;
+  // Safari emits GestureEvents separately from PointerEvents. Blocking only
+  // pointers leaves its pinch handler free to zoom behind the placement ghost.
+  const blockGesture = (e: Event) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  const gestureEvents = [
+    "gesturestart",
+    "gesturechange",
+    "gestureend",
+    "touchmove",
+  ];
   const stop = (e: PointerEvent) => {
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -71,6 +105,8 @@ export function startStructureDrag(
     if (dragging) bus.emit(new StructureDragEvent("move", type, x, y));
   };
   const cleanup = () => {
+    for (const name of gestureEvents)
+      window.removeEventListener(name, blockGesture, true);
     window.removeEventListener("pointerdown", down, true);
     window.removeEventListener("pointermove", move, true);
     window.removeEventListener("pointerup", up, true);
@@ -80,8 +116,9 @@ export function startStructureDrag(
   const finish = (cancelled: boolean) => {
     cleanup();
     if (!dragging) return;
-    const hit = document.elementFromPoint(x, y);
-    const onMap = !!hit?.closest("canvas");
+    // Fine adjustment offsets the ghost from the fingers, even after the
+    // second finger lifts. Validate the placement, not the controlling finger.
+    const onMap = isStructureDropOnMap(x, y);
     bus.emit(
       new StructureDragEvent(
         cancelled || !onMap ? "cancel" : "drop",
@@ -106,6 +143,12 @@ export function startStructureDrag(
       return;
     }
     if (e.pointerId !== first) return;
+    if (!fine) {
+      x += e.clientX - lastX;
+      y += e.clientY - lastY;
+    }
+    lastX = e.clientX;
+    lastY = e.clientY;
     if (dragging) stop(e);
     finish(false);
   };
@@ -116,6 +159,11 @@ export function startStructureDrag(
     }
   };
   const abort = () => finish(true);
+  for (const name of gestureEvents)
+    window.addEventListener(name, blockGesture, {
+      capture: true,
+      passive: false,
+    });
   window.addEventListener("pointerdown", down, {
     capture: true,
     passive: false,

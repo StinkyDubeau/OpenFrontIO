@@ -763,17 +763,19 @@ export class ControlPanel extends LitElement implements Controller {
             .committed=${(100 * deployed) / population}
             .description=${`${renderTroops(pressure.civilians)} civilians, ${renderTroops(pressure.military)} military`}
             @attack-ratio-input=${(e: CustomEvent<{ value: number }>) => {
-          e.stopPropagation();
-          this.mobilisationDraft = e.detail.value;
-          if (this.mobilisationSendTimer) return;
-          this.mobilisationSendTimer = setTimeout(() => {
-            this.mobilisationSendTimer = undefined;
-            if (this.mobilisationDraft !== null)
-              this.eventBus.emit(
-                new SendMobilisationIntentEvent(this.mobilisationDraft / 100),
-              );
-          }, 100);
-        }}
+              e.stopPropagation();
+              this.mobilisationDraft = e.detail.value;
+              if (this.mobilisationSendTimer) return;
+              this.mobilisationSendTimer = setTimeout(() => {
+                this.mobilisationSendTimer = undefined;
+                if (this.mobilisationDraft !== null)
+                  this.eventBus.emit(
+                    new SendMobilisationIntentEvent(
+                      this.mobilisationDraft / 100,
+                    ),
+                  );
+              }, 100);
+            }}
           ></population-ratio-slider>
         </div>
       </div>
@@ -807,15 +809,17 @@ export class ControlPanel extends LitElement implements Controller {
             style="touch-action:none"
             @pointerdown=${(event: PointerEvent) => startStructureDrag(event, type, this.eventBus)}
             @click=${(event: Event) => {
-          event.stopPropagation();
-          this.highlightedStructure =
-            this.highlightedStructure === type ? null : type;
-          this.eventBus.emit(
-            new ToggleStructureEvent(
-              this.highlightedStructure ? [this.highlightedStructure] : null,
-            ),
-          );
-        }}
+              event.stopPropagation();
+              this.highlightedStructure =
+                this.highlightedStructure === type ? null : type;
+              this.eventBus.emit(
+                new ToggleStructureEvent(
+                  this.highlightedStructure
+                    ? [this.highlightedStructure]
+                    : null,
+                ),
+              );
+            }}
           >
             <img src=${icon} width="18" height="18" alt="" /><span
               >${player.totalUnitLevels(type)}</span
@@ -842,7 +846,15 @@ export class ControlPanel extends LitElement implements Controller {
       <div
         style="display:flex;justify-content:space-between;gap:8px;padding:0 2px 3px"
       >
-        <span>Population</span><span>Capacity</span>
+        <span
+          >population${
+            pressure.growthPerSecond !== undefined
+              ? html` <span aria-label="Population growth per second"
+                  >+${(pressure.growthPerSecond / 10).toLocaleString("en", { notation: "compact", maximumFractionDigits: 1 }).toLowerCase()}/sec</span
+                >`
+              : ""
+          }</span
+        ><span>capacity</span>
       </div>
       <div
         class="atlas-troop-meter"
@@ -869,8 +881,7 @@ export class ControlPanel extends LitElement implements Controller {
         <div
           style="position:relative;display:flex;justify-content:space-between;gap:8px;padding:4px 8px;font-weight:600;color:#fff;text-shadow:0 1px 2px #000"
         >
-          <span
-            >${renderTroops(population)}${pressure.growthPerSecond !== undefined ? html` <em aria-label="Population growth per second" style="margin-left:4px;font-weight:400;white-space:nowrap">+${(pressure.growthPerSecond / 10).toLocaleString(undefined, { maximumFractionDigits: 1 })}/sec</em>` : ""}</span
+          <span>${renderTroops(population)}</span
           ><span>${renderTroops(capacity)}</span>
         </div>
       </div>

@@ -8,6 +8,61 @@
 
 @import "./stone-controls.css";
 
+/* Interface copy is consistently lowercase; user-authored content keeps its case. */
+body.atlas-theme
+  :is(
+    button,
+    label,
+    h1,
+    h2,
+    h3,
+    h4,
+    th,
+    [class*="label"],
+    [class*="eyebrow"],
+    [class*="caption"],
+    [class*="kicker"],
+    .atlas-population-summary,
+    .atlas-fronts-title
+  ) {
+  text-transform: lowercase !important;
+}
+body.atlas-theme
+  :is(
+    input,
+    textarea,
+    [contenteditable],
+    .username,
+    .player-name,
+    .stats-table-row,
+    chat-display,
+    chat-modal
+  ) {
+  text-transform: none !important;
+}
+
+body.atlas-theme .atlas-leaderboard-flyout:has(> .block) {
+  animation: atlas-leaderboard-unfold 220ms ease-out both;
+  transform-origin: top;
+}
+@keyframes atlas-leaderboard-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    clip-path: inset(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.atlas-theme .atlas-leaderboard-flyout:has(> .block) {
+    animation: none;
+  }
+}
+
 :root {
   --war-ink: #130d0a;
   --war-ink-soft: #21150f;
