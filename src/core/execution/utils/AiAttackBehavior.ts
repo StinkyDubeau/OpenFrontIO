@@ -13,6 +13,8 @@ import {
   UnitType,
 } from "../../game/Game";
 import { TileRef } from "../../game/GameMap";
+import { hasPressureGrace } from "../../game/PressureDiplomacy";
+import { setAiMobilisationTarget } from "../../game/PressurePopulation";
 import { canBuildTransportShip } from "../../game/TransportShipUtils";
 import { PseudoRandom } from "../../PseudoRandom";
 import {
@@ -38,6 +40,14 @@ const NEIGHBOR_SCRATCH: TileRef[] = [0, 0, 0, 0];
 
 export class AiAttackBehavior {
   private botAttackTroopsSent: number = 0;
+  private nextNavalCampaignTick = 0;
+  private navalObjective: {
+    tile: TileRef;
+    started: number;
+    initialLand: number;
+    attempts: number;
+  } | null = null;
+  private failedNavalTile: { tile: TileRef; until: number } | null = null;
 
   constructor(
     private random: PseudoRandom,
@@ -51,7 +61,10 @@ export class AiAttackBehavior {
   ) {}
 
   maybeAttack() {
-    if (this.game.config().gameConfig().continuousPressure) return;
+    if (this.game.config().gameConfig().continuousPressure) {
+      this.maybePressureNavalAttack();
+      return;
+    }
     if (this.player === null || this.allianceBehavior === undefined) {
       throw new Error("not initialized");
     }
@@ -109,6 +122,128 @@ export class AiAttackBehavior {
     }
 
     this.attackBestTarget(borderingFriends, borderingEnemies);
+  }
+
+  /** Ocean campaigns must not disappear when passive land pressure is enabled.
+   * Sample the existing roster/ports, with at most two reachability queries per
+   * decision; reuse native transport construction, navigation and landing rules.
+   */
+  maybePressureNavalAttack(): void {
+    if (this.player.type() !== PlayerType.Nation) return;
+    const tick = this.game.ticks();
+    if (tick < this.nextNavalCampaignTick) return;
+    this.nextNavalCampaignTick = tick + 300 + (this.player.smallID() % 100);
+    if (
+      this.game.inSpawnPhase() ||
+      hasPressureGrace(this.game, this.player) ||
+      this.game.config().isUnitDisabled(UnitType.TransportShip) ||
+      this.player.unitCount(UnitType.TransportShip) >=
+        Math.min(3, this.game.config().boatMaxNumber())
+    )
+      return;
+    const free = this.player.troops();
+    if (free < 1000) return;
+    const incoming = this.player
+      .incomingAttacks()
+      .filter((a) => a.isActive() && !a.retreating())
+      .reduce((sum, a) => sum + a.troops(), 0);
+    if (incoming > free * 0.25) return;
+    const roster = this.game.players();
+    if (!roster.length) return;
+    const start = this.random.nextInt(0, roster.length);
+    let queries = 0;
+    const tryLanding = (tile: TileRef): boolean => {
+      if (
+        this.failedNavalTile?.tile === tile &&
+        tick < this.failedNavalTile.until
+      )
+        return false;
+      if (queries >= 2) return false;
+      queries++;
+      if (canBuildTransportShip(this.game, this.player, tile) === false)
+        return false;
+      setAiMobilisationTarget(this.player, 0.75);
+      this.game.addExecution(
+        new TransportShipExecution(this.player, tile, Math.floor(free * 0.3)),
+      );
+      if (!this.navalObjective || this.navalObjective.tile !== tile) {
+        this.navalObjective = {
+          tile,
+          started: tick,
+          initialLand: this.player.numTilesOwned(),
+          attempts: 0,
+        };
+      }
+      this.navalObjective.attempts++;
+      return true;
+    };
+    const objective = this.navalObjective;
+    if (objective) {
+      const owner = this.game.owner(objective.tile);
+      const stalled =
+        tick - objective.started >= 900 &&
+        this.player.numTilesOwned() <= objective.initialLand;
+      if (stalled || objective.attempts >= 3) {
+        this.failedNavalTile = { tile: objective.tile, until: tick + 1800 };
+        this.navalObjective = null;
+      } else if (
+        (!owner.isPlayer() ||
+          (owner !== this.player &&
+            !this.player.isFriendly(owner) &&
+            !hasPressureGrace(this.game, owner) &&
+            this.player.canAttackPlayer(owner))) &&
+        tryLanding(objective.tile)
+      ) {
+        return;
+      } else {
+        this.navalObjective = null;
+      }
+    }
+    for (let offset = 0; offset < Math.min(12, roster.length); offset++) {
+      const target = roster[(start + offset) % roster.length];
+      if (
+        target === this.player ||
+        !target.isAlive() ||
+        this.player.isFriendly(target) ||
+        hasPressureGrace(this.game, target) ||
+        !this.player.canAttackPlayer(target)
+      )
+        continue;
+      const troops = Math.floor(free * 0.3);
+      if (troops < target.troops() * 0.15) continue;
+      const ports = target.units(UnitType.Port);
+      // A coastal opponent need not have developed ports yet. Bound the fallback
+      // scan so a huge inland border cannot dominate a strategic decision.
+      let tile: TileRef | undefined;
+      if (ports.length) tile = this.random.randElement(ports).tile();
+      else {
+        let checked = 0;
+        for (const border of target.borderTiles()) {
+          if (++checked > 128) break;
+          if (this.game.isShore(border)) {
+            tile = border;
+            break;
+          }
+        }
+      }
+      if (tile !== undefined && tryLanding(tile)) return;
+      if (queries >= 2) return;
+    }
+    // Also discover undeveloped islands, rather than requiring an enemy port.
+    for (let sample = 0; sample < 48 && queries < 2; sample++) {
+      const tile = this.game.ref(
+        this.random.nextInt(0, this.game.width()),
+        this.random.nextInt(0, this.game.height()),
+      );
+      if (
+        !this.game.hasOwner(tile) &&
+        this.game.isLand(tile) &&
+        !this.game.isImpassable(tile) &&
+        this.game.isShore(tile) &&
+        tryLanding(tile)
+      )
+        return;
+    }
   }
 
   private attackWithRandomBoat(borderingEnemies: Player[] = []) {

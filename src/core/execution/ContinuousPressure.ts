@@ -1,6 +1,7 @@
 import type { Game, Player } from "../game/Game";
 import { hasPressureGrace } from "../game/PressureDiplomacy";
 import { AttackExecution } from "./AttackExecution";
+import { applyPressureStrategy } from "./PressureStrategy";
 
 /** One cached contact count per neighbour, not one execution per boundary tile.
  * Ownership/terrain changes invalidate only adjacent players. Military and
@@ -79,6 +80,7 @@ export function applyContinuousPressure(
   }
   const width = index.width(player),
     free = player.troops();
+  if (applyPressureStrategy(game, player, tick, index)) return;
   if (free < 20) return;
   const ownStrength = free / width;
   const pending = new Set(

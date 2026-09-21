@@ -120,6 +120,7 @@ export class NamePass {
 
   // Hovered player's small ID (0 = no highlight, matches TerritoryPass).
   private highlightOwnerID = 0;
+  private labelRefreshOwners = new Set<number>();
   // Cursor in world coords — fades names under it (far off-map = no fade).
   private mouseWorldX = -1e9;
   private mouseWorldY = -1e9;
@@ -426,6 +427,7 @@ export class NamePass {
       if (
         !snap &&
         slot.nameLen !== 0 &&
+        !this.labelRefreshOwners.has(slot.static.smallID) &&
         slot.index % NamePass.UPDATE_SLICES !== phase
       ) {
         continue;
@@ -463,12 +465,21 @@ export class NamePass {
       // Write troop count string (refreshed per slot every 500ms, staggered by
       // slot index so updates spread across the window instead of bursting).
       const troopBucket = Math.floor((now + (slot.index % 5) * 0.1) / 0.5);
-      if (snap || slot.troopLen === 0 || troopBucket !== slot.lastTroopBucket) {
+      if (
+        snap ||
+        slot.troopLen === 0 ||
+        troopBucket !== slot.lastTroopBucket ||
+        this.labelRefreshOwners.has(slot.static.smallID)
+      ) {
+        this.labelRefreshOwners.delete(slot.static.smallID);
         slot.lastTroopBucket = troopBucket;
         // Population includes civilians and committed military; legacy games
         // without population accounting keep their native troop label.
         const troops = ps?.population ?? ps?.troops ?? 0;
-        const troopStr = renderTroops(troops);
+        const troopStr =
+          this.highlightOwnerID === slot.static.smallID
+            ? `${renderTroops(ps?.troops ?? 0)} troops`
+            : renderTroops(troops);
         if (troopStr !== slot.lastTroopStr) {
           slot.troopLen = Math.min(troopStr.length, MAX_CHARS);
           slot.lastTroopStr = troopStr;
@@ -711,6 +722,10 @@ export class NamePass {
   // -------------------------------------------------------------------------
 
   setHighlightOwner(ownerID: number): void {
+    if (ownerID === this.highlightOwnerID) return;
+    if (this.highlightOwnerID)
+      this.labelRefreshOwners.add(this.highlightOwnerID);
+    if (ownerID) this.labelRefreshOwners.add(ownerID);
     this.highlightOwnerID = ownerID;
   }
 

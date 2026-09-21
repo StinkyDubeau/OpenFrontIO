@@ -60,7 +60,8 @@ test("mobile defense relocates live alerts and restores them when closed", async
   expect(alerts.parentElement).toBe(
     display.querySelector(".atlas-flow-details"),
   );
-  expect(actions.parentElement).toBe(alerts.parentElement);
+  // Alliance actions stay in the visible popup, even while defense is open.
+  expect(actions.parentElement).toBe(notices);
   defense.click();
   await display.updateComplete;
   expect(alerts.parentElement).toBe(notices);

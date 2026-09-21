@@ -77,6 +77,7 @@ function lobbySnapshot(): PersistentWorldLobbySnapshot {
 }
 
 interface PageInternals {
+  signIn(name: string): Promise<void>;
   session: PersistentWorldControllerSession | null;
   snapshot: PersistentWorldLobbySnapshot | null;
   identityName: string;
@@ -92,6 +93,47 @@ function pageInternals(): PageInternals {
 }
 
 describe("persistent-world game identity binding", () => {
+  it("replaces a stale controller identity with the explicitly submitted landing name", async () => {
+    localStorage.setItem(
+      "pressure-atlas.world-controller.v1",
+      CONTROLLER_TOKEN,
+    );
+    vi.spyOn(persistentWorldApi, "resumeSession").mockResolvedValue(
+      controllerSession(),
+    );
+    const changed = createdSession();
+    changed.session.identity.displayName = "New Commander";
+    vi.spyOn(persistentWorldApi, "createGuestSession").mockResolvedValue(
+      changed,
+    );
+    vi.spyOn(persistentWorldApi, "bindGameIdentityWithToken").mockResolvedValue(
+      "new-credential",
+    );
+    const page = pageInternals();
+    await page.signIn("New Commander");
+    expect(persistentWorldApi.createGuestSession).toHaveBeenCalledWith(
+      "New Commander",
+    );
+    expect(page.session?.identity.displayName).toBe("New Commander");
+  });
+
+  it("keeps the existing identity and match ownership when the name is unchanged", async () => {
+    localStorage.setItem(
+      "pressure-atlas.world-controller.v1",
+      CONTROLLER_TOKEN,
+    );
+    vi.spyOn(persistentWorldApi, "resumeSession").mockResolvedValue(
+      controllerSession(),
+    );
+    const create = vi.spyOn(persistentWorldApi, "createGuestSession");
+    vi.spyOn(persistentWorldApi, "bindGameIdentityWithToken").mockResolvedValue(
+      null,
+    );
+    const page = pageInternals();
+    await page.signIn(" Atlas Tester ");
+    expect(create).not.toHaveBeenCalled();
+    expect(page.session?.identity.id).toBe("identity_123");
+  });
   beforeEach(() => {
     localStorage.clear();
     getPlayTokenMock.mockReset().mockResolvedValue(PLAY_TOKEN);

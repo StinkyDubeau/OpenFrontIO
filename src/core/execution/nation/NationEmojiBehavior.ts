@@ -14,6 +14,20 @@ import { EmojiExecution } from "../EmojiExecution";
 
 const emojiId = (e: (typeof flattenedEmojiTable)[number]) =>
   flattenedEmojiTable.indexOf(e);
+
+const ambientChatBudget = new WeakMap<Game, Map<string, number>>();
+/** Shared recipient budget prevents hundreds of nations each using a cooldown. */
+export function allowAmbientNationChat(game: Game, recipient: string): boolean {
+  let budget = ambientChatBudget.get(game);
+  if (!budget) {
+    budget = new Map();
+    ambientChatBudget.set(game, budget);
+  }
+  const now = game.ticks();
+  if (now - (budget.get(recipient) ?? -Infinity) < 300) return false;
+  budget.set(recipient, now);
+  return true;
+}
 export const EMOJI_ASSIST_ACCEPT = (["👍", "🤝", "🎯"] as const).map(emojiId);
 export const EMOJI_ASSIST_RELATION_TOO_LOW = (["🥱", "🤦‍♂️"] as const).map(
   emojiId,
@@ -248,6 +262,13 @@ export class NationEmojiBehavior {
   sendEmoji(otherPlayer: Player | typeof AllPlayers, emojisList: number[]) {
     if (!this.shouldSendEmoji(otherPlayer, false)) return;
     if (!this.player.canSendEmoji(otherPlayer)) return;
+    if (
+      !allowAmbientNationChat(
+        this.game,
+        otherPlayer === AllPlayers ? "broadcast" : otherPlayer.id(),
+      )
+    )
+      return;
 
     this.game.addExecution(
       new EmojiExecution(

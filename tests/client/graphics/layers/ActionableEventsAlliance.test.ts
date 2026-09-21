@@ -25,6 +25,51 @@ import { ActionableEvents } from "../../../../src/client/hud/layers/ActionableEv
 import { MessageType } from "../../../../src/core/game/Game";
 
 describe("ActionableEvents - alliance renewal cleanup (allianceID based)", () => {
+  test("expiration replaces its warning and does not reappear after dismissal until renewed", () => {
+    const display = new ActionableEvents() as any;
+    let ticks = 900;
+    const alliance = { id: 1, other: "ally", expiresAt: 1000 };
+    display.requestUpdate = vi.fn();
+    display.game = {
+      ticks: () => ticks,
+      myPlayer: () => ({ isAlive: () => true, alliances: () => [alliance] }),
+      config: () => ({
+        allianceExtensionPromptOffset: () => 100,
+        gameConfig: () => ({ continuousPressure: "v1" }),
+      }),
+      player: () => ({ displayName: () => "ally", smallID: () => 2 }),
+    };
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(1);
+    expect(display.events[0].description).toContain("ending soon");
+    ticks = 1000;
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(1);
+    expect(display.events[0].description).toContain("has ended");
+    ticks = 5000;
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(1);
+    display.removeEvent(0);
+    ticks = 6000;
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(0);
+    alliance.expiresAt = 6100;
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(1);
+    alliance.expiresAt = 9000;
+    display.checkForAllianceExpirations();
+    expect(display.events).toHaveLength(0);
+  });
+
+  test("repeated requests replace rather than duplicate the same requestor", () => {
+    const display = new ActionableEvents() as any;
+    display.requestUpdate = vi.fn();
+    const request = { type: MessageType.ALLIANCE_REQUEST, requestorID: 2 };
+    display.addEvent(request);
+    display.addEvent({ ...request });
+    display.addEvent({ ...request, requestorID: 3 });
+    expect(display.events).toHaveLength(2);
+  });
   function makeRenewal(
     allianceID: number,
     focusID: number,

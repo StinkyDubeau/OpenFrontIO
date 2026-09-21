@@ -256,6 +256,16 @@ export class UserSettings {
     return this.getBool("settings.cursorCostLabel", legacy);
   }
 
+  frameRateLimit(): number {
+    const value = Number(this.getCached("settings.frameRateLimit"));
+    return [30, 60, 90, 120, 144, 165, 240].includes(value) ? value : 60;
+  }
+
+  setFrameRateLimit(value: number): void {
+    if ([30, 60, 90, 120, 144, 165, 240].includes(value))
+      this.setCached("settings.frameRateLimit", String(value));
+  }
+
   toggleLeftClickOpenMenu() {
     this.setBool("settings.leftClickOpensMenu", !this.leftClickOpensMenu());
   }

@@ -378,6 +378,9 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
   }
 
   private gameplayName(displayName: string, index: number): string {
+    // Preserve valid submitted names exactly; normalization is legacy fallback only.
+    const original = UsernameSchema.safeParse(displayName);
+    if (original.success) return original.data;
     const cleaned = displayName
       .normalize("NFKC")
       .replace(/[^a-zA-Z0-9_ üÜ.]+/gu, " ")

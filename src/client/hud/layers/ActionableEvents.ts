@@ -51,8 +51,8 @@ export class ActionableEvents extends LitElement implements Controller {
 
   private active = false;
   private events: ActionableEvent[] = [];
-  // allianceID -> last checked at tick
-  private alliancesCheckedAt = new Map<number, Tick>();
+  // One prompt per protection deadline/stage, not one per rolling time window.
+  private alliancesCheckedAt = new Map<number, string>();
   @state() private _isVisible = false;
 
   private updateMap = [
@@ -73,7 +73,18 @@ export class ActionableEvents extends LitElement implements Controller {
   }
 
   private addEvent(event: ActionableEvent) {
-    this.events = [...this.events, event];
+    this.events = [
+      ...this.events.filter(
+        (existing) =>
+          !(
+            existing.type === event.type &&
+            (event.allianceID !== undefined
+              ? existing.allianceID === event.allianceID
+              : existing.requestorID === event.requestorID)
+          ),
+      ),
+      event,
+    ];
     this.requestUpdate();
   }
 
@@ -154,18 +165,25 @@ export class ActionableEvents extends LitElement implements Controller {
         alliance.expiresAt >
         this.game.ticks() + this.game.config().allianceExtensionPromptOffset()
       ) {
+        if (
+          this.events.some(
+            (event) =>
+              event.type === MessageType.RENEW_ALLIANCE &&
+              event.allianceID === alliance.id,
+          )
+        ) {
+          this.removeAllianceRenewalEvents(alliance.id);
+          this.requestUpdate();
+        }
         continue;
       }
 
-      if (
-        (this.alliancesCheckedAt.get(alliance.id) ?? 0) >=
-        this.game.ticks() - this.game.config().allianceExtensionPromptOffset()
-      ) {
-        // Already prompted for this alliance in the current window.
+      const promptStage = `${alliance.expiresAt}:${alliance.expiresAt <= this.game.ticks() ? "ended" : "ending"}`;
+      if (this.alliancesCheckedAt.get(alliance.id) === promptStage) {
         continue;
       }
 
-      this.alliancesCheckedAt.set(alliance.id, this.game.ticks());
+      this.alliancesCheckedAt.set(alliance.id, promptStage);
 
       const other = this.game.player(alliance.other) as PlayerView;
 
@@ -321,6 +339,7 @@ export class ActionableEvents extends LitElement implements Controller {
 
     return html`
       <div
+        aria-live="polite"
         class="atlas-action-notices flex flex-col gap-2 w-full min-[1200px]:w-96 pointer-events-auto mt-2"
       >
         ${sorted.map(

@@ -436,11 +436,9 @@ function mountWebGLFrameLoop(
   });
   resizeObs.observe(glCanvas);
 
-  // WKWebView can spend substantially more power compositing this very large
-  // board than the interaction requires. Keep desktop at the display refresh
-  // rate, but render the native mobile shell at a steady 30 FPS. Simulation
-  // frames and input remain uncapped and authoritative on the server.
-  const minimumFrameIntervalMs = window.ReactNativeWebView ? 1000 / 30 - 1 : 0;
+  // Shared native/browser preference; cached reads allow live changes without
+  // touching the authoritative simulation or input frequency.
+  const frameSettings = new UserSettings();
   let lastRenderedAt = -Infinity;
 
   const syncCamera = (frameTime: number): void => {
@@ -483,8 +481,20 @@ function mountWebGLFrameLoop(
   // synchronized camera-update + WebGL render.
   let rafId: number | null = null;
   const driveFrame = (frameTime: number): void => {
-    if (frameTime - lastRenderedAt >= minimumFrameIntervalMs) {
-      lastRenderedAt = frameTime;
+    const minimumFrameIntervalMs = 1000 / frameSettings.frameRateLimit();
+    if (frameTime - lastRenderedAt >= minimumFrameIntervalMs - 0.5) {
+      const elapsed = frameTime - lastRenderedAt;
+      lastRenderedAt = Number.isFinite(elapsed)
+        ? Math.min(
+            frameTime,
+            lastRenderedAt +
+              Math.max(
+                1,
+                Math.floor((elapsed + 0.5) / minimumFrameIntervalMs),
+              ) *
+                minimumFrameIntervalMs,
+          )
+        : frameTime;
       syncCamera(frameTime);
     }
     rafId = requestAnimationFrame(driveFrame);

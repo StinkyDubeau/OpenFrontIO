@@ -17,6 +17,7 @@ import {
 } from "./NationEmojiBehavior";
 
 export class NationWarshipBehavior {
+  private nextFleetBuildTick = 0;
   // Track our transport ships we currently own
   private trackedTransportShips: Set<Unit> = new Set();
   // Track our trade ships we currently own
@@ -38,14 +39,22 @@ export class NationWarshipBehavior {
     if (this.game.config().isUnitDisabled(UnitType.Warship)) {
       return false;
     }
-    if (!this.random.chance(50)) {
+    const pressure = !!this.game.config().gameConfig().continuousPressure;
+    if (pressure && this.game.ticks() < this.nextFleetBuildTick) return false;
+    if (pressure)
+      this.nextFleetBuildTick =
+        this.game.ticks() + 300 + (this.player.smallID() % 100);
+    if (!pressure && !this.random.chance(50)) {
       return false;
     }
     const ports = this.player.units(UnitType.Port);
     const ships = this.player.units(UnitType.Warship);
     if (
       ports.length > 0 &&
-      ships.length === 0 &&
+      ships.length <
+        (pressure
+          ? Math.min(4, Math.max(1, Math.ceil(ports.length / 3)))
+          : 1) &&
       this.player.gold() > this.cost(UnitType.Warship)
     ) {
       const port = this.random.randElement(ports);

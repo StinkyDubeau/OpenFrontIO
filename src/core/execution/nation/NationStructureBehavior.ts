@@ -151,6 +151,12 @@ export class NationStructureBehavior {
   ) {}
 
   handleStructures(): boolean {
+    if (
+      this.game.config().gameConfig().continuousPressure &&
+      this.lastStructureTick !== null &&
+      this.game.ticks() - this.lastStructureTick < 50
+    )
+      return false;
     // Defense posts are handled outside the normal pacing/counter system:
     // they don't increment placementsCount or lastStructureTick, and they
     // are never built as the very first structure.
@@ -163,7 +169,10 @@ export class NationStructureBehavior {
       }
       // If the attack threshold is met, block other structures even when
       // placement failed (no tile found / can't afford).
-      if (this.defensePostNeeded()) {
+      if (
+        this.defensePostNeeded() &&
+        !this.game.config().gameConfig().continuousPressure
+      ) {
         return false;
       }
     }
@@ -411,6 +420,7 @@ export class NationStructureBehavior {
   // Spreads placements after the save-up target is first reached:
   // 15s ON / 15s OFF, alternating, to allow NationNukeBehavior to spend the gold.
   private isInPostSaveUpBlockedPhase(): boolean {
+    if (this.game.config().gameConfig().continuousPressure) return false;
     if (this.game.config().isUnitDisabled(UnitType.MissileSilo)) {
       return false;
     }
@@ -641,6 +651,10 @@ export class NationStructureBehavior {
    */
   private getPerceivedCost(type: UnitType): Gold {
     const realCost = this.cost(type);
+    // Keep a modest cash cushion, not a stockpile that grows with every city.
+    // Real construction/upgrade costs are still enforced by native executions.
+    if (this.game.config().gameConfig().continuousPressure)
+      return realCost + realCost / 4n;
 
     const saveUpTarget = this.getSaveUpTarget();
     if (saveUpTarget === 0n || this.player.gold() >= saveUpTarget) {

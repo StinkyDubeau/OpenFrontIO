@@ -97,9 +97,7 @@ export class AttacksDisplay extends LitElement implements Controller {
     const details = this.querySelector(".atlas-flow-details");
     const hud = this.closest("atlas-game-hud");
     if (!details || !hud) return;
-    for (const alert of hud.querySelectorAll<HTMLElement>(
-      "events-display, actionable-events",
-    )) {
+    for (const alert of hud.querySelectorAll<HTMLElement>("events-display")) {
       if (this.goldExpanded && alert.tagName === "ACTIONABLE-EVENTS") continue;
       if (alert.tagName === "EVENTS-DISPLAY")
         (alert as EventsDisplay).tickerFilter = this.goldExpanded
@@ -830,13 +828,13 @@ export class AttacksDisplay extends LitElement implements Controller {
       <div
         class="atlas-flow-cluster"
         @keydown=${(event: KeyboardEvent) => {
-        if (event.key === "Escape") {
-          this.goldExpanded = false;
-          this.incomingExpanded = false;
-          this.outgoingExpanded = false;
-          event.stopPropagation();
-        }
-      }}
+          if (event.key === "Escape") {
+            this.goldExpanded = false;
+            this.incomingExpanded = false;
+            this.outgoingExpanded = false;
+            event.stopPropagation();
+          }
+        }}
       >
         <button
           type="button"
@@ -844,10 +842,10 @@ export class AttacksDisplay extends LitElement implements Controller {
           aria-label="Gold"
           aria-expanded=${this.goldExpanded}
           @click=${() => {
-          this.goldExpanded = !this.goldExpanded;
-          this.incomingExpanded = false;
-          this.outgoingExpanded = false;
-        }}
+            this.goldExpanded = !this.goldExpanded;
+            this.incomingExpanded = false;
+            this.outgoingExpanded = false;
+          }}
         >
           <img src=${goldCoinIcon} width="16" height="16" alt="" /><strong
             >${renderNumber(player?.gold() ?? 0n)}</strong
@@ -866,28 +864,28 @@ export class AttacksDisplay extends LitElement implements Controller {
                   >${this.goldExpanded ? "Gold · donations" : this.incomingExpanded ? "Defense · ongoing fronts" : "Attack · ongoing fronts"}</strong
                 >
                 ${
-            this.incomingExpanded && player?.pressure
-              ? html`<div
-                  style="display:grid;gap:4px;padding-bottom:6px;border-bottom:1px solid #ffffff20"
-                >
-                  <button
-                    type="button"
-                    class="atlas-instrument-readout"
-                    style="min-height:36px"
-                    aria-label="Auto-defend while active"
-                    aria-pressed=${player.pressure.autoDefenceEnabled === true}
-                    @click=${() => this.eventBus.emit(new SendMobilisationIntentEvent(player.pressure!.target, player.pressure!.autoDefenceEnabled !== true))}
-                  >
-                    Auto-defend while active ·
-                    ${player.pressure.autoDefenceEnabled === true ? "On" : "Off"}
-                  </button>
-                  <small
-                    >Always on while AFK. Mobilisation follows game
-                    speed.</small
-                  >
-                </div>`
-              : ""
-          }
+                  this.incomingExpanded && player?.pressure
+                    ? html`<div
+                        style="display:grid;gap:4px;padding-bottom:6px;border-bottom:1px solid #ffffff20"
+                      >
+                        <button
+                          type="button"
+                          class="atlas-instrument-readout"
+                          style="min-height:36px"
+                          aria-label="Auto-defend while active"
+                          aria-pressed=${player.pressure.autoDefenceEnabled === true}
+                          @click=${() => this.eventBus.emit(new SendMobilisationIntentEvent(player.pressure!.target, player.pressure!.autoDefenceEnabled !== true))}
+                        >
+                          Auto-defend while active ·
+                          ${player.pressure.autoDefenceEnabled === true ? "On" : "Off"}
+                        </button>
+                        <small
+                          >Always on while AFK. Mobilisation follows game
+                          speed.</small
+                        >
+                      </div>`
+                    : ""
+                }
                 ${this.goldExpanded ? html`<span>${renderNumber(player?.gold() ?? 0n)} gold${this.tickerTypes.includes(MessageType.DONATION_RECEIVED) ? "" : " · No new donations"}</span>` : this.incomingExpanded ? html`${this.renderIncomingAttacks()}${this.renderIncomingBoats()}${incomingTroops === 0 ? "No incoming attacks" : ""}` : html`${this.renderOutgoingAttacks()}${this.renderOutgoingLandAttacks()}${this.renderBoats()}${outgoingTroops === 0 ? "No outgoing attacks" : ""}`}
               </div>`
             : ""

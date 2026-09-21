@@ -7,6 +7,8 @@ import { UsernameInput } from "./UsernameInput";
 @customElement("game-mode-selector")
 export class GameModeSelector extends LitElement {
   @state() private inputValid = true;
+  @state() private signingIn = false;
+  @state() private signInError = "";
 
   createRenderRoot() {
     return this;
@@ -44,10 +46,11 @@ export class GameModeSelector extends LitElement {
   };
 
   render() {
-    const disabled = !this.inputValid;
+    const disabled = !this.inputValid || this.signingIn;
 
     return html`
       <div class="atlas-game-modes">
+        ${this.signInError ? html`<p role="alert">${this.signInError}</p>` : null}
         <ios-add-to-home-screen-banner
           class="atlas-install-prompt no-crazygames"
         ></ios-add-to-home-screen-banner>
@@ -104,17 +107,38 @@ export class GameModeSelector extends LitElement {
     return usernameInput ? usernameInput.canPlay() : true;
   }
 
-  private openWorlds = () => {
-    if (!this.validateUsername()) return;
+  private openWorlds = async () => {
+    if (!this.validateUsername() || this.signingIn) return;
+    this.signingIn = true;
+    this.signInError = "";
+    try {
+      const page = document.querySelector<PersistentWorldPageElement>(
+        "persistent-world-page",
+      );
+      const name = document
+        .querySelector<UsernameInput>("username-input")
+        ?.getUsername();
+      if (!page?.signIn || !name)
+        throw new Error("Please enter your username.");
+      await page.signIn(name);
 
-    history.pushState(history.state, "", "/worlds");
-    window.showPage?.("page-persistent-worlds");
-    document
-      .querySelector<PersistentWorldPageElement>("persistent-world-page")
-      ?.open?.();
+      history.pushState(history.state, "", "/worlds");
+      window.showPage?.("page-persistent-worlds");
+      document
+        .querySelector<PersistentWorldPageElement>("persistent-world-page")
+        ?.open?.();
+    } catch (error) {
+      this.signInError =
+        error instanceof Error
+          ? error.message
+          : "Unable to sign in. Please try again.";
+    } finally {
+      this.signingIn = false;
+    }
   };
 }
 
 interface PersistentWorldPageElement extends Element {
+  signIn?: (name: string) => Promise<void>;
   open?: () => void;
 }

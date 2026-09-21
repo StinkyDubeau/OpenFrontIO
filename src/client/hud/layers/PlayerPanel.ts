@@ -495,18 +495,19 @@ export class PlayerPanel extends LitElement implements Controller {
 
   private renderRelationPillIfNation(other: PlayerView, my: PlayerView) {
     if (other.type() !== PlayerType.Nation) return html``;
-    if (other.isTraitor()) return html``;
-    if (my?.isAlliedWith && my.isAlliedWith(other)) return html``;
     if (!this.otherProfile || !my) return html``;
 
     const relation =
       this.otherProfile.relations?.[my.smallID()] ?? Relation.Neutral;
     const cls = this.getRelationClass(relation);
     const name = this.getRelationName(relation);
+    const personality = this.otherProfile.nationPersonality;
 
     return html`
       <div class="mt-1">
+        ${personality ? html`<span class="text-sm" style="color:#d6c99e">${personality.name} · ${personality.aggression} · </span>` : ""}
         <span class="text-sm font-semibold ${cls}">${name}</span>
+        ${personality ? html`<div class="text-xs" style="color:#b9c2bc;margin-top:3px">${personality.description}</div>` : ""}
       </div>
     `;
   }

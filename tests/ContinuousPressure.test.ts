@@ -52,6 +52,30 @@ describe("native pressure rules", () => {
     game.executeNextTick();
     expect(a.isAlliedWith(b)).toBe(true);
   }
+  it("allows a bounded AI offensive on balanced fronts, but never into allies", () => {
+    vi.spyOn(a, "type").mockReturnValue(PlayerType.Nation);
+    const add = vi.spyOn(game, "addExecution");
+    const tick = (Math.floor(a.smallID() / 10) % 30) * 10 + (a.smallID() % 10);
+    applyContinuousPressure(game, a, tick);
+    expect(
+      add.mock.calls.some(
+        ([execution]) =>
+          execution instanceof AttackExecution &&
+          execution.targetID() === b.id(),
+      ),
+    ).toBe(true);
+    add.mockClear();
+    vi.spyOn(a, "isFriendly").mockReturnValue(true);
+    applyContinuousPressure(game, a, tick);
+    // Wilderness pressure is still allowed; no attack may target the ally.
+    expect(
+      add.mock.calls.filter(
+        ([execution]) =>
+          execution instanceof AttackExecution &&
+          execution.targetID() === b.id(),
+      ).length,
+    ).toBe(0);
+  });
   it("always auto-defends when disconnected despite the active-play opt-out", () => {
     pressurePopulation(game, b).civilians = 100;
     setMobilisationTarget(game, a, 0.1, false);

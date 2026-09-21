@@ -54,6 +54,13 @@ export function pressureView(player: Player): PressureView | undefined {
     }
   );
 }
+
+/** Strategy changes the desired ratio only; normal paced conversion moves people. */
+export function setAiMobilisationTarget(player: Player, target: number): void {
+  const state = populations.get(player);
+  if (!state || player.type() !== PlayerType.Nation) return;
+  state.target = Math.max(0.35, Math.min(0.8, target));
+}
 export function samePressure(a?: PressureView, b?: PressureView): boolean {
   return (
     a === b ||

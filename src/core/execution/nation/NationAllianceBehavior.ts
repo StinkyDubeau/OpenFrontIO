@@ -6,6 +6,7 @@ import {
   PlayerType,
   Relation,
 } from "../../game/Game";
+import { nationPersonality } from "../../game/NationPersonality";
 import { PseudoRandom } from "../../PseudoRandom";
 import { assertNever } from "../../Util";
 import { AllianceExtensionExecution } from "../alliance/AllianceExtensionExecution";
@@ -19,6 +20,107 @@ import {
 } from "./NationEmojiBehavior";
 
 export class NationAllianceBehavior {
+  private nextDiplomacyTick = 0;
+  private contactedAt = new Map<string, number>();
+
+  private pressurePartnerUseful(other: Player, renewing = false): boolean {
+    if (
+      other === this.player ||
+      !other.isAlive() ||
+      other.type() === PlayerType.Bot ||
+      other.isTraitor()
+    )
+      return false;
+    if (this.player.relation(other) < Relation.Neutral) return false;
+    const profile = nationPersonality(this.player.id());
+    const rivals =
+      this.game
+        .players()
+        .filter((p) => p.isAlive() && p.type() !== PlayerType.Bot).length - 1;
+    const limit = Math.min(profile.allies, Math.max(1, Math.floor(rivals / 2)));
+    if (!renewing && this.player.alliances().length >= limit) return false;
+    if (
+      this.player
+        .incomingAttacks()
+        .some((a) => a.isActive() && a.attacker() === other) ||
+      this.player
+        .outgoingAttacks()
+        .some((a) => a.isActive() && a.target() === other)
+    )
+      return false;
+    if (renewing || this.player.relation(other) === Relation.Friendly)
+      return true;
+    const sharedEnemy = this.player
+      .incomingAttacks()
+      .some(
+        (a) =>
+          a.isActive() &&
+          other
+            .outgoingAttacks()
+            .some((b) => b.isActive() && b.target() === a.attacker()),
+      );
+    const ratio = other.troops() / Math.max(1, this.player.troops());
+    return (
+      sharedEnemy ||
+      (ratio >= 0.7 && ratio <= 2.5 && profile.name !== "opportunist")
+    );
+  }
+
+  /** One invitation per minute, with a two-minute per-partner retry interval. */
+  maybePressureDiplomacy(): void {
+    if (
+      !this.game.config().gameConfig().continuousPressure ||
+      this.player.type() !== PlayerType.Nation ||
+      this.game.config().disableAlliances() ||
+      this.game.inSpawnPhase() ||
+      this.game.ticks() < this.nextDiplomacyTick
+    )
+      return;
+    const tick = this.game.ticks();
+    this.nextDiplomacyTick = tick + 600 + (this.player.smallID() % 100);
+    for (const alliance of this.player.alliances()) {
+      const other = alliance.other(this.player);
+      if (
+        alliance.expiresAt() <=
+          tick + this.game.config().allianceExtensionPromptOffset() &&
+        !alliance.agreedToExtend(this.player) &&
+        this.pressurePartnerUseful(other, true)
+      ) {
+        this.game.addExecution(
+          new AllianceExtensionExecution(this.player, other.id()),
+        );
+        return;
+      }
+    }
+    // Include a few distant partners: being on another continent should not
+    // prevent nations (or an isolated human observer) from receiving diplomacy.
+    const candidates = this.player
+      .nearby()
+      .filter((p) => p.isPlayer())
+      .slice(0, 8) as Player[];
+    const roster = this.game.players();
+    const start = roster.length ? this.random.nextInt(0, roster.length) : 0;
+    for (let i = 0; i < Math.min(4, roster.length); i++) {
+      const candidate = roster[(start + i) % roster.length];
+      if (!candidates.includes(candidate)) candidates.push(candidate);
+    }
+    for (const other of candidates) {
+      if (
+        other === this.player ||
+        !other.isPlayer() ||
+        this.player.isFriendly(other) ||
+        tick - (this.contactedAt.get(other.id()) ?? -Infinity) < 1200 ||
+        !this.player.canSendAllianceRequest(other) ||
+        !this.pressurePartnerUseful(other)
+      )
+        continue;
+      this.contactedAt.set(other.id(), tick);
+      this.game.addExecution(
+        new AllianceRequestExecution(this.player, other.id()),
+      );
+      return;
+    }
+  }
   constructor(
     private random: PseudoRandom,
     private game: Game,
@@ -52,6 +154,7 @@ export class NationAllianceBehavior {
       // Alliance expiration tracked by Events Panel, only human ally can click Request to Renew
       // Skip if no expiration yet/ ally didn't request extension yet / nation already agreed to extend
       if (!alliance.onlyOneAgreedToExtend()) continue;
+      if (alliance.agreedToExtend(this.player)) continue;
 
       const human = alliance.other(this.player);
       if (!this.getAllianceDecision(human, true)) continue;
@@ -89,6 +192,14 @@ export class NationAllianceBehavior {
     otherPlayer: Player,
     isResponse: boolean,
   ): boolean {
+    if (
+      this.game.config().gameConfig().continuousPressure &&
+      this.player.type() === PlayerType.Nation
+    )
+      return this.pressurePartnerUseful(
+        otherPlayer,
+        this.player.isAlliedWith(otherPlayer),
+      );
     // Easy (dumb) nations sometimes get confused and accept/reject randomly (Just like dumb humans do)
     if (this.isConfused()) {
       return this.random.chance(2);

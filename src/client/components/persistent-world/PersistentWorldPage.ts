@@ -7,6 +7,7 @@ import type {
   PersistentWorldControllerSession,
   PersistentWorldLobbySnapshot,
 } from "../../../core/PersistentWorldSchemas";
+import { UsernameSchema } from "../../../core/Schemas";
 import { getPlayToken, setGuestPlayToken } from "../../Auth";
 import { placeholderCopy } from "../../copy/PlaceholderCopy";
 import type { JoinLobbyEvent } from "../../Main";
@@ -37,6 +38,29 @@ const HEADER_NOTICE_DURATION_MS = 6_500;
 
 @customElement("persistent-world-page")
 export class PersistentWorldPage extends LitElement {
+  /** Explicit landing submission, unlike passive restoration on a deep link. */
+  public async signIn(displayName: string): Promise<void> {
+    const name = UsernameSchema.parse(displayName.trim());
+    const previous = persistentWorldApi.sessionToken()
+      ? await persistentWorldApi.resumeSession().catch((error) => {
+          if (error instanceof PersistentWorldApiError && error.status === 401)
+            return null;
+          throw error;
+        })
+      : null;
+    const session =
+      previous?.identity.displayName === name
+        ? previous
+        : (await persistentWorldApi.createGuestSession(name)).session;
+    this.session = null;
+    setGuestPlayToken(null);
+    const credential = await persistentWorldApi.bindGameIdentityWithToken(
+      await getPlayToken(),
+    );
+    if (credential !== null) setGuestPlayToken(credential);
+    this.session = session;
+  }
+
   @state() private view: WorldPageView = "hub";
   @state() private lobbyTab: LobbyTab = "invitation";
   @state() private session: PersistentWorldControllerSession | null = null;

@@ -54,6 +54,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { nationPersonality } from "./NationPersonality";
 import { OrderedRoster } from "./OrderedRoster";
 import { hasPressureGrace } from "./PressureDiplomacy";
 import { pressureHash, pressureView } from "./PressurePopulation";
@@ -1678,7 +1679,21 @@ export class PlayerImpl implements Player {
   }
 
   public playerProfile(): PlayerProfile {
+    const personality =
+      this.type() === PlayerType.Nation &&
+      this.mg.config().gameConfig().continuousPressure
+        ? nationPersonality(this.id())
+        : undefined;
     const rel = {
+      ...(personality
+        ? {
+            nationPersonality: {
+              name: personality.name,
+              aggression: personality.aggression,
+              description: personality.description,
+            },
+          }
+        : {}),
       relations: Object.fromEntries(
         this.allRelationsSorted().map(({ player, relation }) => [
           player.smallID(),

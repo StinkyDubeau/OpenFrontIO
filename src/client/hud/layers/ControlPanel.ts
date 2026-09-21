@@ -739,6 +739,11 @@ export class ControlPanel extends LitElement implements Controller {
           background: #a8c7ad30;
           box-shadow: inset 0 0 0 1px #a8c7ad;
         }
+        @media (min-width: 769px) {
+          .atlas-structure-register {
+            display: none;
+          }
+        }
       </style>
       <div class="atlas-pressure-dials">
         <population-ratio-slider

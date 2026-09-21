@@ -72,9 +72,35 @@ export class AtlasGameHud extends LitElement {
     return html`
       <style>
         @media (max-width: 1023px) {
-          atlas-game-hud .atlas-hud-notices > events-display,
-          atlas-game-hud .atlas-hud-notices > actionable-events {
+          atlas-game-hud .atlas-hud-notices > events-display {
             display: none !important;
+          }
+          atlas-game-hud .atlas-hud-notices > actionable-events {
+            display: block !important;
+            position: fixed;
+            top: calc(var(--atlas-top-command-bottom, 100px) + 6px);
+            left: 6px;
+            right: 6px;
+            width: auto;
+            z-index: 60;
+            pointer-events: none;
+          }
+          atlas-game-hud
+            .atlas-hud-notices
+            > actionable-events
+            .atlas-action-notices {
+            margin-top: 0;
+            max-height: 32dvh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+          }
+          /* A single actionable card at a time; dismissing reveals the next. */
+          atlas-game-hud
+            .atlas-hud-notices
+            > actionable-events
+            .atlas-action-notice
+            ~ .atlas-action-notice {
+            display: none;
           }
           body.atlas-theme.in-game atlas-game-hud .atlas-control-deck {
             position: relative;
@@ -183,9 +209,9 @@ export class AtlasGameHud extends LitElement {
           aria-label=${this.showClockLogo ? "Show game time" : `Game time ${this.clockText}. Show Idlefront logo`}
           @pointerdown=${(event: PointerEvent) => event.stopPropagation()}
           @click=${(event: Event) => {
-          event.stopPropagation();
-          this.showClockLogo = !this.showClockLogo;
-        }}
+            event.stopPropagation();
+            this.showClockLogo = !this.showClockLogo;
+          }}
         >
           ${this.showClockLogo ? html`<span class="atlas-clock-swap"><product-wordmark compact quiet></product-wordmark></span>` : html`<span class="atlas-clock-swap">${this.clockText}</span>`}
         </button>

@@ -9,6 +9,7 @@ import "./components/baseComponents/setting/SettingSelect";
 import "./components/baseComponents/setting/SettingSlider";
 import "./components/baseComponents/setting/SettingToggle";
 import { BaseModal } from "./components/BaseModal";
+import "./components/FrameRateSetting";
 import "./components/GraphicsPresetSelector";
 import { modalHeader } from "./components/ui/ModalHeader";
 import { Platform } from "./Platform";
@@ -748,6 +749,7 @@ export class UserSettingModal extends BaseModal {
 
   private renderBasicSettings() {
     return html`
+      <frame-rate-setting></frame-rate-setting>
       <!-- 🎨 Graphics preset -->
       <div
         class="flex flex-col w-full p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all gap-3"
@@ -874,42 +876,42 @@ export class UserSettingModal extends BaseModal {
           ? html`
               <setting-slider
                 label="${translateText(
-                "user_setting.easter_writing_speed_label",
-              )}"
+                  "user_setting.easter_writing_speed_label",
+                )}"
                 description="${translateText(
-                "user_setting.easter_writing_speed_desc",
-              )}"
+                  "user_setting.easter_writing_speed_desc",
+                )}"
                 min="0"
                 max="100"
                 value="40"
                 easter="true"
                 @change=${(e: CustomEvent) => {
-                const value = e.detail?.value;
-                if (value !== undefined) {
-                  console.log("Changed:", value);
-                } else {
-                  console.warn("Slider event missing detail.value", e);
-                }
-              }}
+                  const value = e.detail?.value;
+                  if (value !== undefined) {
+                    console.log("Changed:", value);
+                  } else {
+                    console.warn("Slider event missing detail.value", e);
+                  }
+                }}
               ></setting-slider>
 
               <setting-number
                 label="${translateText("user_setting.easter_bug_count_label")}"
                 description="${translateText(
-                "user_setting.easter_bug_count_desc",
-              )}"
+                  "user_setting.easter_bug_count_desc",
+                )}"
                 value="100"
                 min="0"
                 max="1000"
                 easter="true"
                 @change=${(e: CustomEvent) => {
-                const value = e.detail?.value;
-                if (value !== undefined) {
-                  console.log("Changed:", value);
-                } else {
-                  console.warn("Slider event missing detail.value", e);
-                }
-              }}
+                  const value = e.detail?.value;
+                  if (value !== undefined) {
+                    console.log("Changed:", value);
+                  } else {
+                    console.warn("Slider event missing detail.value", e);
+                  }
+                }}
               ></setting-number>
             `
           : null

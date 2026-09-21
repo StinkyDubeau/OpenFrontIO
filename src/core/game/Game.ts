@@ -759,13 +759,33 @@ export interface Game extends GameMap {
   players(): Player[];
   allPlayers(): Player[];
   /** Derived-state observer; called after ownership changes, in simulation order. */
-  observeTerritory(listener: (tile: TileRef, previousOwner: number, owner: number) => void): () => void;
-  observeUnitLocations(listener: (unit: Unit, removed: boolean) => void): () => void;
+  observeTerritory(
+    listener: (tile: TileRef, previousOwner: number, owner: number) => void,
+  ): () => void;
+  observeUnitLocations(
+    listener: (unit: Unit, removed: boolean) => void,
+  ): () => void;
   observeWaterConversions(listener: (tile: TileRef) => void): () => void;
   /** Authority-only activity scheduling; ordinary matches always expand. */
-  setAttackActivityPolicy(policy: ((attacker: Player, target: Player | TerraNullius, tick: Tick) => number) | undefined): void;
-  shouldExpandAttack(attacker: Player, target: Player | TerraNullius, tick: Tick): boolean;
-  attackExpansionBudget(attacker: Player, target: Player | TerraNullius, tick: Tick): number;
+  setAttackActivityPolicy(
+    policy:
+      | ((
+          attacker: Player,
+          target: Player | TerraNullius,
+          tick: Tick,
+        ) => number)
+      | undefined,
+  ): void;
+  shouldExpandAttack(
+    attacker: Player,
+    target: Player | TerraNullius,
+    tick: Tick,
+  ): boolean;
+  attackExpansionBudget(
+    attacker: Player,
+    target: Player | TerraNullius,
+    tick: Tick,
+  ): number;
   /** Optional pure capability check; planners must not probe a stateful policy. */
   hasAttackActivityPolicy?(): boolean;
   playerByClientID(id: ClientID): Player | null;
@@ -954,6 +974,7 @@ export const NUKE_BULK_STEPS: readonly number[] = [2, 5];
 export const STRUCTURE_BULK_STEPS: readonly number[] = [5, 10];
 
 export interface PlayerProfile {
+  nationPersonality?: { name: string; aggression: string; description: string };
   relations: Record<number, Relation>;
   alliances: number[];
 }

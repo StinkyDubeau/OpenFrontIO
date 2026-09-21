@@ -11,6 +11,7 @@ import {
   ToggleRenderDebugGuiEvent,
 } from "../../InputHandler";
 import { translateText } from "../../Utils";
+import "../../components/FrameRateSetting";
 import {
   SetBackgroundMusicVolumeEvent,
   SetSoundEffectsVolumeEvent,
@@ -242,6 +243,7 @@ export class SettingsModal extends LitElement implements Controller {
           </div>
 
           <div class="atlas-settings-list p-4 flex flex-col gap-3">
+            <frame-rate-setting></frame-rate-setting>
             <button
               class="flex gap-3 items-center w-full text-left p-3 hover:bg-slate-700 rounded-sm text-white transition-colors"
               @click="${this.onGraphicsSettingsButtonClick}"
