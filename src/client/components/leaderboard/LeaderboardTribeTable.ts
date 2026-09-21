@@ -34,19 +34,19 @@ function rankStyle(rank: number): { color: string; icon: string } {
   if (rank === 1) {
     return {
       color: "text-yellow-400 bg-yellow-400/10 ring-1 ring-yellow-400/20",
-      icon: "👑",
+      icon: "1",
     };
   }
   if (rank === 2) {
     return {
       color: "text-slate-300 bg-slate-400/10 ring-1 ring-slate-400/20",
-      icon: "🥈",
+      icon: "2",
     };
   }
   if (rank === 3) {
     return {
       color: "text-amber-600 bg-amber-600/10 ring-1 ring-amber-600/20",
-      icon: "🥉",
+      icon: "3",
     };
   }
   return { color: "text-white/40 bg-white/5", icon: String(rank) };
@@ -338,8 +338,9 @@ export class LeaderboardTribeTable extends LitElement {
                           >
                             <div
                               class="h-full bg-blue-500/50 rounded-full"
-                              style="width: ${(tribe.playerReach / maxReach) *
-                              100}%"
+                              style="width: ${
+                                (tribe.playerReach / maxReach) * 100
+                              }%"
                             ></div>
                           </div>
                         </div>

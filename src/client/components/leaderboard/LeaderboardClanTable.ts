@@ -8,11 +8,7 @@ import { fetchClanLeaderboard } from "../../ClanApi";
 import { translateText } from "../../Utils";
 
 export type ClanSortColumn =
-  | "rank"
-  | "games"
-  | "winScore"
-  | "lossScore"
-  | "ratio";
+  "rank" | "games" | "winScore" | "lossScore" | "ratio";
 export type ClanSortOrder = "asc" | "desc";
 
 @customElement("leaderboard-clan-table")
@@ -225,18 +221,22 @@ export class LeaderboardClanTable extends LitElement {
                     <button
                       class="whitespace-nowrap uppercase"
                       @click=${() => this.handleSort("games")}
-                      aria-sort=${this.sortBy === "games"
-                        ? this.sortOrder === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"}
+                      aria-sort=${
+                        this.sortBy === "games"
+                          ? this.sortOrder === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
                     >
                       ${translateText("leaderboard_modal.games")}
-                      ${this.sortBy === "games"
-                        ? this.sortOrder === "asc"
-                          ? "↑"
-                          : "↓"
-                        : "↕"}
+                      ${
+                        this.sortBy === "games"
+                          ? this.sortOrder === "asc"
+                            ? "↑"
+                            : "↓"
+                          : "↕"
+                      }
                     </button>
                   </th>
                   <th
@@ -248,18 +248,22 @@ export class LeaderboardClanTable extends LitElement {
                     <button
                       class="whitespace-nowrap uppercase"
                       @click=${() => this.handleSort("winScore")}
-                      aria-sort=${this.sortBy === "winScore"
-                        ? this.sortOrder === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"}
+                      aria-sort=${
+                        this.sortBy === "winScore"
+                          ? this.sortOrder === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
                     >
                       ${translateText("leaderboard_modal.win_score")}
-                      ${this.sortBy === "winScore"
-                        ? this.sortOrder === "asc"
-                          ? "↑"
-                          : "↓"
-                        : "↕"}
+                      ${
+                        this.sortBy === "winScore"
+                          ? this.sortOrder === "asc"
+                            ? "↑"
+                            : "↓"
+                          : "↕"
+                      }
                     </button>
                   </th>
                   <th
@@ -271,18 +275,22 @@ export class LeaderboardClanTable extends LitElement {
                     <button
                       class="whitespace-nowrap uppercase"
                       @click=${() => this.handleSort("lossScore")}
-                      aria-sort=${this.sortBy === "lossScore"
-                        ? this.sortOrder === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"}
+                      aria-sort=${
+                        this.sortBy === "lossScore"
+                          ? this.sortOrder === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
                     >
                       ${translateText("leaderboard_modal.loss_score")}
-                      ${this.sortBy === "lossScore"
-                        ? this.sortOrder === "asc"
-                          ? "↑"
-                          : "↓"
-                        : "↕"}
+                      ${
+                        this.sortBy === "lossScore"
+                          ? this.sortOrder === "asc"
+                            ? "↑"
+                            : "↓"
+                          : "↕"
+                      }
                     </button>
                   </th>
                   <th
@@ -291,18 +299,22 @@ export class LeaderboardClanTable extends LitElement {
                     <button
                       class="whitespace-nowrap uppercase"
                       @click=${() => this.handleSort("ratio")}
-                      aria-sort=${this.sortBy === "ratio"
-                        ? this.sortOrder === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : "none"}
+                      aria-sort=${
+                        this.sortBy === "ratio"
+                          ? this.sortOrder === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                      }
                     >
                       ${translateText("leaderboard_modal.win_loss_ratio")}
-                      ${this.sortBy === "ratio"
-                        ? this.sortOrder === "asc"
-                          ? "↑"
-                          : "↓"
-                        : "↕"}
+                      ${
+                        this.sortBy === "ratio"
+                          ? this.sortOrder === "asc"
+                            ? "↑"
+                            : "↓"
+                          : "↕"
+                      }
                     </button>
                   </th>
                 </tr>
@@ -320,11 +332,11 @@ export class LeaderboardClanTable extends LitElement {
                           : "text-white/40 bg-white/5";
                   const rankIcon =
                     displayRank === 1
-                      ? "👑"
+                      ? "1"
                       : displayRank === 2
-                        ? "🥈"
+                        ? "2"
                         : displayRank === 3
-                          ? "🥉"
+                          ? "3"
                           : String(displayRank);
 
                   return html`
@@ -377,10 +389,11 @@ export class LeaderboardClanTable extends LitElement {
                       <td class="py-3 px-4 text-right pr-6">
                         <div class="inline-flex flex-col items-end">
                           <span
-                            class="font-mono font-bold ${clan.weightedWLRatio >=
-                            1
-                              ? "text-green-400"
-                              : "text-red-400"}"
+                            class="font-mono font-bold ${
+                              clan.weightedWLRatio >= 1
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }"
                             >${clan.weightedWLRatio.toLocaleString(undefined, {
                               maximumFractionDigits: 2,
                             })}</span

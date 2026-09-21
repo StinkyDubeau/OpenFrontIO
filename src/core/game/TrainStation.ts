@@ -3,6 +3,7 @@ import { PseudoRandom } from "../PseudoRandom";
 import { Game, Player, Unit, UnitType } from "./Game";
 import { TileRef } from "./GameMap";
 import { GameUpdateType } from "./GameUpdates";
+import { pressureIncome } from "./PressurePopulation";
 import { Railroad } from "./Railroad";
 
 /**
@@ -29,11 +30,13 @@ class TradeStationStopHandler implements TrainStopHandler {
       );
     // Share revenue with the station owner if it's not the current player
     if (trainOwner !== stationOwner) {
-      stationOwner.addGold(gold, station.tile());
-      mg.stats().trainExternalTrade(stationOwner, gold);
+      const stationGold = pressureIncome(stationOwner, gold);
+      stationOwner.addGold(stationGold, station.tile());
+      mg.stats().trainExternalTrade(stationOwner, stationGold);
     }
-    trainOwner.addGold(gold, station.tile());
-    mg.stats().trainSelfTrade(trainOwner, gold);
+    const trainGold = pressureIncome(trainOwner, gold);
+    trainOwner.addGold(trainGold, station.tile());
+    mg.stats().trainSelfTrade(trainOwner, trainGold);
   }
 }
 

@@ -271,7 +271,10 @@ export class GameRunner {
         canSendEmoji: player.canSendEmoji(other),
         canTarget: player.canTarget(other),
         canSendAllianceRequest: player.canSendAllianceRequest(other),
-        canBreakAlliance: player.isAlliedWith(other),
+        canBreakAlliance:
+          player.isAlliedWith(other) &&
+          (!this.game.config().gameConfig().continuousPressure ||
+            player.allianceWith(other)!.expiresAt() <= this.game.ticks()),
         canDonateGold: player.canDonateGold(other),
         canDonateTroops: player.canDonateTroops(other),
         canEmbargo: !player.hasEmbargoAgainst(other),

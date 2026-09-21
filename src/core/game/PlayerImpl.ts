@@ -55,6 +55,8 @@ import {
   PlayerUpdate,
 } from "./GameUpdates";
 import { OrderedRoster } from "./OrderedRoster";
+import { hasPressureGrace } from "./PressureDiplomacy";
+import { pressureHash, pressureView } from "./PressurePopulation";
 import { ReadonlyTileSet, TileSet } from "./TileSet";
 import {
   bestShoreDeploymentSource,
@@ -341,6 +343,7 @@ export class PlayerImpl implements Player {
       tilesOwned: this.numTilesOwned(),
       gold: this._gold,
       troops: this.troops(),
+      pressure: pressureView(this),
       allies: allies,
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
@@ -700,11 +703,13 @@ export class PlayerImpl implements Player {
       return null;
     }
     const inExtensionWindow =
+      !!this.mg.config().gameConfig().continuousPressure ||
       alliance.expiresAt() <=
-      this.mg.ticks() + this.mg.config().allianceExtensionPromptOffset();
+        this.mg.ticks() + this.mg.config().allianceExtensionPromptOffset();
     const canExtend =
       !this.isDisconnected() &&
-      !other.isDisconnected() &&
+      (!other.isDisconnected() ||
+        !!this.mg.config().gameConfig().continuousPressure) &&
       this.isAlive() &&
       other.isAlive() &&
       inExtensionWindow &&
@@ -1198,7 +1203,11 @@ export class PlayerImpl implements Player {
     if (other === this) {
       return true;
     }
-    if (other.isDisconnected() && !treatAFKFriendly) {
+    if (
+      !this.mg.config().gameConfig().continuousPressure &&
+      other.isDisconnected() &&
+      !treatAFKFriendly
+    ) {
       return false;
     }
     return this.isOnSameTeam(other) || this.isAlliedWith(other);
@@ -1655,6 +1664,7 @@ export class PlayerImpl implements Player {
 
   hash(): number {
     return (
+      pressureHash(this) +
       simpleHash(this.id()) * (this.troops() + this.numTilesOwned()) +
       this._units.reduce((acc, unit) => acc + unit.hash(), 0)
     );
@@ -1709,6 +1719,7 @@ export class PlayerImpl implements Player {
   }
 
   public isImmune(): boolean {
+    if (hasPressureGrace(this.mg, this)) return true;
     if (this.type() === PlayerType.Human) {
       return this.mg.isSpawnImmunityActive();
     }
@@ -1722,6 +1733,7 @@ export class PlayerImpl implements Player {
     player: Player,
     treatAFKFriendly: boolean = false,
   ): boolean {
+    if (hasPressureGrace(this.mg, player)) return false;
     if (this.type() !== PlayerType.Human) {
       // Only human attackers respect PVP immunity
       return !this.isFriendly(player, treatAFKFriendly);

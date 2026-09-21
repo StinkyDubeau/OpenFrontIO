@@ -140,6 +140,7 @@ function isFriendlyTarget(params: MenuElementParams): boolean {
 }
 
 function isDisconnectedTarget(params: MenuElementParams): boolean {
+  if (params.game.config().gameConfig().continuousPressure) return false;
   const selectedPlayer = params.selected;
   if (selectedPlayer === null) return false;
   const isDisconnected = (selectedPlayer as PlayerView).isDisconnected;
@@ -269,7 +270,8 @@ const allyBreakElement: MenuElement = {
   displayed: (params: MenuElementParams) =>
     !!params.playerActions?.interaction?.canBreakAlliance,
   color: (params: MenuElementParams) =>
-    params.selected?.isTraitor() || params.selected?.isDisconnected()
+    !params.game.config().gameConfig().continuousPressure &&
+    (params.selected?.isTraitor() || params.selected?.isDisconnected())
       ? COLORS.breakAllyNoDebuff
       : COLORS.breakAlly,
   icon: traitorIcon,

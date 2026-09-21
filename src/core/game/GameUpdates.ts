@@ -251,6 +251,7 @@ export interface AttackUpdate {
  * the first emission and later changes are silently dropped.
  */
 export interface PlayerUpdate {
+  pressure?: import("./PressurePopulation").PressureView;
   type: GameUpdateType.Player;
   id: PlayerID;
   nameViewData?: NameViewData;

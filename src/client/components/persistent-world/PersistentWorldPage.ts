@@ -610,8 +610,7 @@ export class PersistentWorldPage extends LitElement {
         </div>
       </div>
       <div class="pw-loading-caption">
-        <span class="pw-loading-compass" aria-hidden="true">✦</span
-        ><span>Opening the invitation table…</span>
+        <span>Opening lobby…</span>
       </div>
     </main>`;
   }

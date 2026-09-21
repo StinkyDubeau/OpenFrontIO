@@ -1,6 +1,7 @@
 import { Colord } from "colord";
 import { html, LitElement } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import { assetUrl } from "../../../core/AssetUrls";
 import type { EventBus } from "../../../core/EventBus";
 import { GameMode, type Team } from "../../../core/game/Game";
@@ -15,10 +16,6 @@ import type { PlayerStats } from "./PlayerStats";
 import { SpawnBarVisibleEvent } from "./SpawnTimer";
 import "./TeamStats";
 import type { TeamStats } from "./TeamStats";
-const playerStatsRegularIcon = assetUrl(
-  "images/LeaderboardIconRegularWhite.svg",
-);
-const playerStatsSolidIcon = assetUrl("images/LeaderboardIconSolidWhite.svg");
 const teamStatsRegularIcon = assetUrl("images/TeamIconRegularWhite.svg");
 const teamStatsSolidIcon = assetUrl("images/TeamIconSolidWhite.svg");
 
@@ -38,6 +35,8 @@ export class GameLeftSidebar extends LitElement implements Controller {
   private spawnBarVisible = false;
   @state()
   private immunityBarVisible = false;
+  @state()
+  private leaderboardRank: number | null = null;
 
   private playerColor: Colord = new Colord("#FFFFFF");
   @property({ attribute: false }) public game: GameView | null = null;
@@ -80,7 +79,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
       this.isPlayerTeamLabelVisible = false;
     }
 
-    this.playerStats?.refresh();
+    this.playerStats?.refresh(true);
     this.teamStats?.refresh();
   }
 
@@ -116,43 +115,24 @@ export class GameLeftSidebar extends LitElement implements Controller {
         style="margin-top: ${this.barOffset}px;"
       >
         <div class="atlas-overview-actions flex items-center text-white">
-          <div
-            class="atlas-map-brand-mark"
-            aria-hidden="true"
-            @pointerup=${this.onLogoTap}
-          >
-            <svg viewBox="0 0 36 36" focusable="false">
-              <circle cx="18" cy="18" r="13.5"></circle>
-              <path d="M8.4 20.5c4.7-5.4 9.1-8 19.2-6.4"></path>
-              <path d="m21.2 13.7-2.1 6-6 2.2 2.2-6.1 5.9-2.1Z"></path>
-              <circle
-                class="atlas-map-brand-mark__pin"
-                cx="17.2"
-                cy="17.8"
-                r="1.6"
-              ></circle>
-            </svg>
-          </div>
           <button
-            class="atlas-hud-button"
+            class="atlas-hud-button atlas-nav-rank"
             type="button"
             role="button"
+            aria-label=${this.isPlayerStatsShown ? "Close leaderboard" : this.leaderboardRank === null ? "Open leaderboard" : `Leaderboard: position ${this.leaderboardRank}`}
             aria-expanded=${this.isPlayerStatsShown}
+            title="Leaderboard"
+            @pointerup=${this.onLogoTap}
             @click=${this.togglePlayerStats}
           >
-            <img
-              src=${
-                this.isPlayerStatsShown
-                  ? playerStatsSolidIcon
-                  : playerStatsRegularIcon
-              }
-              alt=${
-                translateText("help_modal.icon_alt_player_leaderboard") ||
-                "Player Leaderboard Icon"
-              }
-              width="20"
-              height="20"
-            />
+            ${keyed(
+              this.isPlayerStatsShown,
+              html`<span
+                class="atlas-leaderboard-rank ${this.isPlayerStatsShown ? "is-close" : ""}"
+                aria-hidden="true"
+                >${this.isPlayerStatsShown ? "×" : this.leaderboardRank === null ? html`<img src=${assetUrl("images/LeaderboardIconRegularWhite.svg")} width="20" height="20" alt="" />` : `#${this.leaderboardRank}`}</span
+              >`,
+            )}
           </button>
           ${
             this.isTeamGame
@@ -210,8 +190,15 @@ export class GameLeftSidebar extends LitElement implements Controller {
               `
             : null
         }
-        <div class="flex flex-col gap-2 min-w-0 w-full">
+        <div
+          class="atlas-leaderboard-flyout flex flex-col gap-2 min-w-0 w-full"
+        >
           <player-stats
+            @leaderboard-rank=${(
+              event: CustomEvent<{ rank: number | null }>,
+            ) => {
+              this.leaderboardRank = event.detail.rank;
+            }}
             class=${this.isPlayerStatsShown ? "block min-w-0" : "hidden"}
             .game=${this.game}
             .eventBus=${this.eventBus}

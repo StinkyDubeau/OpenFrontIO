@@ -121,8 +121,9 @@ export class JoinLobbyModal extends BaseModal {
             this.serverTimeOffset,
           )
         : null;
-    const statusLabel =
-      secondsRemaining === null
+    const statusLabel = this.isConnecting
+      ? translateText("public_lobby.connecting")
+      : secondsRemaining === null
         ? this.isPrivateLobby()
           ? translateText("private_lobby.joined_waiting")
           : translateText("public_lobby.waiting_for_players")
@@ -139,40 +140,45 @@ export class JoinLobbyModal extends BaseModal {
     return html`
       <div class="flex flex-col h-full">
         <div class="flex-1 custom-scrollbar p-6 space-y-4 mr-1">
-          ${this.isConnecting
-            ? html`
-                <div
-                  class="min-h-[240px] flex flex-col items-center justify-center gap-4"
-                >
+          ${
+            this.isConnecting
+              ? html`
                   <div
-                    class="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"
-                  ></div>
-                  <p class="text-center text-white/80 text-sm">
-                    ${translateText("public_lobby.connecting")}
-                  </p>
-                </div>
-              `
-            : html`
-                ${this.gameConfig ? this.renderGameConfig() : html``}
-                ${this.players.length > 0
-                  ? html`
-                      <lobby-player-view
-                        class="mt-6"
-                        .gameMode=${this.gameConfig?.gameMode ?? GameMode.FFA}
-                        .clients=${this.players}
-                        .lobbyCreatorClientID=${hostClientID}
-                        .currentClientID=${this.currentClientID}
-                        .teamCount=${this.gameConfig?.playerTeams ?? 2}
-                        .isPublicGame=${this.gameConfig?.gameType ===
-                        GameType.Public}
-                        .nationCount=${nationsConfigToSlider(
+                    class="min-h-[240px] flex flex-col items-center justify-center gap-4"
+                  >
+                    <div
+                      class="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"
+                    ></div>
+                    <p class="text-center text-white/80 text-sm">
+                      ${translateText("public_lobby.connecting")}
+                    </p>
+                  </div>
+                `
+              : html`
+                  ${this.gameConfig ? this.renderGameConfig() : html``}
+                  ${
+                  this.players.length > 0
+                    ? html`
+                        <lobby-player-view
+                          class="mt-6"
+                          .gameMode=${this.gameConfig?.gameMode ?? GameMode.FFA}
+                          .clients=${this.players}
+                          .lobbyCreatorClientID=${hostClientID}
+                          .currentClientID=${this.currentClientID}
+                          .teamCount=${this.gameConfig?.playerTeams ?? 2}
+                          .isPublicGame=${
+                          this.gameConfig?.gameType === GameType.Public
+                        }
+                          .nationCount=${nationsConfigToSlider(
                           this.gameConfig?.nations ?? "default",
                           this.nationCount,
                         )}
-                      ></lobby-player-view>
-                    `
-                  : ""}
-              `}
+                        ></lobby-player-view>
+                      `
+                    : ""
+                }
+                `
+          }
         </div>
 
         ${html`
@@ -189,24 +195,26 @@ export class JoinLobbyModal extends BaseModal {
                 >
                 <span class="text-sm font-bold text-white">${statusLabel}</span>
               </div>
-              ${maxPlayers > 0
-                ? html`
-                    <div
-                      class="flex items-center gap-2 text-white/80 text-xs font-bold uppercase tracking-widest"
-                    >
-                      <span>${playerCount}/${maxPlayers}</span>
-                      <svg
-                        class="w-4 h-4 text-white"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
+              ${
+                maxPlayers > 0
+                  ? html`
+                      <div
+                        class="flex items-center gap-2 text-white/80 text-xs font-bold uppercase tracking-widest"
                       >
-                        <path
-                          d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.972 0 004 15v3H1v-3a3 3 0 013.75-2.906z"
-                        ></path>
-                      </svg>
-                    </div>
-                  `
-                : html``}
+                        <span>${playerCount}/${maxPlayers}</span>
+                        <svg
+                          class="w-4 h-4 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.972 0 004 15v3H1v-3a3 3 0 013.75-2.906z"
+                          ></path>
+                        </svg>
+                      </div>
+                    `
+                  : html``
+              }
             </div>
           </div>
         `}
@@ -321,27 +329,31 @@ export class JoinLobbyModal extends BaseModal {
           <span class="text-xs text-white/60"
             >${c ? this.modeSubtitle(c) : ""}</span
           >
-          ${settings.length > 0 || disabledUnitCount > 0
-            ? html`<div class="flex flex-wrap gap-1 mt-1">
-                ${settings.map((s) => {
+          ${
+            settings.length > 0 || disabledUnitCount > 0
+              ? html`<div class="flex flex-wrap gap-1 mt-1">
+                  ${settings.map((s) => {
                   // Some labels (e.g. host_modal.bots) already end with ": ".
                   const label = s.label.replace(/[:\s]+$/, "");
                   return html`<span
                     class="px-1.5 py-0.5 bg-white/10 text-white/70 text-[10px] rounded font-bold"
-                    >${s.value === enabled
-                      ? label
-                      : `${label}: ${s.value}`}</span
+                    >${
+                      s.value === enabled ? label : `${label}: ${s.value}`
+                    }</span
                   >`;
                 })}
-                ${disabledUnitCount > 0
-                  ? html`<span
-                      class="px-1.5 py-0.5 bg-red-500/20 text-red-200 text-[10px] rounded font-bold border border-red-500/30"
-                      >${translateText("private_lobby.disabled_units")}:
-                      ${disabledUnitCount}</span
-                    >`
-                  : ""}
-              </div>`
-            : ""}
+                  ${
+                  disabledUnitCount > 0
+                    ? html`<span
+                        class="px-1.5 py-0.5 bg-red-500/20 text-red-200 text-[10px] rounded font-bold border border-red-500/30"
+                        >${translateText("private_lobby.disabled_units")}:
+                        ${disabledUnitCount}</span
+                      >`
+                    : ""
+                }
+                </div>`
+              : ""
+          }
         </div>
         <div
           class="flex items-center gap-1 text-white/80 text-xs font-bold shrink-0"
@@ -737,11 +749,13 @@ export class JoinLobbyModal extends BaseModal {
           <span class="text-sm text-white/60">${modeSubtitle}</span>
         </div>
       </div>
-      ${cards.length > 0
-        ? html`<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
-            ${cards}
-          </div>`
-        : html``}
+      ${
+        cards.length > 0
+          ? html`<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
+              ${cards}
+            </div>`
+          : html``
+      }
       ${this.renderDisabledUnits()} ${this.renderHostCheats()}
     `;
   }
@@ -1100,7 +1114,7 @@ export class JoinLobbyModal extends BaseModal {
     }
 
     if (gameInfo.exists) {
-      this.showMessage(translateText("private_lobby.joined_waiting"));
+      // The lobby's own status surface communicates progress, without a duplicate toast.
 
       // Use the clientID that was already set by startTrackingLobby in open()
       this.dispatchEvent(

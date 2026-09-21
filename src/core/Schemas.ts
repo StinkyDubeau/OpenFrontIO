@@ -22,6 +22,7 @@ import {
   Trios,
   UnitType,
 } from "./game/Game";
+import { PressurePacingSchema } from "./PressurePacing";
 import { ArchivedPlayerStatsSchema, PlayerStatsSchema } from "./StatsSchemas";
 import { flattenedEmojiTable } from "./Util";
 
@@ -29,6 +30,7 @@ export type GameID = string;
 export type ClientID = string;
 
 export type Intent =
+  | { type: "mobilisation"; target: number; autoDefenceEnabled?: boolean }
   | SpawnIntent
   | AttackIntent
   | CancelAttackIntent
@@ -392,6 +394,13 @@ export const GameConfigSchema = z.object({
   // explicitly configured match timer still win normally.
   disableForcedTimeLimit: z.boolean().optional(),
   customAllianceDuration: z.number().int().min(0).max(15).nullable().optional(), // In minutes; 0 disables alliances
+  // Persisted tuning for the upcoming pressure rules. Presence alone does not
+  // activate the new population/combat model in an existing replay.
+  pressurePacing: PressurePacingSchema.optional(),
+  continuousPressure: z.literal("v1").optional(),
+  allianceProtectionMinutes: z.number().int().min(1).max(10080).optional(),
+  pressureGraceSeconds: z.number().int().min(0).max(86400).optional(),
+  passiveWildernessExpansion: z.boolean().optional(),
   startDelay: z.number().int().min(0).max(600).nullable().optional(), // In seconds
   spawnImmunityDuration: z.number().int().min(0).nullable().optional(), // In ticks
   disabledUnits: z.enum(UnitType).array().optional(),
@@ -615,6 +624,11 @@ export const ToggleGameStartTimerIntentSchema = z.object({
 });
 
 export const IntentSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("mobilisation"),
+    target: z.number().finite().min(0).max(1),
+    autoDefenceEnabled: z.boolean().optional(),
+  }),
   AttackIntentSchema,
   CancelAttackIntentSchema,
   SpawnIntentSchema,

@@ -13,6 +13,26 @@ import {
 } from "../src/core/game/GameUpdates";
 import { makePlayerUpdate } from "./util/viewStubs";
 
+it("updates renderer population even when only civilians change", () => {
+  const state = makePlayerState({ troops: 100 });
+  const pressure = {
+    civilians: 200,
+    military: 150,
+    target: 0.5,
+    effectiveTarget: 0.5,
+    automatic: false,
+  };
+  applyStateUpdate(state, { id: "a", type: GameUpdateType.Player, pressure });
+  expect(state.population).toBe(350);
+  expect(state.troops).toBe(100);
+  applyStateUpdate(state, {
+    id: "a",
+    type: GameUpdateType.Player,
+    pressure: { ...pressure, civilians: 250 },
+  });
+  expect(state.population).toBe(400);
+});
+
 function makePlayerState(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
     smallID: 1,

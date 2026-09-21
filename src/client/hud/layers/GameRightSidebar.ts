@@ -267,6 +267,7 @@ export class GameRightSidebar extends LitElement implements Controller {
     if (isAlive) {
       const isConfirmed = await showInGameConfirm(
         translateText("help_modal.exit_confirmation"),
+        { commandFlyout: true },
       );
       if (!isConfirmed) return;
     }
@@ -292,6 +293,16 @@ export class GameRightSidebar extends LitElement implements Controller {
         console.warn("Failed to exit fullscreen:", err);
       });
     }
+  }
+
+  protected updated() {
+    this.dispatchEvent(
+      new CustomEvent("atlas-game-clock", {
+        detail: this.secondsToHms(this.timer),
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   render() {

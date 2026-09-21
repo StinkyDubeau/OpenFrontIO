@@ -926,6 +926,11 @@ export class GameImpl implements Game {
   }
 
   public breakAlliance(breaker: Player, alliance: MutableAlliance) {
+    if (
+      this.config().gameConfig().continuousPressure &&
+      this.ticks() < alliance.expiresAt()
+    )
+      return;
     let other: Player;
     if (alliance.requestor() === breaker) {
       other = alliance.recipient();
@@ -937,7 +942,10 @@ export class GameImpl implements Game {
         `${breaker} not allied with ${other}, cannot break alliance`,
       );
     }
-    if (!other.isTraitor() && !other.isDisconnected()) {
+    if (
+      this.config().gameConfig().continuousPressure ||
+      (!other.isTraitor() && !other.isDisconnected())
+    ) {
       breaker.markTraitor();
     }
 
@@ -952,6 +960,7 @@ export class GameImpl implements Game {
   }
 
   public expireAlliance(alliance: Alliance) {
+    if (this.config().gameConfig().continuousPressure) return;
     const p1Set = new Set(alliance.recipient().alliances());
     const alliances = alliance
       .requestor()

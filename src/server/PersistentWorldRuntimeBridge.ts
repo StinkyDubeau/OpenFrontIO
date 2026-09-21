@@ -257,6 +257,17 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
     const preset = WORLD_PRESETS[world.gamePreset ?? "scheduled-earth"];
     return GameConfigSchema.parse({
       ...upstream,
+      pressurePacing: world.pressurePacing,
+      ...("allianceProtectionMinutes" in preset
+        ? {
+            continuousPressure: "v1",
+            allianceProtectionMinutes: preset.allianceProtectionMinutes,
+            pressureGraceSeconds: preset.pressureGraceSeconds,
+            passiveWildernessExpansion: true,
+            donateTroops: true,
+            donateGold: true,
+          }
+        : {}),
       // The seamless-world branch changes only the physical board and its
       // population. Every economy, AI, structure and combat rule continues
       // to come from the current OpenFront configuration.
@@ -274,7 +285,7 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       // economy, AI, combat, structures and explicit timers remain unchanged.
       disableForcedTimeLimit: world.targetDuration !== "1h",
       gameMapSize: GameMapSize.Normal,
-      bots: 2000,
+      bots: world.gamePreset === "quickplay" ? 200 : 2000,
       nations: "default",
       difficulty: Difficulty.Medium,
       gameType: GameType.Private,

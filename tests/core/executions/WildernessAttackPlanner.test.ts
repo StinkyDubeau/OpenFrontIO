@@ -19,7 +19,7 @@ function mapState(map: GameMap) {
   return map.tilePages().map((page) => page.state.slice());
 }
 
-async function makeGame(paged = false) {
+async function makeGame(paged = false, passive = false) {
   const config = new Config(
     (await setup("big_plains")).config().gameConfig(),
     null,
@@ -53,6 +53,11 @@ async function makeGame(paged = false) {
   );
   game.endSpawnPhase();
   const owner = game.player("a");
+  if (passive)
+    Object.assign(config.gameConfig(), {
+      continuousPressure: "v1",
+      passiveWildernessExpansion: true,
+    });
   owner.setTroops(1_000_000);
   for (let y = 16; y <= 23; y++)
     for (let x = 16; x <= 23; x++) {
@@ -67,6 +72,9 @@ async function makeGame(paged = false) {
     50_000,
     owner,
     game.terraNullius().id(),
+    null,
+    true,
+    passive,
   );
   execution.init(game, game.ticks());
   return { game, map, owner, execution };
@@ -76,6 +84,24 @@ describe.each([
   ["guarded-reference", planWildernessAttack],
   ["isolated-kernel", planWildernessAttackKernel],
 ] as const)("%s", (_name, plan) => {
+  it("preserves passive wilderness forces in worker and authoritative paths", async () => {
+    const { game, owner, execution } = await makeGame(false, true);
+    const input = execution.wildernessPlanningInput(game.ticks())!;
+    expect(input.state.passiveWilderness).toBe(true);
+    const planned = plan(input);
+    expect(planned.kind).toBe("shadow-plan");
+    execution.tick(game.ticks());
+    if (planned.kind !== "shadow-plan") throw new Error("Expected a plan");
+    expect(planned.effects.some((e) => e.type === "conquer")).toBe(true);
+    expect(planned.state.troops).toBe(input.state.troops);
+    expect(execution.wildernessPlanningInput(game.ticks())!.state).toEqual(
+      planned.state,
+    );
+    expect(
+      owner.troops() +
+        owner.outgoingAttacks().reduce((sum, a) => sum + a.troops(), 0),
+    ).toBe(1_000_000);
+  });
   it.each([false, true])(
     "matches every ordered effect, heap tie, random state and fallout change without mutating the world, paged=%s",
     async (paged) => {
@@ -425,8 +451,8 @@ it.each([false, true])(
         original.execution.wildernessPlanningInput(original.game.ticks())
           ?.state,
       );
-      expect((planned.game as GameImpl).hash()).toEqual(
-        (original.game as GameImpl).hash(),
+      expect((planned.game as GameImpl)["hash"]()).toEqual(
+        (original.game as GameImpl)["hash"](),
       );
       original.game.executeNextTick();
       planned.game.executeNextTick();

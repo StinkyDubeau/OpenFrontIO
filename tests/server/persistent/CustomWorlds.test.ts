@@ -31,6 +31,89 @@ describe("public custom games and scheduled worlds", () => {
     return { host, id: created.snapshot.world.id, snapshot: created.snapshot };
   }
 
+  it.each([
+    ["1h", "quickplay"],
+    ["1d", "longplay"],
+    ["7d", "idlefront"],
+  ] as const)("schedules %s with its duration preset", (duration, preset) => {
+    const host = service.createGuestSession({ displayName: "Host" });
+    const created = service.createWorld(host.bearerToken, {
+      name: "Scheduled pace",
+      startMode: "scheduled",
+      gamePreset: preset,
+      targetDuration: duration,
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now + 60_000,
+    });
+    expect(created.snapshot.world).toMatchObject({
+      gamePreset: preset,
+      targetDuration: duration,
+    });
+  });
+
+  it("pins custom duration to its selected mode", () => {
+    const host = service.createGuestSession({ displayName: "Host" });
+    const created = service.createWorld(host.bearerToken, {
+      name: "Custom pace",
+      startMode: "host",
+      gamePreset: "quickplay",
+      targetDuration: "7d",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now,
+    });
+    expect(created.snapshot.world).toMatchObject({
+      gamePreset: "quickplay",
+      targetDuration: "1h",
+    });
+  });
+
+  it("persists custom pacing and rejects overrides on scheduled games", () => {
+    const host = service.createGuestSession({ displayName: "Pace Tester" });
+    const request = {
+      name: "Tuning",
+      gamePreset: "quickplay",
+      targetDuration: "1h",
+      access: "public",
+      mode: "ffa",
+      maxHumans: 8,
+      startsAt: now + 60_000,
+      pressurePacing: {
+        populationDoublingSeconds: 900,
+        mobilisationHalfLifeSeconds: 20,
+      },
+    };
+    const created = service.createWorld(host.bearerToken, {
+      ...request,
+      startMode: "host",
+    });
+    expect(
+      repository.getWorld(created.snapshot.world.id)?.pressurePacing,
+    ).toEqual(request.pressurePacing);
+    expect(
+      service.getSnapshot(created.snapshot.world.id).world.pressurePacing,
+    ).toEqual(request.pressurePacing);
+    expect(() =>
+      service.createWorld(host.bearerToken, {
+        ...request,
+        startMode: "scheduled",
+      }),
+    ).toThrow(/pacing/);
+    expect(() =>
+      service.createWorld(host.bearerToken, {
+        ...request,
+        startMode: "host",
+        pressurePacing: {
+          ...request.pressurePacing,
+          mobilisationHalfLifeSeconds: 0,
+        },
+      }),
+    ).toThrow();
+  });
+
   it("keeps custom rooms waiting indefinitely without timers or stale-world cancellation", () => {
     const { id } = create();
     now += 30 * 24 * 60 * 60_000;
@@ -78,7 +161,7 @@ describe("public custom games and scheduled worlds", () => {
     now += 60_000;
     expect(service.activateDueWorlds().map((world) => world.id)).toEqual([id]);
     expect(service.activateDueWorlds()).toEqual([]);
-    expect(repository.getWorld(id)?.gamePreset).toBe("scheduled-earth");
+    expect(repository.getWorld(id)?.gamePreset).toBe("longplay");
   });
 
   it("cannot start cancelled games or invent custom presets", () => {
@@ -120,13 +203,13 @@ describe("public custom games and scheduled worlds", () => {
     expect(WORLD_PRESETS["great-lakes"]).toMatchObject({
       trade: 10,
       trains: 10,
-      attackDivisor: 15,
+      attackDivisor: 1,
     });
     for (const id of ["enormous-earth", "hd-earth-9x"] as const) {
       expect(WORLD_PRESETS[id]).toMatchObject({
         trade: 5,
         trains: 5,
-        attackDivisor: 15,
+        attackDivisor: 1,
       });
     }
     expect(WORLD_PRESETS["scheduled-earth"]).toMatchObject({

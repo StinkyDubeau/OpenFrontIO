@@ -55,13 +55,14 @@ export class TribeExecution implements Execution {
       );
 
       // Send an attack on the first tick
-      this.attackBehavior.sendAttack(this.mg.terraNullius());
+      if (!this.mg.config().gameConfig().continuousPressure)
+        this.attackBehavior.sendAttack(this.mg.terraNullius());
       return;
     }
 
     this.acceptAllAllianceRequests();
     this.deleteNextStructure();
-    this.maybeAttack();
+    if (!this.mg.config().gameConfig().continuousPressure) this.maybeAttack();
   }
 
   private acceptAllAllianceRequests() {

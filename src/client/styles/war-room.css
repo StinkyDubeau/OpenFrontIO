@@ -352,6 +352,155 @@ atlas-surface {
   -webkit-user-select: none;
 }
 
+.atlas-leaderboard-rank {
+  font-family: var(--war-font);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  color: #ded7bd;
+  text-shadow:
+    0 -1px 1px rgb(0 0 0 / 0.95),
+    0 -2px 3px rgb(0 0 0 / 0.55),
+    0 1px 0 rgb(255 255 255 / 0.42),
+    0 2px 3px rgb(255 239 198 / 0.16);
+}
+
+.atlas-nav-rank {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+.atlas-nav-rank .atlas-leaderboard-rank {
+  display: block;
+  animation: atlas-rank-swap 180ms ease-out both;
+}
+.atlas-nav-rank .atlas-leaderboard-rank.is-close {
+  font-size: 24px;
+  font-weight: 500;
+}
+@keyframes atlas-rank-swap {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atlas-nav-rank .atlas-leaderboard-rank {
+    animation: none;
+  }
+}
+.atlas-nav-rank:focus-visible {
+  outline: 2px solid #dbc787;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Recessed standings, matching the command bar's quiet instrument surface. */
+body.atlas-theme .atlas-leaderboard-flyout .stats-table {
+  color: #eee9d9;
+  font-family: var(--war-font);
+  margin-top: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  -webkit-font-smoothing: antialiased;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-content,
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-scroll,
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row,
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-header {
+  gap: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row {
+  height: 30px;
+  min-height: 30px;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row > div {
+  height: 30px;
+  min-height: 0;
+  padding-inline: 6px;
+  border-left: 0;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-header > div {
+  height: 32px;
+  border-left: 0;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-scroll {
+  max-height: 180px;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+body.atlas-theme
+  .atlas-leaderboard-flyout
+  .stats-table-scroll::-webkit-scrollbar {
+  display: none;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-well {
+  background: linear-gradient(#0005, #0001), var(--atlas-hud-surface);
+  border: 0;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 3px #0006;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-header {
+  background: linear-gradient(#ffffff0c, #0003), var(--atlas-hud-surface);
+  color: #ded7bd;
+  text-shadow: 0 -1px 1px #000;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row > div,
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-header > div {
+  border-color: rgb(188 180 144 / 0.16);
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row:nth-child(even) {
+  background: rgb(255 255 255 / 0.025);
+}
+body.atlas-theme
+  .atlas-leaderboard-flyout
+  .stats-table-row.stats-table-emphasized,
+body.atlas-theme
+  .atlas-leaderboard-flyout
+  .stats-table-row.stats-table-pinned-row {
+  background: #283d35;
+  color: #fff3cb;
+  box-shadow: inset 2px 0 #bba971;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-row:hover {
+  background: #34443d;
+}
+body.atlas-theme .atlas-leaderboard-flyout .stats-table-header button {
+  color: inherit;
+  min-height: 24px;
+}
+body.atlas-theme .atlas-leaderboard-flyout [aria-sort] span.text-sky-300 {
+  color: #e2c783;
+}
+body.atlas-theme .atlas-leaderboard-flyout button:focus-visible {
+  outline: 2px solid #dbc787;
+  outline-offset: -2px;
+}
+body.atlas-theme .column-picker-popover {
+  background: var(--atlas-hud-surface);
+  border-color: #797864;
+  box-shadow: var(--atlas-hud-shadow);
+  color: #eee9d9;
+}
+body.atlas-theme .column-picker-popover label {
+  color: inherit;
+  min-height: 32px;
+}
+body.atlas-theme .column-picker-popover input {
+  accent-color: #a89a66;
+}
+
 .atlas-map-brand-mark svg {
   width: 1.25rem;
   height: 1.25rem;
@@ -1982,8 +2131,11 @@ body.atlas-theme .modal-overlay {
 
 :host .atlas-modal-shell,
 body.atlas-theme .modal-overlay > div {
-  border: 3px solid #9c6d27 !important;
-  border-radius: var(--war-radius-lg) !important;
+  border: var(--atlas-modal-border-width, 3px) solid #9c6d27 !important;
+  border-radius: var(
+    --atlas-modal-corner-radius,
+    var(--war-radius-lg)
+  ) !important;
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent 18%),
     var(--war-mahogany-texture), var(--war-mahogany-deep) !important;
@@ -2263,7 +2415,6 @@ body.atlas-theme.in-game .atlas-control-deck,
 body.atlas-theme.in-game game-left-sidebar > aside,
 body.atlas-theme.in-game game-right-sidebar > aside,
 body.atlas-theme.in-game replay-panel > div,
-body.atlas-theme.in-game player-panel > div,
 body.atlas-theme.in-game
   :where(
     attacks-display,
@@ -2298,6 +2449,319 @@ body.atlas-theme.in-game .atlas-control-deck {
 
 body.atlas-theme.in-game .atlas-control-deck::before {
   content: none;
+}
+
+.atlas-top-command-surface {
+  display: none;
+}
+.atlas-nav-clock {
+  display: none;
+}
+body.in-game .atlas-top-command-surface {
+  display: contents;
+}
+/* HUD hosts remain mounted across menu navigation. Their decorative shell
+ * must never become a flex/grid item in a landing or lobby layout. */
+body:not(.in-game) atlas-game-hud .atlas-top-command-surface {
+  display: none !important;
+}
+
+body.atlas-theme.in-game > atlas-game-hud [data-game-timer] {
+  font-family: var(--war-font);
+  font-weight: 800;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 36px;
+  text-align: center;
+  letter-spacing: 0.035em;
+  color: #ddd7bb;
+  text-shadow:
+    0 -1px 1px #000,
+    0 1px 0 rgb(255 255 255 / 0.18);
+  white-space: nowrap;
+}
+
+@media (max-width: 1023px) {
+  body.atlas-theme.in-game > atlas-game-hud .atlas-top-command-surface {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    position: fixed;
+    top: calc(var(--atlas-board-safe-top) + 6px);
+    left: 6px;
+    right: 6px;
+    z-index: 1001;
+    padding: 4px max(6px, var(--atlas-board-safe-right)) 4px
+      max(6px, var(--atlas-board-safe-left));
+    border-radius: var(--war-radius);
+    border: 1px solid #776748;
+    background: var(--atlas-hud-surface);
+    box-shadow: var(--atlas-hud-shadow);
+    pointer-events: auto;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-hud-top-actions {
+    grid-column: 2;
+    grid-row: 1;
+    position: static;
+    justify-self: end;
+    min-width: 0;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    game-left-sidebar
+    > .atlas-game-overview {
+    position: static;
+    width: auto;
+    margin-top: 0 !important;
+    overflow: visible;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    :is(
+      .atlas-game-overview,
+      .atlas-match-actions,
+      .atlas-player-info-surface
+    ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-match-actions {
+    transform: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px;
+    padding: 3px;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    [data-game-timer] {
+    position: absolute;
+    left: 50%;
+    top: 7px;
+    transform: translateX(-50%);
+    pointer-events: none;
+    min-width: 8ch;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-nav-clock {
+    display: grid;
+    place-items: center;
+    z-index: 1;
+    pointer-events: auto;
+    width: 132px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 !important;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.015em;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #ded7bd;
+    text-shadow:
+      0 -1px 1px rgb(0 0 0 / 0.95),
+      0 -2px 3px rgb(0 0 0 / 0.55),
+      0 1px 0 rgb(255 255 255 / 0.42),
+      0 2px 3px rgb(255 239 198 / 0.16);
+    cursor: pointer;
+  }
+  .atlas-nav-clock .atlas-wordmark__type {
+    display: none;
+  }
+  .atlas-nav-clock .atlas-wordmark__mark {
+    width: 34px;
+    height: 34px;
+  }
+  .atlas-nav-clock .atlas-clock-swap {
+    display: grid;
+    place-items: center;
+    animation: atlas-clock-swap 180ms ease-out;
+  }
+  .atlas-nav-clock:focus-visible {
+    outline: 2px solid #dbc787;
+    outline-offset: 2px;
+  }
+  @keyframes atlas-clock-swap {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .atlas-nav-clock .atlas-clock-swap {
+      animation: none;
+    }
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    game-right-sidebar
+    [data-game-timer] {
+    display: none;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-hud-button {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    player-info-overlay {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-player-info-positioner {
+    position: static;
+    margin-top: 0 !important;
+    width: 100%;
+    transform: none;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    game-left-sidebar,
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-game-overview:not(.hidden) {
+    display: contents;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-overview-actions {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-leaderboard-flyout:not(:has(> .block)) {
+    display: none;
+  }
+  body.atlas-theme.in-game
+    > atlas-game-hud
+    .atlas-top-command-surface
+    .atlas-leaderboard-flyout:has(> .block) {
+    position: relative;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: auto;
+    max-height: 32dvh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 2px;
+    border: 0;
+    border-radius: 8px;
+    margin-top: 4px;
+    background: linear-gradient(#0004, #ffffff05), var(--atlas-hud-surface);
+    box-shadow: inset 0 1px 3px #0005;
+  }
+  body.atlas-theme.in-game settings-modal > .modal-overlay,
+  body.atlas-theme.in-game .atlas-command-confirm {
+    align-items: flex-start;
+    padding: calc(
+        var(--atlas-top-command-bottom, var(--atlas-board-safe-top)) + 6px
+      )
+      6px 6px;
+    background: rgb(0 0 0 / 0.22);
+    backdrop-filter: none;
+  }
+  body.atlas-theme.in-game settings-modal .atlas-settings-modal,
+  body.atlas-theme.in-game .atlas-command-confirm > div {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    max-height: calc(
+      100dvh - var(--atlas-top-command-bottom, 100px) -
+        var(--atlas-board-safe-bottom) - 12px
+    );
+    overflow-y: auto;
+    border-radius: 0 0 11px 11px;
+    background: var(--atlas-hud-surface);
+  }
+}
+
+body.atlas-theme.in-game settings-modal .atlas-settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--atlas-hud-surface) !important;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+body.atlas-theme.in-game settings-modal .atlas-settings-header > button {
+  flex: 0 0 40px;
+  width: 40px;
+  min-height: 40px;
+  color: #fff2ca;
+}
+body.atlas-theme.in-game settings-modal .atlas-settings-modal {
+  background: var(--atlas-hud-surface) !important;
+  border-color: #776748 !important;
+  color: #fff2ca;
+}
+
+/* Safe areas are public geometry, not an exact hardware corner-radius API.
+ * Keep the controls above the home indicator, but extend their surface below
+ * them so its lower corners follow an inset phone-screen silhouette.
+ * Do not clip this host: attack/defense flyouts extend outside it. */
+@media (max-width: 639px) and (orientation: portrait) and (pointer: coarse) {
+  body.atlas-theme.in-game .atlas-hud-dock {
+    padding-bottom: 6px;
+  }
+
+  body.atlas-theme.in-game .atlas-control-deck {
+    --atlas-device-bottom-safe: max(
+      env(safe-area-inset-bottom, 0px),
+      var(--native-safe-bottom, 0px)
+    );
+    --atlas-device-bottom-radius: clamp(
+      var(--war-radius),
+      calc(var(--atlas-device-bottom-safe) * 1.5 - 6px),
+      48px
+    );
+    border-bottom-left-radius: var(--atlas-device-bottom-radius) !important;
+    border-bottom-right-radius: var(--atlas-device-bottom-radius) !important;
+    padding-bottom: max(
+      3px,
+      calc(var(--atlas-device-bottom-safe) - 3px)
+    ) !important;
+  }
 }
 
 body.atlas-theme.in-game control-panel > div {
@@ -2851,6 +3315,217 @@ body.atlas-theme.in-game :where(spawn-timer, immunity-timer):not(:has(> div)) {
 /* -------------------------------------------------------------------------- */
 /* Gauge/instrument primitives                                                 */
 /* -------------------------------------------------------------------------- */
+
+/* Transitional UI uses the same compact instrument casing as the live HUD. */
+body.atlas-theme.in-game player-panel .atlas-player-dialog-backdrop {
+  background: rgb(0 0 0 / 0.35) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  padding: calc(
+      max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px)) + 6px
+    )
+    6px
+    calc(
+      max(env(safe-area-inset-bottom, 0px), var(--native-safe-bottom, 0px)) +
+        6px
+    );
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog-wrapper {
+  width: min(420px, 100%);
+  min-width: 0;
+  max-width: 420px;
+  max-height: 100%;
+  padding: 0;
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog {
+  background: var(--atlas-hud-surface, #17231e) !important;
+  border: 1px solid #776748;
+  border-radius: 11px;
+  box-shadow: var(--atlas-hud-shadow);
+  overflow: hidden;
+  color: #eee9d9;
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog-scroll {
+  max-height: calc(
+    100dvh - max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px)) -
+      max(env(safe-area-inset-bottom, 0px), var(--native-safe-bottom, 0px)) -
+      12px
+  );
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog-close {
+  height: 44px;
+  background: var(--atlas-hud-surface, #17231e);
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog-close button {
+  top: 5px;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+}
+body.atlas-theme.in-game player-panel .atlas-player-dialog-content {
+  padding: 0 14px 14px;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+body.atlas-theme.in-game player-panel .atlas-player-resources {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+body.atlas-theme.in-game player-panel .atlas-player-resources > div {
+  width: auto;
+  min-width: 0;
+  padding: 8px;
+  box-shadow: inset 0 2px 4px #0007;
+}
+body.atlas-theme.in-game player-panel .atlas-player-resources .tabular-nums {
+  width: auto;
+}
+body.atlas-theme.in-game player-panel button {
+  background: linear-gradient(#37423b, #17251e);
+  border: 1px solid #626b5d;
+  box-shadow:
+    inset 0 1px #ffffff25,
+    0 1px 3px #0006;
+}
+body.atlas-theme .radial-menu-container .menu-item-path {
+  stroke: #91866a;
+  stroke-width: 1px;
+  filter: drop-shadow(0 2px 2px #0008);
+}
+body.atlas-theme .radial-menu-container .center-button-visible {
+  fill: #26352d;
+  stroke: #91866a;
+  stroke-width: 1px;
+  filter: drop-shadow(0 2px 2px #0008);
+}
+body.atlas-theme .atlas-result-panel:not(.hidden) {
+  background: var(--atlas-hud-surface, #17231e);
+  border: 1px solid #776748;
+  border-radius: 11px;
+  box-shadow: var(--atlas-hud-shadow);
+  backdrop-filter: none;
+  width: min(420px, calc(100vw - 12px));
+  max-width: none;
+  padding: 16px;
+}
+body.atlas-theme .atlas-result-panel h2 {
+  font-size: 22px;
+  color: #eee9d9;
+  text-shadow: 0 -1px #000;
+}
+body.atlas-theme join-lobby-modal o-modal::part(backdrop) {
+  box-sizing: border-box;
+  padding: calc(
+      max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px)) + 6px
+    )
+    6px 6px;
+}
+body.atlas-theme join-lobby-modal o-modal {
+  --atlas-modal-border-width: 1px;
+  --atlas-loading-bottom-safe: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--native-safe-bottom, 0px)
+  );
+  --atlas-loading-bottom-radius: clamp(
+    11px,
+    calc(var(--atlas-loading-bottom-safe) * 1.5 - 6px),
+    48px
+  );
+  --atlas-modal-corner-radius: 11px 11px var(--atlas-loading-bottom-radius)
+    var(--atlas-loading-bottom-radius);
+}
+body.atlas-theme join-lobby-modal o-modal::part(shell) {
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding-bottom: max(3px, calc(var(--atlas-loading-bottom-safe) - 3px));
+  border-width: 1px !important;
+  border-radius: var(--atlas-modal-corner-radius) !important;
+}
+body.atlas-theme .atlas-command-confirm > div,
+body.atlas-theme .atlas-game-starting-card,
+body.atlas-theme .atlas-heads-up-status {
+  background: var(--atlas-hud-surface, #17231e) !important;
+  border: 1px solid #776748;
+  border-radius: 11px !important;
+  box-shadow: var(--atlas-hud-shadow);
+  color: #eee9d9;
+  backdrop-filter: none;
+}
+body.atlas-theme .atlas-command-confirm > div {
+  padding: 16px;
+}
+body.atlas-theme .atlas-command-confirm p {
+  color: #eee9d9;
+  margin-bottom: 14px;
+}
+body.atlas-theme .atlas-command-confirm button,
+body.atlas-theme .atlas-heads-up-status button {
+  min-height: 36px;
+  border: 1px solid #677069;
+  border-radius: 8px;
+  background: linear-gradient(#38413c, #15211b);
+  box-shadow:
+    inset 0 1px #ffffff28,
+    inset 0 -2px #0006,
+    0 2px 3px #0004;
+  color: #f1ead4;
+  text-transform: none;
+  letter-spacing: normal;
+}
+body.atlas-theme .atlas-command-confirm button:last-child {
+  background: linear-gradient(#704b42, #38221e);
+  border-color: #976d5b;
+}
+body.atlas-theme .atlas-command-confirm button:active,
+body.atlas-theme .atlas-heads-up-status button:active {
+  box-shadow: inset 0 2px 5px #0009;
+}
+body.atlas-theme .atlas-heads-up-status {
+  top: calc(
+    var(--atlas-top-command-bottom, var(--atlas-board-safe-top, 0px)) + 6px
+  );
+  width: max-content;
+  max-width: calc(100vw - 12px);
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.3;
+  gap: 10px;
+}
+body.atlas-theme .atlas-heads-up-status button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+body.atlas-theme .atlas-game-starting-card {
+  width: min(360px, calc(100vw - 24px));
+  padding: 20px;
+}
+body.atlas-theme .atlas-game-starting-card > div,
+body.atlas-theme .atlas-game-starting-card > p {
+  color: #d9d5c7;
+  font-size: 13px;
+}
+body.atlas-theme .atlas-game-starting-card > a {
+  color: #ddc78b;
+  font-size: 14px;
+}
+body.atlas-theme .atlas-game-starting-card > p:last-child {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+body.atlas-theme:has(.atlas-game-starting-card)
+  :is(heads-up-message, spawn-timer, immunity-timer) {
+  visibility: hidden;
+}
+body.atlas-theme:not(.in-game) :is(spawn-timer, immunity-timer) {
+  display: none !important;
+}
 
 /* Quiet secondary controls: native hit targets, shared focus and press states.
  * Stone faces remain reserved for a notice's primary action. */

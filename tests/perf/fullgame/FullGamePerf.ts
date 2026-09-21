@@ -48,6 +48,7 @@ import {
 import { createGame } from "../../../src/core/game/GameImpl";
 import { GameUpdateType, HashUpdate } from "../../../src/core/game/GameUpdates";
 import { createNationsForGame } from "../../../src/core/game/NationCreation";
+import { pressureView } from "../../../src/core/game/PressurePopulation";
 import { loadTerrainMap } from "../../../src/core/game/TerrainMapLoader";
 import { GameRunner } from "../../../src/core/GameRunner";
 import { PseudoRandom } from "../../../src/core/PseudoRandom";
@@ -94,6 +95,7 @@ interface Options {
   footprint: boolean;
   snapshotAt: number[];
   waterNukes: boolean;
+  pressure?: boolean;
 }
 
 function resolveMap(name: string): GameMapType {
@@ -181,6 +183,9 @@ function parseArgs(argv: string[]): Options {
       case "--water-nukes":
         opts.waterNukes = true;
         break;
+      case "--pressure":
+        opts.pressure = true;
+        break;
       default:
         throw new Error(`unknown argument: ${arg}`);
     }
@@ -231,6 +236,19 @@ async function main(): Promise<void> {
     instantBuild: false,
     randomSpawn: false,
     waterNukes: opts.waterNukes ? true : undefined,
+    ...(opts.pressure
+      ? {
+          continuousPressure: "v1" as const,
+          passiveWildernessExpansion: true,
+          pressureGraceSeconds: 180,
+          allianceProtectionMinutes: 5,
+          pressurePacing: {
+            populationGrowthMultiplier: 1,
+            populationDoublingSeconds: 600,
+            mobilisationHalfLifeSeconds: 5,
+          },
+        }
+      : {}),
   };
   const gameStart: GameStartInfo = {
     gameID: opts.seed,
@@ -407,6 +425,17 @@ async function main(): Promise<void> {
   console.log(`Ticks executed:   ${game.ticks()} (${spawnTurns} spawn)`);
   console.log(`Players alive:    ${alive.length} / ${game.players().length}`);
   console.log(`Units:            ${game.units().length}`);
+  if (opts.pressure) {
+    const totals = alive
+      .map((p) => {
+        const s = pressureView(p);
+        return s ? s.civilians + s.military : 0;
+      })
+      .sort((a, b) => a - b);
+    console.log(
+      `Population min/median/max: ${totals[0]} / ${totals[Math.floor(totals.length / 2)]} / ${totals[totals.length - 1]}`,
+    );
+  }
   console.log(
     `Final hash:       ${lastHash ? `${lastHash.hash} (tick ${lastHash.tick})` : "n/a"}`,
   );

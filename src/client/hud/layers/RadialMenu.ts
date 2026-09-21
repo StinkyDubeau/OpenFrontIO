@@ -17,10 +17,14 @@ function resolveColor(
   item: MenuElement,
   params: MenuElementParams | null,
 ): string | undefined {
-  if (typeof item.color === "function") {
-    return params ? item.color(params) : undefined;
-  }
-  return item.color;
+  const color =
+    typeof item.color === "function"
+      ? params
+        ? item.color(params)
+        : undefined
+      : item.color;
+  // Preserve action colors and timer gradients, but as muted instrument faces.
+  return d3.interpolateRgb("#202e28", color ?? "#35443b")(0.18);
 }
 
 export class CloseRadialMenuEvent implements GameEvent {
@@ -90,7 +94,7 @@ export class RadialMenu implements Controller {
   private backButtonHoverTimeout: number | null = null;
   private navigationInProgress: boolean = false;
   private originalCenterButtonIcon: string = "";
-  private readonly defaultCenterButtonColor = "#0f2744";
+  private readonly defaultCenterButtonColor = "#26352d";
   private centerButtonColor: string;
   private centerButtonIconSize: number;
 
@@ -106,8 +110,8 @@ export class RadialMenu implements Controller {
       menuSize: config.menuSize ?? 190,
       submenuScale: config.submenuScale ?? 1.5,
       centerButtonSize: config.centerButtonSize ?? 30,
-      iconSize: config.iconSize ?? 32,
-      centerIconSize: config.centerIconSize ?? 48,
+      iconSize: config.iconSize ?? 24,
+      centerIconSize: config.centerIconSize ?? 28,
       disabledColor: config.disabledColor ?? d3.rgb(128, 128, 128).toString(),
       menuTransitionDuration: config.menuTransitionDuration ?? 300,
       mainMenuInnerRadius: config.mainMenuInnerRadius ?? 40,
@@ -343,7 +347,8 @@ export class RadialMenu implements Controller {
 
         return d3.color(color)?.copy({ opacity: opacity })?.toString() ?? color;
       })
-      .attr("stroke", "none")
+      .attr("stroke", "#958b6c")
+      .attr("stroke-width", 1)
       .style("cursor", (d) =>
         this.params === null || d.data.disabled(this.params)
           ? "not-allowed"

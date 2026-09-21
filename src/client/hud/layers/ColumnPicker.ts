@@ -5,7 +5,7 @@ import { translateText } from "../../Utils";
 import type { ColumnDef } from "./lib/StatsColumns";
 
 /**
- * ⚙️ button + checkbox popover for choosing which stat columns a panel
+ * ≡ button + checkbox popover for choosing which stat columns a panel
  * shows. Emits `columns-changed` (CustomEvent<ColumnId[]>) with the new
  * selection in registry order; the host persists and re-renders.
  */
@@ -139,7 +139,7 @@ export class ColumnPicker extends LitElement {
         aria-haspopup="menu"
         @click=${() => (this.open = !this.open)}
       >
-        ⚙️
+        ≡
       </button>
     `;
   }

@@ -6,6 +6,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { samePressure } from "./PressurePopulation";
 
 /**
  * Build a partial PlayerUpdate containing only fields whose value differs
@@ -36,6 +37,7 @@ export function diffPlayerUpdate(
   // allocating anything. The comparisons repeat below only for the rare
   // changed player.
   if (
+    samePressure(prev.pressure, next.pressure) &&
     prev.clientID === next.clientID &&
     prev.name === next.name &&
     prev.displayName === next.displayName &&
@@ -94,6 +96,7 @@ export function diffPlayerUpdate(
   setIfDifferent("playerType", prev.playerType === next.playerType);
   setIfDifferent("isAlive", prev.isAlive === next.isAlive);
   setIfDifferent("isDisconnected", prev.isDisconnected === next.isDisconnected);
+  setIfDifferent("pressure", samePressure(prev.pressure, next.pressure));
   setIfDifferent("killedBy", prev.killedBy === next.killedBy);
   setIfDifferent("deathPosition", prev.deathPosition === next.deathPosition);
   // tilesOwned / gold / troops intentionally absent — see EXCEPTION above.
@@ -161,6 +164,8 @@ export function diffPlayerUpdate(
  * target state is fully populated after one merge of the initial update.
  */
 export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
+  if (pu.pressure !== undefined)
+    target.population = pu.pressure.civilians + pu.pressure.military;
   // smallID is identity — never changes for a given player.
   if (pu.isAlive !== undefined) target.isAlive = pu.isAlive;
   if (pu.isDisconnected !== undefined)

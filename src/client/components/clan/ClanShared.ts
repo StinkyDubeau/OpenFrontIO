@@ -35,7 +35,7 @@ export function translateClanRole(role: string): string {
 
 export function renderRoleIcon(role: string): TemplateResult {
   if (role === "leader") {
-    return html`<span class="text-sm">👑</span>`;
+    return html`<span class="text-sm">Leader</span>`;
   }
   if (role === "officer") {
     return html`<svg
@@ -93,9 +93,11 @@ function renderPaginationButtons(
         @click=${() => onPageChange(1)}
         ?disabled=${currentPage <= 1}
         class="px-2 py-1 text-xs font-bold rounded-lg transition-all
-          ${currentPage <= 1
-          ? "text-white/20 cursor-not-allowed"
-          : "text-white/60 hover:text-white hover:bg-white/10"}"
+          ${
+            currentPage <= 1
+              ? "text-white/20 cursor-not-allowed"
+              : "text-white/60 hover:text-white hover:bg-white/10"
+          }"
       >
         &lt;&lt;
       </button>
@@ -103,9 +105,11 @@ function renderPaginationButtons(
         @click=${() => onPageChange(Math.max(1, currentPage - 1))}
         ?disabled=${currentPage <= 1}
         class="px-2 py-1 text-xs font-bold rounded-lg transition-all
-          ${currentPage <= 1
-          ? "text-white/20 cursor-not-allowed"
-          : "text-white/60 hover:text-white hover:bg-white/10"}"
+          ${
+            currentPage <= 1
+              ? "text-white/20 cursor-not-allowed"
+              : "text-white/60 hover:text-white hover:bg-white/10"
+          }"
       >
         &lt;
       </button>
@@ -116,9 +120,11 @@ function renderPaginationButtons(
         @click=${() => onPageChange(Math.min(totalPages, currentPage + 1))}
         ?disabled=${currentPage >= totalPages}
         class="px-2 py-1 text-xs font-bold rounded-lg transition-all
-          ${currentPage >= totalPages
-          ? "text-white/20 cursor-not-allowed"
-          : "text-white/60 hover:text-white hover:bg-white/10"}"
+          ${
+            currentPage >= totalPages
+              ? "text-white/20 cursor-not-allowed"
+              : "text-white/60 hover:text-white hover:bg-white/10"
+          }"
       >
         &gt;
       </button>
@@ -126,9 +132,11 @@ function renderPaginationButtons(
         @click=${() => onPageChange(totalPages)}
         ?disabled=${currentPage >= totalPages}
         class="px-2 py-1 text-xs font-bold rounded-lg transition-all
-          ${currentPage >= totalPages
-          ? "text-white/20 cursor-not-allowed"
-          : "text-white/60 hover:text-white hover:bg-white/10"}"
+          ${
+            currentPage >= totalPages
+              ? "text-white/20 cursor-not-allowed"
+              : "text-white/60 hover:text-white hover:bg-white/10"
+          }"
       >
         &gt;&gt;
       </button>
@@ -295,9 +303,11 @@ export function renderMemberPagination(
             <button
               @click=${() => onPerPageChange(opt)}
               class="px-2 py-1 text-xs font-bold rounded-lg transition-all
-                ${membersPerPage === opt
-                ? "bg-malibu-blue/15 text-aquarius border border-malibu-blue/30"
-                : "text-white/40 hover:text-white/70 border border-transparent"}"
+                ${
+                  membersPerPage === opt
+                    ? "bg-malibu-blue/15 text-aquarius border border-malibu-blue/30"
+                    : "text-white/40 hover:text-white/70 border border-transparent"
+                }"
             >
               ${opt}
             </button>
@@ -338,18 +348,22 @@ export function renderWLBarRow(
         aria-label="${wins} wins, ${losses} losses"
       >
         <div class="absolute inset-0 flex">
-          ${wins > 0
-            ? html`<div
-                class="bg-malibu-blue h-full"
-                style="width:${winPct}%"
-              ></div>`
-            : ""}
-          ${losses > 0
-            ? html`<div
-                class="bg-red-500 h-full"
-                style="width:${lossPct}%"
-              ></div>`
-            : ""}
+          ${
+            wins > 0
+              ? html`<div
+                  class="bg-malibu-blue h-full"
+                  style="width:${winPct}%"
+                ></div>`
+              : ""
+          }
+          ${
+            losses > 0
+              ? html`<div
+                  class="bg-red-500 h-full"
+                  style="width:${lossPct}%"
+                ></div>`
+              : ""
+          }
         </div>
         <div
           class="absolute inset-0 flex items-center justify-between px-1.5 text-[11px] font-bold text-white tabular-nums whitespace-nowrap pointer-events-none"
@@ -388,16 +402,20 @@ export function renderMemberRow(
   return html`
     <div
       class="flex flex-col py-2.5 px-3 rounded-xl border
-        ${isMe
-        ? "bg-malibu-blue/10 border-malibu-blue/20"
-        : "bg-white/5 border-white/10"}"
+        ${
+          isMe
+            ? "bg-malibu-blue/10 border-malibu-blue/20"
+            : "bg-white/5 border-white/10"
+        }"
     >
       <div class="flex items-center gap-3">
         <div
           class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0
-            ${isMe
-            ? "bg-malibu-blue/20 text-aquarius"
-            : "bg-white/10 text-white/50"}"
+            ${
+              isMe
+                ? "bg-malibu-blue/20 text-aquarius"
+                : "bg-white/10 text-white/50"
+            }"
         >
           ${renderRoleIcon(member.role)}
         </div>

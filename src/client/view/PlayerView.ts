@@ -82,6 +82,9 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
     tilesOwned: pu.tilesOwned!,
     gold: Number(pu.gold!),
     troops: pu.troops!,
+    population: pu.pressure
+      ? pu.pressure.civilians + pu.pressure.military
+      : undefined,
     isTraitor: pu.isTraitor!,
     traitorRemainingTicks: Math.max(0, pu.traitorRemainingTicks ?? 0),
     inDoomsdayClock: pu.inDoomsdayClock ?? false,
@@ -105,6 +108,7 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
 }
 
 export class PlayerView {
+  public pressure?: import("../../core/game/PressurePopulation").PressureView;
   public anonymousName: string | null = null;
   private decoder?: PatternDecoder;
 
@@ -136,6 +140,7 @@ export class PlayerView {
     public cosmetics: PlayerCosmetics,
   ) {
     this.state = stateFromUpdate(data);
+    this.pressure = data.pressure;
     this.static = staticFromUpdate(data);
 
     // First emission always carries name + playerType (see staticFromUpdate).
@@ -269,6 +274,7 @@ export class PlayerView {
    * player appears in the PlayerUpdate stream.
    */
   applyUpdate(pu: PlayerUpdate): void {
+    if (pu.pressure) this.pressure = pu.pressure;
     applyStateUpdate(this.state, pu);
     // applyStateUpdate refreshes outgoingEmojis every tick; re-apply the
     // "Disable emojis" setting so live emojis stay hidden when it's off (#4430).

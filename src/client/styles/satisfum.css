@@ -395,6 +395,7 @@ body.atlas-theme .modal-overlay > div,
 body.atlas-theme.in-game
   :where(
     .atlas-control-deck,
+    .atlas-top-command-surface,
     .atlas-player-info-surface,
     .atlas-action-notice,
     .atlas-game-overview,

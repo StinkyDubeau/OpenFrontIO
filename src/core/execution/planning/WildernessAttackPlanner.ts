@@ -145,6 +145,7 @@ export function planWildernessAttack(
     "execution",
     Object.assign(Object.create(AttackExecution.prototype), {
       active: true,
+      passiveWilderness: state.passiveWilderness === true,
       executionVersion: 0,
       toConquer: heap,
       random,

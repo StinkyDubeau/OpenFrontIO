@@ -9,6 +9,7 @@ export interface WildernessAttackState {
   ownerSmallID: number;
   ownerType: PlayerType;
   troops: number;
+  passiveWilderness?: boolean;
   border: { tiles: TileRef[]; size: number };
   random: PseudoRandomState;
   heap: FlatBinaryHeapState;

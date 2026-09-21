@@ -39,6 +39,7 @@ export class SpawnTimer extends LitElement implements Controller {
 
   init() {
     this.isVisible = true;
+    this.tick();
   }
 
   tick() {
@@ -50,6 +51,7 @@ export class SpawnTimer extends LitElement implements Controller {
       this.ratios = [];
       this.colors = [];
       this.requestUpdate();
+      this.emitBarVisibility();
       return;
     }
 
@@ -90,6 +92,7 @@ export class SpawnTimer extends LitElement implements Controller {
 
   private emitBarVisibility() {
     const nowVisible = this.isVisible && this.ratios.length > 0;
+    this.style.display = nowVisible ? "block" : "none";
     if (nowVisible !== this._barVisible) {
       this._barVisible = nowVisible;
       this.eventBus?.emit(new SpawnBarVisibleEvent(this._barVisible));

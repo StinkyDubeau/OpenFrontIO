@@ -112,7 +112,12 @@ export class AttackingTroopsController implements Controller {
     for (const attack of myPlayer.outgoingAttacks()) {
       if (!attack.targetID) continue;
       const defender = this.game.playerBySmallID(attack.targetID);
-      if (!defender || !defender.isPlayer()) continue;
+      if (
+        !defender ||
+        !defender.isPlayer() ||
+        defender.type() === PlayerType.Bot
+      )
+        continue;
       activeIDs.add(attack.id);
       this.ensureEntry(attack.id, attack.troops, false);
     }

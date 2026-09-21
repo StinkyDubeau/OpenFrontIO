@@ -55,11 +55,16 @@ body:not([data-page="page-persistent-worlds"]) persistent-world-page {
 }
 
 body[data-page="page-persistent-worlds"] #page-persistent-worlds {
-  position: absolute !important;
+  position: fixed !important;
+  height: 100dvh;
   z-index: 60;
   inset: 0;
   display: block;
   animation: pw-scene-push-in 480ms var(--pw-glide) both;
+}
+body[data-page="page-persistent-worlds"]
+  .pw-app:has(persistent-world-creation-wizard)::after {
+  display: none;
 }
 
 body[data-page="page-play"] #page-play {
@@ -2680,6 +2685,9 @@ persistent-world-countdown {
 
 persistent-world-creation-wizard {
   display: block;
+  position: absolute;
+  inset: 0;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -2689,7 +2697,7 @@ persistent-world-creation-wizard {
   width: 100%;
   height: 100%;
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% -20%, rgb(67 134 101 / 0.2), transparent 45%),
@@ -2699,8 +2707,7 @@ persistent-world-creation-wizard {
       transparent 1px 4px
     ),
     linear-gradient(145deg, #071712, #020b09);
-  padding: var(--pw-safe-top) var(--pw-safe-right) var(--pw-safe-bottom)
-    var(--pw-safe-left);
+  padding: max(var(--pw-safe-top), var(--native-safe-top, 0px)) 6px 10px;
 }
 
 .pw-wizard__header {
@@ -3387,6 +3394,75 @@ persistent-world-creation-wizard {
   min-width: 8.5rem;
 }
 
+/* Navigation never participates in the changing page's scroll/layout. */
+.pw-wizard .pw-wizard__command-panel {
+  width: min(58rem, 100%);
+  justify-self: center;
+  display: grid;
+  grid-template-rows: 48px 48px minmax(0, auto) 52px;
+  gap: 6px;
+  padding: 10px 12px max(12px, var(--native-safe-area-bottom, 0px));
+  border: 1px solid #776748;
+  border-radius: 11px 11px
+    clamp(
+      11px,
+      calc(
+        max(
+            env(safe-area-inset-bottom, 0px),
+            var(--native-safe-area-bottom, 0px)
+          ) *
+          1.5 - 6px
+      ),
+      48px
+    )
+    clamp(
+      11px,
+      calc(
+        max(
+            env(safe-area-inset-bottom, 0px),
+            var(--native-safe-area-bottom, 0px)
+          ) *
+          1.5 - 6px
+      ),
+      48px
+    );
+  background: var(--atlas-hud-surface, linear-gradient(#24302b, #091611));
+  box-shadow: var(--atlas-hud-shadow, inset 0 1px #ffffff25, 0 3px 10px #0006);
+}
+.pw-wizard .pw-wizard__command-panel .pw-wizard__header {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.pw-wizard .pw-wizard__command-panel h1 {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+.pw-wizard .pw-wizard__command-panel .pw-wizard__progress {
+  width: 100%;
+  margin: 0;
+  align-self: center;
+}
+.pw-wizard .pw-wizard__command-panel .pw-wizard__footer {
+  grid-row: 4;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  border: 0;
+  width: 100%;
+}
+.pw-wizard .pw-wizard__command-panel .pw-button {
+  min-width: 0;
+  width: 100%;
+  min-height: 48px;
+}
+.pw-wizard .pw-wizard__command-panel .pw-alert {
+  grid-row: 3;
+  max-height: 4rem;
+  overflow-y: auto;
+  margin: 0;
+}
+
 .pw-alert {
   width: min(58rem, 100%);
   margin: 0 auto 0.3rem;
@@ -3592,6 +3668,31 @@ persistent-world-creation-wizard {
       22rem,
       1.15fr
     );
+}
+.pw-lobby.pw-lobby--loading {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px;
+  padding-bottom: 6px;
+  min-height: 0;
+}
+.pw-lobby--loading .pw-lobby__composition {
+  min-height: 0;
+  overflow: hidden;
+}
+.pw-lobby--loading .pw-loading-caption {
+  position: static;
+  transform: none;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding-bottom: max(12px, var(--native-safe-bottom, 0px));
+  border-radius: 11px 11px
+    clamp(11px, calc(var(--native-safe-bottom, 0px) * 1.5 - 6px), 48px)
+    clamp(11px, calc(var(--native-safe-bottom, 0px) * 1.5 - 6px), 48px);
+  background: var(--atlas-hud-surface, #17231e);
+  font-size: 13px;
 }
 .pw-skeleton--invitation,
 .pw-skeleton--panel {
@@ -4025,6 +4126,8 @@ persistent-world-creation-wizard {
 
   .pw-hub__lists {
     grid-template-columns: 1fr;
+    grid-auto-rows: max-content;
+    align-content: start;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-x: none;
@@ -4034,9 +4137,14 @@ persistent-world-creation-wizard {
   .pw-hub__lists::-webkit-scrollbar {
     display: none;
   }
-  .pw-world-list {
-    height: min(24rem, 48vh);
-    min-height: 14rem;
+  .pw-hub__lists .pw-world-list {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto auto;
+  }
+  .pw-hub__lists .pw-world-list__cards {
+    overflow: visible;
+    grid-auto-rows: max-content;
   }
 
   .pw-lobby {
@@ -4256,7 +4364,7 @@ persistent-world-creation-wizard {
   }
 
   .pw-wizard {
-    padding-inline: var(--pw-safe-left);
+    padding-inline: 6px;
   }
   .pw-wizard__header {
     gap: 0.55rem;

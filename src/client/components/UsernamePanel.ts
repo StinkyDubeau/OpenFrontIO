@@ -195,16 +195,18 @@ export class UsernamePanel extends LitElement {
     return html`
       <div class="bg-white/5 rounded-xl border border-white/10 p-6">
         <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <span class="text-blue-400">🏷️</span>
+          <span class="text-blue-400">Name</span>
           ${translateText("account_modal.username_title")}
         </h3>
-        ${this.player.username
-          ? html`<div class="text-white text-lg font-medium">
-              ${usernameText(this.player.username)}
-            </div>`
-          : html`<div class="text-white/50 text-sm">
-              ${translateText("account_modal.username_not_set")}
-            </div>`}
+        ${
+          this.player.username
+            ? html`<div class="text-white text-lg font-medium">
+                ${usernameText(this.player.username)}
+              </div>`
+            : html`<div class="text-white/50 text-sm">
+                ${translateText("account_modal.username_not_set")}
+              </div>`
+        }
         ${this.renderNotices()}
         <div class="mt-4 flex items-stretch gap-2">
           <input
@@ -227,16 +229,20 @@ export class UsernamePanel extends LitElement {
             @click=${this.handleSave}
           ></o-button>
         </div>
-        ${locked
-          ? html`<div class="mt-2 text-white/50 text-sm">
-              ${translateText("account_modal.username_cooldown_until", {
+        ${
+          locked
+            ? html`<div class="mt-2 text-white/50 text-sm">
+                ${translateText("account_modal.username_cooldown_until", {
                 date: this.formatDate(cooldownEnd),
               })}
-            </div>`
-          : nothing}
-        ${this.error
-          ? html`<div class="mt-2 text-red-400 text-sm">${this.error}</div>`
-          : nothing}
+              </div>`
+            : nothing
+        }
+        ${
+          this.error
+            ? html`<div class="mt-2 text-red-400 text-sm">${this.error}</div>`
+            : nothing
+        }
       </div>
     `;
   }

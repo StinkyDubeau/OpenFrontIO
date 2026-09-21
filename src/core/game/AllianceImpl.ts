@@ -82,7 +82,10 @@ export class AllianceImpl implements MutableAlliance {
   extend(): void {
     this.extensionRequestedRequestor_ = false;
     this.extensionRequestedRecipient_ = false;
-    this.expiresAt_ = this.mg.ticks() + this.mg.config().allianceDuration();
+    this.expiresAt_ =
+      (this.mg.config().gameConfig().continuousPressure
+        ? Math.max(this.expiresAt_, this.mg.ticks())
+        : this.mg.ticks()) + this.mg.config().allianceDuration();
   }
 
   expiresAt(): Tick {

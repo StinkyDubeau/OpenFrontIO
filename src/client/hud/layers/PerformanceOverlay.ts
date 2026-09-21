@@ -1166,6 +1166,7 @@ export class PerformanceOverlay extends LitElement implements Controller {
   private buildPerformanceSnapshot() {
     return {
       timestamp: new Date().toISOString(),
+      display: this.displayMetrics(),
       fps: {
         current: this.currentFPS,
         average60s: this.averageFPS,
@@ -1249,6 +1250,35 @@ export class PerformanceOverlay extends LitElement implements Controller {
     }
 
     this.scheduleCopyStatusReset();
+  }
+
+  private displayMetrics() {
+    const surface = document.querySelector<HTMLElement>(
+      ".atlas-top-command-surface",
+    );
+    const root = getComputedStyle(document.documentElement);
+    const viewport = window.visualViewport;
+    return {
+      screenCSS: `${screen.width} × ${screen.height}`,
+      viewportCSS: `${innerWidth} × ${innerHeight}`,
+      devicePixelRatio,
+      visualViewport: viewport
+        ? `${Math.round(viewport.width)} × ${Math.round(viewport.height)} @ ${viewport.scale}`
+        : "unavailable",
+      native:
+        (window as Window & { __IDLEFRONT_DISPLAY_METRICS__?: unknown })
+          .__IDLEFRONT_DISPLAY_METRICS__ ??
+        "Reload Expo shell to collect native metrics",
+      nativeInsets: ["top", "right", "bottom", "left"]
+        .map(
+          (side) =>
+            root.getPropertyValue(`--native-safe-${side}`).trim() || "0px",
+        )
+        .join(" / "),
+      nav: surface?.dataset.displayGeometry
+        ? JSON.parse(surface.dataset.displayGeometry)
+        : null,
+    };
   }
 
   render() {
@@ -1335,6 +1365,16 @@ export class PerformanceOverlay extends LitElement implements Controller {
           @pointerdown=${this.handleResizePointerDown}
         ></div>
         <div class="overlay-scroll">
+          <details
+            open
+            class="display-calibration"
+            style="padding:6px 0;border-bottom:1px solid #ffffff30"
+          >
+            <summary>Display / notch calibration</summary>
+            <div style="font-size:11px;line-height:1.4;overflow-wrap:anywhere">
+              ${Object.entries(this.displayMetrics()).map(([key, value]) => html`<div><strong>${key}:</strong> ${typeof value === "object" ? JSON.stringify(value) : value}</div>`)}
+            </div>
+          </details>
           <div class="performance-line">
             ${this.uiText.fps}
             <span class="${this.getPerformanceColor(this.currentFPS)}"

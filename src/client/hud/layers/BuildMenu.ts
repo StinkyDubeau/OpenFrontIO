@@ -18,6 +18,7 @@ import {
   ShowBuildMenuEvent,
   ShowEmojiMenuEvent,
 } from "../../InputHandler";
+import { startStructureDrag } from "../../StructureDrag";
 import { TransformHandler } from "../../TransformHandler";
 import {
   BuildUnitIntentEvent,
@@ -505,6 +506,8 @@ export class BuildMenu extends LitElement implements Controller {
                   <button
                     class="build-button"
                     data-haptic=${nuclearAction ? "nuke" : "selection"}
+                    style="touch-action:none"
+                    @pointerdown=${(event: PointerEvent) => startStructureDrag(event, item.unitType, this.eventBus, () => this.hideMenu())}
                     @click=${() =>
                       this.sendBuildOrUpgrade(buildableUnit, this.clickedTile)}
                     ?disabled=${!enabled}

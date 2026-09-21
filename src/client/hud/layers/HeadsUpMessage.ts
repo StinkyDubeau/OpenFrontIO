@@ -30,6 +30,8 @@ export class HeadsUpMessage extends LitElement implements Controller {
   @state()
   private fastForwardRequested = false;
   private catchingUpTicks = 0;
+  @state()
+  private graceSeconds = 0;
 
   private static readonly CATCHING_UP_SHOW_THRESHOLD = 10;
 
@@ -119,11 +121,21 @@ export class HeadsUpMessage extends LitElement implements Controller {
     this.isCatchingUp =
       this.catchingUpTicks >= HeadsUpMessage.CATCHING_UP_SHOW_THRESHOLD;
 
+    this.graceSeconds = this.game.myPlayer()?.pressure
+      ? Math.max(
+          0,
+          Math.ceil(
+            (this.game.config().gameConfig().pressureGraceSeconds ?? 0) -
+              this.game.elapsedGameSeconds(),
+          ),
+        )
+      : 0;
     this.isVisible =
       this.game.inSpawnPhase() ||
       this.isPaused ||
       this.isImmunityActive ||
-      this.isCatchingUp;
+      this.isCatchingUp ||
+      this.graceSeconds > 0;
     this.requestUpdate();
   }
 
@@ -142,6 +154,9 @@ export class HeadsUpMessage extends LitElement implements Controller {
       return translateText("heads_up_message.pvp_immunity_active", {
         seconds: Math.round(this.game.config().spawnImmunityDuration() / 10),
       });
+    }
+    if (!this.game.inSpawnPhase() && this.graceSeconds > 0) {
+      return `Grace ${Math.floor(this.graceSeconds / 60)}:${String(this.graceSeconds % 60).padStart(2, "0")} · wilderness and bots only`;
     }
     return this.game.config().isRandomSpawn()
       ? translateText("heads_up_message.random_spawn")
@@ -189,12 +204,12 @@ export class HeadsUpMessage extends LitElement implements Controller {
                   @contextmenu=${(e: MouseEvent) => e.preventDefault()}
                 >
                   ${
-                  typeof this.toastMessage === "string"
-                    ? html`<span class="font-medium"
-                        >${this.toastMessage}</span
-                      >`
-                    : this.toastMessage
-                }
+                    typeof this.toastMessage === "string"
+                      ? html`<span class="font-medium"
+                          >${this.toastMessage}</span
+                        >`
+                      : this.toastMessage
+                  }
                 </div>
               `
             : null
@@ -203,34 +218,36 @@ export class HeadsUpMessage extends LitElement implements Controller {
           this.isVisible
             ? html`
                 <div
-                  class="fixed top-[15%] left-1/2 -translate-x-1/2 z-[799]
+                  class="atlas-heads-up-status fixed top-[15%] left-1/2 -translate-x-1/2 z-[799]
                             inline-flex items-center justify-center min-h-8 lg:min-h-10
                             w-fit max-w-[90vw]
                             bg-gray-800/70 rounded-md lg:rounded-lg
                             backdrop-blur-xs text-white text-md lg:text-xl px-3 lg:px-4 py-1
                             text-center break-words"
                   style="word-wrap: break-word; hyphens: auto; ${
-                  this.isCatchingUp ? "pointer-events: auto; gap: 0.55rem;" : ""
-                }"
+                    this.isCatchingUp
+                      ? "pointer-events: auto; gap: 0.55rem;"
+                      : ""
+                  }"
                   @contextmenu=${(e: MouseEvent) => e.preventDefault()}
                 >
                   <span>${this.getMessage()}</span>
                   ${
-                  this.isCatchingUp
-                    ? html`<button
-                        type="button"
-                        class="rounded-md border border-white/35 bg-white/15 px-3 py-1 text-sm font-semibold shadow-inner transition active:translate-y-px disabled:opacity-70"
-                        ?disabled=${this.fastForwardRequested}
-                        @click=${this.onSkipCatchup}
-                      >
-                        ${
-                        this.fastForwardRequested
-                          ? translateText("heads_up_message.fast_forwarding")
-                          : translateText("heads_up_message.skip_catchup")
-                      }
-                      </button>`
-                    : null
-                }
+                    this.isCatchingUp
+                      ? html`<button
+                          type="button"
+                          class="rounded-md border border-white/35 bg-white/15 px-3 py-1 text-sm font-semibold shadow-inner transition active:translate-y-px disabled:opacity-70"
+                          ?disabled=${this.fastForwardRequested}
+                          @click=${this.onSkipCatchup}
+                        >
+                          ${
+                          this.fastForwardRequested
+                            ? translateText("heads_up_message.fast_forwarding")
+                            : translateText("heads_up_message.skip_catchup")
+                        }
+                        </button>`
+                      : null
+                  }
                 </div>
               `
             : null

@@ -234,6 +234,7 @@ export class SettingsModal extends LitElement implements Controller {
             </div>
             <button
               class="text-slate-400 hover:text-white text-2xl font-bold leading-none"
+              aria-label="Close settings"
               @click=${this.closeModal}
             >
               ×

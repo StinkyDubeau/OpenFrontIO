@@ -40,6 +40,11 @@ interface ActionableEvent {
 
 @customElement("actionable-events")
 export class ActionableEvents extends LitElement implements Controller {
+  public tickerEvents() {
+    return this.active && this._isVisible
+      ? this.events.map((event) => ({ type: event.type }))
+      : [];
+  }
   public eventBus: EventBus;
   public game: GameView;
   public uiState: UIState;
@@ -165,9 +170,11 @@ export class ActionableEvents extends LitElement implements Controller {
       const other = this.game.player(alliance.other) as PlayerView;
 
       this.addEvent({
-        description: translateText("events_display.about_to_expire", {
-          name: other.displayName(),
-        }),
+        description: this.game.config().gameConfig().continuousPressure
+          ? `${other.displayName()}: alliance protection ${alliance.expiresAt <= this.game.ticks() ? "has ended; either side may now betray" : "is ending soon"}.`
+          : translateText("events_display.about_to_expire", {
+              name: other.displayName(),
+            }),
         type: MessageType.RENEW_ALLIANCE,
         buttons: [
           {

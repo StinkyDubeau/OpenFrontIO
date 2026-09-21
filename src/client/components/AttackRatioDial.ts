@@ -62,6 +62,8 @@ function shortestAngleDelta(previous: number, current: number): number {
 export class AttackRatioDial extends LitElement {
   @property({ type: Number }) value = 20;
   @property({ type: Number }) step = 10;
+  @property({ type: Number }) min = 1;
+  @property() footer = "";
   @property() label = "Attack ratio";
   @property({ attribute: "display-value" }) displayValue = "";
 
@@ -92,7 +94,7 @@ export class AttackRatioDial extends LitElement {
   }
 
   private setValue(value: number): void {
-    const nextValue = clampAttackRatioPercent(value);
+    const nextValue = Math.max(this.min, Math.min(100, Math.round(value)));
     if (nextValue === this.value) return;
     this.value = nextValue;
     this.dispatchEvent(
@@ -175,10 +177,10 @@ export class AttackRatioDial extends LitElement {
         );
         const delta = shortestAngleDelta(this.dialLastAngle, angle);
         this.dialContinuousValue = Math.max(
-          MIN_RATIO_PERCENT,
+          this.min,
           Math.min(
             MAX_RATIO_PERCENT,
-            this.dialContinuousValue + (delta / 270) * 99,
+            this.dialContinuousValue + (delta / 270) * (100 - this.min),
           ),
         );
         this.dialLastAngle = angle;
@@ -188,7 +190,7 @@ export class AttackRatioDial extends LitElement {
       const increasingPixels =
         this.linearLastY - event.clientY + (event.clientX - this.linearLastX);
       this.linearContinuousValue = Math.max(
-        MIN_RATIO_PERCENT,
+        this.min,
         Math.min(
           MAX_RATIO_PERCENT,
           this.linearContinuousValue +
@@ -279,7 +281,7 @@ export class AttackRatioDial extends LitElement {
         nextValue = this.value - coarseStep;
         break;
       case "Home":
-        nextValue = MIN_RATIO_PERCENT;
+        nextValue = this.min;
         break;
       case "End":
         nextValue = MAX_RATIO_PERCENT;
@@ -293,8 +295,8 @@ export class AttackRatioDial extends LitElement {
   }
 
   render() {
-    const value = clampAttackRatioPercent(this.value);
-    const sweep = ((value - MIN_RATIO_PERCENT) / 99) * 270;
+    const value = Math.max(this.min, Math.min(100, Math.round(this.value)));
+    const sweep = ((value - this.min) / (100 - this.min)) * 270;
     const needle = -135 + sweep;
 
     return html`
@@ -303,10 +305,10 @@ export class AttackRatioDial extends LitElement {
         role="slider"
         tabindex="0"
         aria-label=${this.label}
-        aria-valuemin=${MIN_RATIO_PERCENT}
+        aria-valuemin=${this.min}
         aria-valuemax=${MAX_RATIO_PERCENT}
         aria-valuenow=${value}
-        aria-valuetext="${value}%"
+        aria-valuetext="${value}%; ${this.displayValue}; ${this.footer}"
         style="--atlas-ratio-sweep: ${sweep}deg; --atlas-ratio-needle: ${needle}deg;"
         @pointerdown=${this.handlePointerDown}
         @pointermove=${this.handlePointerMove}
@@ -329,7 +331,7 @@ export class AttackRatioDial extends LitElement {
           </span>
         </span>
         <span class="atlas-attack-dial__ratio" aria-hidden="true" translate="no"
-          >${value}%</span
+          >${this.footer || `${value}%`}</span
         >
       </div>
     `;

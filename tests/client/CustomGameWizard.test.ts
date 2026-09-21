@@ -24,6 +24,28 @@ describe("public game creation", () => {
     await element.updateComplete;
   }
 
+  it("keeps navigation and progress in one panel outside every scrolling step", async () => {
+    const element = await wizard(true);
+    const name = element.querySelector<HTMLInputElement>('input[type="text"]')!;
+    name.value = "Navigation test";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    const panel = element.querySelector(".pw-wizard__command-panel");
+    for (let step = 0; step < 4; step++) {
+      expect(element.querySelector(".pw-wizard__command-panel")).toBe(panel);
+      expect(panel?.querySelector(".pw-wizard__header")).not.toBeNull();
+      expect(panel?.querySelector(".pw-wizard__progress")).not.toBeNull();
+      expect(panel?.querySelectorAll(".pw-wizard__footer button")).toHaveLength(
+        2,
+      );
+      expect(
+        element.querySelector(".pw-wizard__viewport .pw-wizard__footer"),
+      ).toBeNull();
+      if (step < 3) await continueStep(element);
+    }
+    expect(panel?.textContent).toContain("Create invitation");
+  });
+
   it("offers public map presets and readable economic symbols without a debug flag", async () => {
     const element = await wizard(true);
     expect(element.querySelectorAll('input[name="game-preset"]')).toHaveLength(

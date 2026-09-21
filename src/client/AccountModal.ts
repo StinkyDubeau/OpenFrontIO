@@ -55,11 +55,9 @@ import { translateText } from "./Utils";
 // gate page itself) — so a rename of one can't silently leave this button
 // wired to nothing.
 function desktopLinkGateBridge():
-  | { showLinkGate: () => Promise<void> }
-  | undefined {
+  { showLinkGate: () => Promise<void> } | undefined {
   const desktop = window.openfrontDesktop as
-    | { showLinkGate?: unknown }
-    | undefined;
+    { showLinkGate?: unknown } | undefined;
   return typeof desktop?.showLinkGate === "function"
     ? (desktop as { showLinkGate: () => Promise<void> })
     : undefined;
@@ -193,9 +191,11 @@ export class AccountModal extends BaseModal {
     }
     if (!this.isLinkedAccount()) {
       return html`<div class="custom-scrollbar mr-1">
-        ${crazyGamesSDK.isOnCrazyGames()
-          ? this.renderCrazyGamesSignIn()
-          : this.renderLoginOptions()}
+        ${
+          crazyGamesSDK.isOnCrazyGames()
+            ? this.renderCrazyGamesSignIn()
+            : this.renderLoginOptions()
+        }
       </div>`;
     }
     return html`
@@ -246,33 +246,41 @@ export class AccountModal extends BaseModal {
               ${translateText("account_modal.marketing_title")}
             </div>
             <div class="text-white/50 text-sm mt-1">
-              ${hasEmail
-                ? translateText("account_modal.marketing_desc")
-                : translateText("account_modal.marketing_no_email")}
+              ${
+                hasEmail
+                  ? translateText("account_modal.marketing_desc")
+                  : translateText("account_modal.marketing_no_email")
+              }
             </div>
           </div>
-          ${hasEmail
-            ? html`<button
-                role="switch"
-                aria-checked=${on ? "true" : "false"}
-                aria-label=${translateText("account_modal.marketing_title")}
-                ?disabled=${this.consentBusy}
-                @click=${() => this.setConsent(!on)}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-malibu-blue/50 disabled:opacity-60 ${on
-                  ? "bg-malibu-blue shadow-[var(--shadow-malibu-blue-pill)]"
-                  : "bg-white/15"}"
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${on
-                    ? "translate-x-6"
-                    : "translate-x-1"}"
-                ></span>
-              </button>`
-            : nothing}
+          ${
+            hasEmail
+              ? html`<button
+                  role="switch"
+                  aria-checked=${on ? "true" : "false"}
+                  aria-label=${translateText("account_modal.marketing_title")}
+                  ?disabled=${this.consentBusy}
+                  @click=${() => this.setConsent(!on)}
+                  class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-malibu-blue/50 disabled:opacity-60 ${
+                  on
+                    ? "bg-malibu-blue shadow-[var(--shadow-malibu-blue-pill)]"
+                    : "bg-white/15"
+                }"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                    on ? "translate-x-6" : "translate-x-1"
+                  }"
+                  ></span>
+                </button>`
+              : nothing
+          }
         </div>
-        ${hasEmail || this.isSteamPrimary()
-          ? nothing
-          : this.renderEmailBinding()}
+        ${
+          hasEmail || this.isSteamPrimary()
+            ? nothing
+            : this.renderEmailBinding()
+        }
       </div>
     `;
   }
@@ -350,14 +358,16 @@ export class AccountModal extends BaseModal {
           ></o-button>
         </div>
       </div>
-      ${this.deleteDialogOpen
-        ? html`<delete-account-dialog
-            @confirm=${this.handleDeleteAccount}
-            @cancel=${() => {
+      ${
+        this.deleteDialogOpen
+          ? html`<delete-account-dialog
+              @confirm=${this.handleDeleteAccount}
+              @cancel=${() => {
               this.deleteDialogOpen = false;
             }}
-          ></delete-account-dialog>`
-        : nothing}
+            ></delete-account-dialog>`
+          : nothing
+      }
     `;
   }
 
@@ -450,11 +460,13 @@ export class AccountModal extends BaseModal {
               <discord-user-header
                 .data=${this.userMeResponse?.user?.discord ?? null}
               ></discord-user-header>
-              ${this.userMeResponse?.user?.steam
-                ? html`<steam-user-header
-                    .data=${this.userMeResponse.user.steam}
-                  ></steam-user-header>`
-                : null}
+              ${
+                this.userMeResponse?.user?.steam
+                  ? html`<steam-user-header
+                      .data=${this.userMeResponse.user.steam}
+                    ></steam-user-header>`
+                  : null
+              }
               ${this.renderLoggedInAs()}
             </div>
           </div>
@@ -555,7 +567,7 @@ export class AccountModal extends BaseModal {
   private renderStatsTab(): TemplateResult {
     if (!this.hasAnyStats()) {
       return this.renderEmptyState(
-        "📊",
+        "Stats",
         translateText("account_modal.no_stats"),
       );
     }
@@ -570,16 +582,18 @@ export class AccountModal extends BaseModal {
     const publicId = this.userMeResponse?.player?.publicId ?? "";
     if (!publicId) {
       return this.renderEmptyState(
-        "🎮",
+        "Games",
         translateText("account_modal.no_games"),
       );
     }
     return html`
       <player-game-history-view
         .publicId=${publicId}
-        .cachedState=${this.gameHistoryCache?.publicId === publicId
-          ? this.gameHistoryCache
-          : null}
+        .cachedState=${
+          this.gameHistoryCache?.publicId === publicId
+            ? this.gameHistoryCache
+            : null
+        }
         @history-updated=${(e: CustomEvent<PlayerGameHistoryCache>) => {
           this.gameHistoryCache = e.detail;
         }}
@@ -848,8 +862,10 @@ export class AccountModal extends BaseModal {
                 class="w-6 h-6 relative z-10"
               />
               <span class="font-bold relative z-10 tracking-wide"
-                >${translateText("main.login_discord") ||
-                translateText("account_modal.link_discord")}</span
+                >${
+                  translateText("main.login_discord") ||
+                  translateText("account_modal.link_discord")
+                }</span
               >
             </button>
 

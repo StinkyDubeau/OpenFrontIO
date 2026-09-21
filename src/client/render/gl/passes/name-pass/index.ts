@@ -465,7 +465,9 @@ export class NamePass {
       const troopBucket = Math.floor((now + (slot.index % 5) * 0.1) / 0.5);
       if (snap || slot.troopLen === 0 || troopBucket !== slot.lastTroopBucket) {
         slot.lastTroopBucket = troopBucket;
-        const troops = ps?.troops ?? 0;
+        // Population includes civilians and committed military; legacy games
+        // without population accounting keep their native troop label.
+        const troops = ps?.population ?? ps?.troops ?? 0;
         const troopStr = renderTroops(troops);
         if (troopStr !== slot.lastTroopStr) {
           slot.troopLen = Math.min(troopStr.length, MAX_CHARS);

@@ -77,8 +77,17 @@ describe("GameLeftSidebar", () => {
     expect(playerStats.querySelector(".stats-table")).not.toBeNull();
 
     expect(() => sidebar.tick()).not.toThrow();
+    await sidebar.updateComplete;
+    expect(sidebar.querySelector(".atlas-leaderboard-rank")?.textContent).toBe(
+      "×",
+    );
+    (sidebar.querySelector(".atlas-nav-rank") as HTMLElement).click();
+    await sidebar.updateComplete;
+    expect(sidebar.querySelector(".atlas-leaderboard-rank")?.textContent).toBe(
+      "#1",
+    );
     await playerStats.updateComplete;
-    expect(playerStats.querySelector(".stats-table-row")).not.toBeNull();
+    expect(playerStats.querySelector(".stats-table-row")).toBeNull();
 
     sidebar.remove();
   });

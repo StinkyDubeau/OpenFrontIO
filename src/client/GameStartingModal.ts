@@ -14,6 +14,7 @@ export class GameStartingModal extends LitElement {
 
   render() {
     const isVisible = this.isVisible;
+    if (!isVisible) return html``;
     return html`
       <div
         class="fixed inset-0 bg-black/30 backdrop-blur-[4px] z-[9998] transition-all duration-300 ${
@@ -21,7 +22,7 @@ export class GameStartingModal extends LitElement {
         }"
       ></div>
       <div
-        class="fixed top-1/2 left-1/2 bg-zinc-900/90 backdrop-blur-md border border-white/10 p-6 rounded-2xl z-[9999] shadow-2xl text-white w-[400px] text-center transition-all duration-300 -translate-x-1/2 ${
+        class="atlas-game-starting-card fixed top-1/2 left-1/2 bg-zinc-900/90 backdrop-blur-md border border-white/10 p-6 rounded-2xl z-[9999] shadow-2xl text-white w-[400px] text-center transition-all duration-300 -translate-x-1/2 ${
           isVisible
             ? "opacity-100 visible -translate-y-1/2"
             : "opacity-0 invisible -translate-y-[48%]"

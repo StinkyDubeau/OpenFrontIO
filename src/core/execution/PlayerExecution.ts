@@ -11,11 +11,16 @@ import {
 } from "../game/Game";
 import { GameMap, TileRef } from "../game/GameMap";
 import {
+  pressureIncome,
+  updatePressurePopulation,
+} from "../game/PressurePopulation";
+import {
   bumpTraversalGeneration,
   tileTraversalScratch,
   TileTraversalScratch,
 } from "../game/TileTraversalScratch";
 import { calculateBoundingBox, getMode, inscribed, simpleHash } from "../Util";
+import { applyContinuousPressure } from "./ContinuousPressure";
 
 export class PlayerExecution implements Execution {
   private readonly ticksPerClusterCalc = 20;
@@ -84,16 +89,24 @@ export class PlayerExecution implements Execution {
       return;
     }
 
-    const troopInc = this.config.troopIncreaseRate(this.player);
-    this.player.addTroops(troopInc);
-    const goldFromWorkers = this.config.goldAdditionRate(this.player);
+    if (this.config.gameConfig().continuousPressure)
+      updatePressurePopulation(this.mg, this.player);
+    else this.player.addTroops(this.config.troopIncreaseRate(this.player));
+    const goldFromWorkers = pressureIncome(
+      this.player,
+      this.config.goldAdditionRate(this.player),
+    );
     this.player.addGold(goldFromWorkers);
 
     // Record stats
     this.mg.stats().goldWork(this.player, goldFromWorkers);
+    applyContinuousPressure(this.mg, this.player, ticks);
 
     for (const alliance of this.player.alliances()) {
-      if (alliance.expiresAt() <= this.mg.ticks()) {
+      if (
+        !this.config.gameConfig().continuousPressure &&
+        alliance.expiresAt() <= this.mg.ticks()
+      ) {
         alliance.expire();
       }
     }

@@ -1,10 +1,6 @@
 import { html, LitElement, TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import {
-  getGamesPlayed,
-  translateText,
-  TUTORIAL_VIDEO_URL,
-} from "../../../client/Utils";
+import { translateText, TUTORIAL_VIDEO_URL } from "../../../client/Utils";
 import { EventBus } from "../../../core/EventBus";
 import { RankedType } from "../../../core/game/Game";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
@@ -58,7 +54,7 @@ export class WinModal extends LitElement implements Controller {
   render() {
     return html`
       <div
-        class="${
+        class="atlas-result-panel ${
           this.isVisible
             ? "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800/70 p-4 md:p-6 shrink-0 rounded-lg z-[10010] shadow-2xl backdrop-blur-xs text-white w-[min(90vw,700px)] max-w-[90%] max-h-[90dvh] overflow-hidden flex flex-col"
             : "hidden"
@@ -114,10 +110,8 @@ export class WinModal extends LitElement implements Controller {
   }
 
   innerHtml() {
-    if (!this.isWin && getGamesPlayed() < 3) {
-      return this.renderYoutubeTutorial();
-    }
-    return this.renderPatternButton();
+    // Keep the match result focused; this fork does not sell upstream cosmetics.
+    return html``;
   }
 
   renderYoutubeTutorial() {

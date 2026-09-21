@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Dimensions, PixelRatio, Platform } from "react-native";
 
 const LAN_GAME_URL = "http://192.168.2.118:9000/";
 
@@ -70,10 +70,22 @@ export function safeAreaScript(
   bottom: number,
   left: number,
 ): string {
+  const screen = Dimensions.get("screen");
+  const windowSize = Dimensions.get("window");
+  const metrics = {
+    platform: Platform.OS,
+    osVersion: Platform.Version,
+    screen: { width: screen.width, height: screen.height },
+    window: { width: windowSize.width, height: windowSize.height },
+    pixelRatio: PixelRatio.get(),
+    fontScale: PixelRatio.getFontScale(),
+    insets: { top, right, bottom, left },
+  };
   return `
     (function () {
       var root = document.documentElement;
       if (!root) return;
+      window.__IDLEFRONT_DISPLAY_METRICS__ = ${JSON.stringify(metrics)};
       root.style.setProperty("--native-safe-top", ${JSON.stringify(`${top}px`)});
       root.style.setProperty("--native-safe-right", ${JSON.stringify(`${right}px`)});
       root.style.setProperty("--native-safe-bottom", ${JSON.stringify(`${bottom}px`)});

@@ -5,6 +5,14 @@ import { WORLD_PRESETS, type WorldPreset } from "../../../core/WorldPresets";
 export function worldModeSummary(id?: WorldPreset) {
   if (!id) return nothing;
   const preset = WORLD_PRESETS[id];
+  if ("duration" in preset) {
+    const duration = { "1h": "1 hour", "1d": "1 day", "7d": "1 week" }[
+      preset.duration
+    ];
+    return html`<span class="pw-mode-summary" aria-label=${preset.label}>
+      <span>Earth · ${preset.scale}×</span><span>Target: ${duration}</span>
+    </span>`;
+  }
   const items = [
     {
       label: "Trade ships",

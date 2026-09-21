@@ -1,7 +1,11 @@
 import { z } from "zod";
+import { PressurePacingSchema } from "./PressurePacing";
 
 export const WorldStartModeSchema = z.enum(["scheduled", "host"]);
 export const WorldPresetSchema = z.enum([
+  "quickplay",
+  "longplay",
+  "idlefront",
   "scheduled-earth",
   "great-lakes",
   "enormous-earth",
@@ -160,6 +164,7 @@ export const PersistentWorldInvitationSecretSchema = z
 
 export const CreatePersistentWorldInputSchema = z
   .object({
+    pressurePacing: PressurePacingSchema.optional(),
     startMode: WorldStartModeSchema.optional(),
     gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
@@ -244,6 +249,7 @@ export type PersistentWorldLobbyMember = z.infer<
 
 export const PersistentWorldSchema = z
   .object({
+    pressurePacing: PressurePacingSchema.optional(),
     startMode: WorldStartModeSchema.optional(),
     gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
@@ -375,6 +381,7 @@ export type PersistentWorldReminderSelection = z.infer<
 
 export const PersistentWorldViewSchema = z
   .object({
+    pressurePacing: PressurePacingSchema.optional(),
     startMode: WorldStartModeSchema.optional(),
     gamePreset: WorldPresetSchema.optional(),
     id: PersistentWorldIdSchema,
@@ -437,6 +444,7 @@ export type PersistentWorldLobbySnapshot = z.infer<
 
 export const CreatePersistentWorldRequestSchema = z
   .object({
+    pressurePacing: PressurePacingSchema.optional(),
     startMode: WorldStartModeSchema.optional(),
     gamePreset: WorldPresetSchema.optional(),
     password: z.string().min(1).max(128).optional(),

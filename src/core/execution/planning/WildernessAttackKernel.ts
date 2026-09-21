@@ -155,7 +155,7 @@ export function planWildernessAttackKernel(
       }
       const result = config.attackLogic(game, troops, owner, target, tile);
       remaining -= result.tilesPerTickUsed;
-      troops -= result.attackerTroopLoss;
+      if (!state.passiveWilderness) troops -= result.attackerTroopLoss;
       effects.push({ type: "troops", troops: Math.max(0, troops) });
       if (hasFallout(tile)) clearedFallout++;
       conquered.add(tile);

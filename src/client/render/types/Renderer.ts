@@ -59,6 +59,8 @@ export interface EmojiData {
 }
 
 export interface PlayerState {
+  /** Civilians + all military in pressure games; absent for legacy matches. */
+  population?: number;
   smallID: number;
   isAlive: boolean;
   isDisconnected: boolean;

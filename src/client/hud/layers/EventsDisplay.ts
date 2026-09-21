@@ -1,5 +1,5 @@
 import { html, LitElement } from "lit";
-import { customElement, query, state } from "lit/decorators.js";
+import { customElement, property, query, state } from "lit/decorators.js";
 import { DirectiveResult } from "lit/directive.js";
 import { unsafeHTML, UnsafeHTMLDirective } from "lit/directives/unsafe-html.js";
 import { EventBus } from "../../../core/EventBus";
@@ -64,6 +64,12 @@ const isTier1 = (type: MessageType): boolean => TIER_1_TYPES.has(type);
 
 @customElement("events-display")
 export class EventsDisplay extends LitElement implements Controller {
+  @property() tickerFilter: "all" | "gold" | "defense" = "all";
+  public tickerEvents() {
+    return this.active && this._isVisible
+      ? this.events.map((event) => ({ type: event.type }))
+      : [];
+  }
   public eventBus: EventBus;
   public game: GameView;
   public uiState: UIState;
@@ -592,23 +598,26 @@ export class EventsDisplay extends LitElement implements Controller {
             event.type,
           )}"
         >
-          ${event.focusID
-            ? this.renderButton({
-                content: this.getEventDescription(event),
-                onClick: () => {
-                  if (event.focusID) this.emitGoToPlayerEvent(event.focusID);
-                },
-                className: "text-left",
-              })
-            : event.unitView
+          ${
+            event.focusID
               ? this.renderButton({
                   content: this.getEventDescription(event),
                   onClick: () => {
-                    if (event.unitView) this.emitGoToUnitEvent(event.unitView);
+                    if (event.focusID) this.emitGoToPlayerEvent(event.focusID);
                   },
                   className: "text-left",
                 })
-              : this.getEventDescription(event)}
+              : event.unitView
+                ? this.renderButton({
+                    content: this.getEventDescription(event),
+                    onClick: () => {
+                      if (event.unitView)
+                        this.emitGoToUnitEvent(event.unitView);
+                    },
+                    className: "text-left",
+                  })
+                : this.getEventDescription(event)
+          }
         </td>
       </tr>
     `;
@@ -629,6 +638,12 @@ export class EventsDisplay extends LitElement implements Controller {
     const tier1Events: GameEvent[] = [];
     let tier2Events: GameEvent[] = [];
     for (const event of this.events) {
+      if (
+        this.tickerFilter !== "all" &&
+        (event.type === MessageType.DONATION_RECEIVED) !==
+          (this.tickerFilter === "gold")
+      )
+        continue;
       (isTier1(event.type) ? tier1Events : tier2Events).push(event);
     }
     tier1Events.sort((a, b) => a.createdAt - b.createdAt);
@@ -645,45 +660,51 @@ export class EventsDisplay extends LitElement implements Controller {
 
     return html`
       <div class="flex flex-col gap-1 w-full min-[1200px]:w-96">
-        ${tier2Events.length > 0
-          ? html`
-              <div
-                class="bg-gray-800/92 backdrop-blur-sm max-h-[12vh] lg:max-h-[22vh] overflow-y-auto rounded-lg opacity-90 events-container"
-              >
-                <table
-                  class="w-full border-collapse text-white text-xs lg:text-sm pointer-events-auto"
+        ${
+          tier2Events.length > 0
+            ? html`
+                <div
+                  class="bg-gray-800/92 backdrop-blur-sm max-h-[12vh] lg:max-h-[22vh] overflow-y-auto rounded-lg opacity-90 events-container"
                 >
-                  <tbody>
-                    ${tier2Events.map((event) => this.renderEventRow(event))}
-                  </tbody>
-                </table>
-              </div>
-            `
-          : ""}
-        ${tier1Events.length > 0 || showBetrayalTimer
-          ? html`
-              <div
-                class="bg-gray-800 backdrop-blur-sm max-h-[30vh] lg:max-h-[40vh] overflow-y-auto rounded-lg shadow-lg border-l-4 border-red-500 important-events-container"
-              >
-                <table
-                  class="w-full border-collapse text-white text-base lg:text-lg font-medium pointer-events-auto"
+                  <table
+                    class="w-full border-collapse text-white text-xs lg:text-sm pointer-events-auto"
+                  >
+                    <tbody>
+                      ${tier2Events.map((event) => this.renderEventRow(event))}
+                    </tbody>
+                  </table>
+                </div>
+              `
+            : ""
+        }
+        ${
+          tier1Events.length > 0 || showBetrayalTimer
+            ? html`
+                <div
+                  class="bg-gray-800 backdrop-blur-sm max-h-[30vh] lg:max-h-[40vh] overflow-y-auto rounded-lg shadow-lg border-l-4 border-red-500 important-events-container"
                 >
-                  <tbody>
-                    ${tier1Events.map((event) => this.renderEventRow(event))}
-                    ${showBetrayalTimer
-                      ? html`
-                          <tr>
-                            <td class="lg:px-2 lg:py-1 p-1 text-left">
-                              ${this.renderBetrayalDebuffTimer()}
-                            </td>
-                          </tr>
-                        `
-                      : ""}
-                  </tbody>
-                </table>
-              </div>
-            `
-          : ""}
+                  <table
+                    class="w-full border-collapse text-white text-base lg:text-lg font-medium pointer-events-auto"
+                  >
+                    <tbody>
+                      ${tier1Events.map((event) => this.renderEventRow(event))}
+                      ${
+                      showBetrayalTimer
+                        ? html`
+                            <tr>
+                              <td class="lg:px-2 lg:py-1 p-1 text-left">
+                                ${this.renderBetrayalDebuffTimer()}
+                              </td>
+                            </tr>
+                          `
+                        : ""
+                    }
+                    </tbody>
+                  </table>
+                </div>
+              `
+            : ""
+        }
       </div>
     `;
   }

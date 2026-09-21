@@ -8,6 +8,7 @@ import {
   UnitType,
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import { pressureIncome } from "../game/PressurePopulation";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { queueWaterPreparation } from "../pathfinding/WaterRoutePreparation";
@@ -183,28 +184,40 @@ export class TradeShipExecution implements Execution {
       .tradeShipGold(this.tilesTraveled, this.tradeShip!.owner());
 
     if (this.wasCaptured) {
-      this.tradeShip!.owner().addGold(gold, this._dstPort.tile());
+      const capturedGold = pressureIncome(this.tradeShip!.owner(), gold);
+      this.tradeShip!.owner().addGold(capturedGold, this._dstPort.tile());
       this.mg.displayMessage(
         "events_display.received_gold_from_captured_ship",
         MessageType.CAPTURED_ENEMY_UNIT,
         this.tradeShip!.owner().id(),
-        gold,
+        capturedGold,
         {
-          gold: renderNumber(gold),
+          gold: renderNumber(capturedGold),
           name: this.origOwner.displayName(),
         },
       );
       // Record stats
       this.mg
         .stats()
-        .boatCapturedTrade(this.tradeShip!.owner(), this.origOwner, gold);
+        .boatCapturedTrade(
+          this.tradeShip!.owner(),
+          this.origOwner,
+          capturedGold,
+        );
     } else {
-      this.srcPort.owner().addGold(gold, this.srcPort.tile());
-      this._dstPort.owner().addGold(gold, this._dstPort.tile());
+      const sourceGold = pressureIncome(this.srcPort.owner(), gold);
+      const targetGold = pressureIncome(this._dstPort.owner(), gold);
+      this.srcPort.owner().addGold(sourceGold, this.srcPort.tile());
+      this._dstPort.owner().addGold(targetGold, this._dstPort.tile());
       // Record stats
       this.mg
         .stats()
-        .boatArriveTrade(this.srcPort.owner(), this._dstPort.owner(), gold);
+        .boatArriveTrade(
+          this.srcPort.owner(),
+          this._dstPort.owner(),
+          sourceGold,
+          targetGold,
+        );
     }
     return;
   }

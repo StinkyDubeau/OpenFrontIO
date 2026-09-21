@@ -202,12 +202,12 @@ export class UserSettingModal extends BaseModal {
   };
 
   private triggerEasterEgg() {
-    console.log("🪺 Setting~ unlocked by EVAN combo!");
+    console.log("Setting~ unlocked by EVAN combo!");
     this.showEasterEggSettings = true;
     const popup = document.createElement("div");
     popup.className =
       "fixed top-10 left-1/2 p-4 px-6 bg-black/80 text-white text-xl rounded-xl animate-fadePop z-[9999]";
-    popup.textContent = "🎉 You found a secret setting!";
+    popup.textContent = "You found a secret setting!";
     document.body.appendChild(popup);
 
     setTimeout(() => {
@@ -218,23 +218,20 @@ export class UserSettingModal extends BaseModal {
   private toggleEmojis() {
     this.userSettings.toggleEmojis();
 
-    console.log("🤡 Emojis:", this.userSettings.emojis() ? "ON" : "OFF");
+    console.log("Emojis:", this.userSettings.emojis() ? "ON" : "OFF");
   }
 
   private toggleAlertFrame() {
     this.userSettings.toggleAlertFrame();
 
-    console.log(
-      "🚨 Alert frame:",
-      this.userSettings.alertFrame() ? "ON" : "OFF",
-    );
+    console.log("Alert frame:", this.userSettings.alertFrame() ? "ON" : "OFF");
   }
 
   private toggleCursorCostLabel() {
     this.userSettings.toggleCursorCostLabel();
 
     console.log(
-      "💰 Cursor build cost:",
+      "Gold Cursor build cost:",
       this.userSettings.cursorCostLabel() ? "ON" : "OFF",
     );
   }
@@ -243,7 +240,7 @@ export class UserSettingModal extends BaseModal {
     this.userSettings.toggleRandomName();
 
     console.log(
-      "🙈 Anonymous Names:",
+      "Anonymous Names:",
       this.userSettings.anonymousNames() ? "ON" : "OFF",
     );
   }
@@ -251,7 +248,7 @@ export class UserSettingModal extends BaseModal {
   private toggleLobbyIdVisibility() {
     this.userSettings.toggleLobbyIdVisibility();
     console.log(
-      "👁️ Hidden Lobby IDs:",
+      "Spectate️ Hidden Lobby IDs:",
       !this.userSettings.lobbyIdVisibility() ? "ON" : "OFF",
     );
   }
@@ -259,7 +256,7 @@ export class UserSettingModal extends BaseModal {
   private toggleLeftClickOpensMenu() {
     this.userSettings.toggleLeftClickOpenMenu();
     console.log(
-      "🖱️ Left Click Opens Menu:",
+      "Left Click Opens Menu:",
       this.userSettings.leftClickOpensMenu() ? "ON" : "OFF",
     );
 
@@ -294,7 +291,7 @@ export class UserSettingModal extends BaseModal {
     this.userSettings.toggleTerritoryPatterns();
 
     console.log(
-      "🏳️ Territory Patterns:",
+      "Territory Patterns:",
       this.userSettings.territoryPatterns() ? "ON" : "OFF",
     );
   }
@@ -302,10 +299,7 @@ export class UserSettingModal extends BaseModal {
   private toggleGoToPlayer() {
     this.userSettings.toggleGoToPlayer();
 
-    console.log(
-      "🔍 Go to player:",
-      this.userSettings.goToPlayer() ? "ON" : "OFF",
-    );
+    console.log("Go to player:", this.userSettings.goToPlayer() ? "ON" : "OFF");
   }
 
   private togglePerformanceOverlay() {
@@ -875,20 +869,21 @@ export class UserSettingModal extends BaseModal {
         @change=${this.changeAttackRatioIncrement}
       ></setting-select>
 
-      ${this.showEasterEggSettings
-        ? html`
-            <setting-slider
-              label="${translateText(
+      ${
+        this.showEasterEggSettings
+          ? html`
+              <setting-slider
+                label="${translateText(
                 "user_setting.easter_writing_speed_label",
               )}"
-              description="${translateText(
+                description="${translateText(
                 "user_setting.easter_writing_speed_desc",
               )}"
-              min="0"
-              max="100"
-              value="40"
-              easter="true"
-              @change=${(e: CustomEvent) => {
+                min="0"
+                max="100"
+                value="40"
+                easter="true"
+                @change=${(e: CustomEvent) => {
                 const value = e.detail?.value;
                 if (value !== undefined) {
                   console.log("Changed:", value);
@@ -896,18 +891,18 @@ export class UserSettingModal extends BaseModal {
                   console.warn("Slider event missing detail.value", e);
                 }
               }}
-            ></setting-slider>
+              ></setting-slider>
 
-            <setting-number
-              label="${translateText("user_setting.easter_bug_count_label")}"
-              description="${translateText(
+              <setting-number
+                label="${translateText("user_setting.easter_bug_count_label")}"
+                description="${translateText(
                 "user_setting.easter_bug_count_desc",
               )}"
-              value="100"
-              min="0"
-              max="1000"
-              easter="true"
-              @change=${(e: CustomEvent) => {
+                value="100"
+                min="0"
+                max="1000"
+                easter="true"
+                @change=${(e: CustomEvent) => {
                 const value = e.detail?.value;
                 if (value !== undefined) {
                   console.log("Changed:", value);
@@ -915,9 +910,10 @@ export class UserSettingModal extends BaseModal {
                   console.warn("Slider event missing detail.value", e);
                 }
               }}
-            ></setting-number>
-          `
-        : null}
+              ></setting-number>
+            `
+          : null
+      }
     `;
   }
 

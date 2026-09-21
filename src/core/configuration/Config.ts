@@ -635,6 +635,8 @@ export class Config {
     return 30 * 10;
   }
   allianceDuration(): Tick {
+    if (this._gameConfig.continuousPressure)
+      return (this._gameConfig.allianceProtectionMinutes ?? 5) * 60 * 10;
     // Host can set a custom alliance duration in minutes (1-15); 0 disables
     // alliances (see disableAlliances). Falls back to the 5 minute default.
     const m = this._gameConfig.customAllianceDuration;
@@ -898,12 +900,15 @@ export class Config {
     }
   }
 
-  troopIncreaseRate(player: Player | PlayerView): number {
+  troopIncreaseRate(
+    player: Player | PlayerView,
+    population = player.troops(),
+  ): number {
     const max = this.maxTroops(player);
 
-    let toAdd = 10 + Math.pow(player.troops(), 0.73) / 4;
+    let toAdd = 10 + Math.pow(population, 0.73) / 4;
 
-    const ratio = 1 - player.troops() / max;
+    const ratio = 1 - population / max;
     toAdd *= ratio;
 
     if (player.type() === PlayerType.Bot) {
@@ -929,7 +934,7 @@ export class Config {
       }
     }
 
-    return Math.min(player.troops() + toAdd, max) - player.troops();
+    return Math.min(population + toAdd, max) - population;
   }
 
   goldAdditionRate(player: Player | PlayerView): Gold {

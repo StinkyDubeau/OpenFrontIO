@@ -1,8 +1,9 @@
 import { assetUrl } from "../../../core/AssetUrls";
 import { EventBus } from "../../../core/EventBus";
-import { PlayerActions } from "../../../core/game/Game";
+import { PlayerActions, UnitType } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { Controller } from "../../Controller";
+import { StructureDragEvent } from "../../StructureDrag";
 import { TransformHandler } from "../../TransformHandler";
 import { UIState } from "../../UIState";
 import { GameView, PlayerView } from "../../view";
@@ -13,6 +14,7 @@ import { PlayerActionHandler } from "./PlayerActionHandler";
 import { PlayerPanel } from "./PlayerPanel";
 import { RadialMenu, RadialMenuConfig } from "./RadialMenu";
 import {
+  attackMenuElement,
   centerButtonElement,
   COLORS,
   MenuElementParams,
@@ -25,6 +27,8 @@ import { ContextMenuEvent } from "../../InputHandler";
 
 export class MainRadialMenu implements Controller {
   private radialMenu: RadialMenu;
+  private placementMenu: RadialMenu;
+  private placementType: UnitType | null = null;
 
   private playerActionHandler: PlayerActionHandler;
   private chatIntegration: ChatIntegration;
@@ -63,6 +67,52 @@ export class MainRadialMenu implements Controller {
       centerButtonElement,
       menuConfig,
     );
+    this.placementMenu = new RadialMenu(
+      this.eventBus,
+      {
+        id: "placement-confirm",
+        name: "Confirm placement",
+        disabled: () => false,
+        subMenu: (params) => {
+          const item = attackMenuElement
+            .subMenu?.(params)
+            .find((item) => item.id === `attack_${this.placementType}`);
+          if (!item)
+            return [
+              {
+                id: "cancel",
+                name: "Cancel",
+                text: "×",
+                disabled: () => false,
+                action: () => this.placementMenu.hideRadialMenu(),
+              },
+            ];
+          return [
+            {
+              ...item,
+              id: "confirm",
+              name: "Confirm",
+              icon: undefined,
+              text: "✓",
+              subMenu: undefined,
+            },
+            {
+              id: "cancel",
+              name: "Cancel",
+              text: "×",
+              disabled: () => false,
+              action: () => this.placementMenu.hideRadialMenu(),
+            },
+            ...(item.subMenu?.(params) ?? []),
+          ];
+        },
+      },
+      {
+        disabled: () => false,
+        action: () => this.placementMenu.hideRadialMenu(),
+      },
+      { centerButtonIcon: assetUrl("images/BackIconWhite.svg") },
+    );
 
     this.playerActionHandler = new PlayerActionHandler(
       this.eventBus,
@@ -74,6 +124,33 @@ export class MainRadialMenu implements Controller {
 
   init() {
     this.radialMenu.init();
+    this.placementMenu.init();
+    this.eventBus.on(StructureDragEvent, async (event) => {
+      if (
+        event.phase !== "drop" ||
+        ![UnitType.AtomBomb, UnitType.HydrogenBomb, UnitType.MIRV].includes(
+          event.type,
+        )
+      )
+        return;
+      const world = this.transformHandler.screenToWorldCoordinates(
+        event.x,
+        event.y,
+      );
+      const player = this.game.myPlayer();
+      if (!player || !this.game.isValidCoord(world.x, world.y)) return;
+      const tile = this.game.ref(world.x, world.y);
+      const actions = await player.actions(tile);
+      this.placementType = event.type;
+      await this.updatePlayerActions(
+        player,
+        actions,
+        tile,
+        event.x,
+        event.y,
+        true,
+      );
+    });
     this.eventBus.on(ContextMenuEvent, (event) => {
       const worldCoords = this.transformHandler.screenToWorldCoordinates(
         event.x,
@@ -85,7 +162,9 @@ export class MainRadialMenu implements Controller {
       if (this.game.myPlayer() === null) {
         return;
       }
-      this.clickedTile = this.game.resolveFogTap(this.game.ref(worldCoords.x, worldCoords.y));
+      this.clickedTile = this.game.resolveFogTap(
+        this.game.ref(worldCoords.x, worldCoords.y),
+      );
       if (this.clickedTile === null) return;
       const selectedTile = this.clickedTile;
       this.game
@@ -109,6 +188,7 @@ export class MainRadialMenu implements Controller {
     tile: TileRef,
     screenX: number | null = null,
     screenY: number | null = null,
+    placement = false,
   ) {
     this.buildMenu.playerBuildables = actions.buildableUnits;
 
@@ -131,14 +211,24 @@ export class MainRadialMenu implements Controller {
       playerPanel: this.playerPanel,
       chatIntegration: this.chatIntegration,
       uiState: this.uiState,
-      closeMenu: () => this.closeMenu(),
+      closeMenu: () => {
+        this.placementMenu.hideRadialMenu();
+        this.closeMenu();
+      },
       eventBus: this.eventBus,
     };
+    if (placement) {
+      this.radialMenu.hideRadialMenu();
+      this.placementMenu.setParams(params);
+      this.placementMenu.showRadialMenu(screenX!, screenY!);
+      return;
+    }
 
     const isFriendlyTarget =
       recipient !== null &&
       recipient.isFriendly(myPlayer) &&
-      !recipient.isDisconnected();
+      (!recipient.isDisconnected() ||
+        !!this.game.config().gameConfig().continuousPressure);
 
     this.radialMenu.setCenterButtonAppearance(
       isFriendlyTarget ? donateTroopIcon : swordIcon,

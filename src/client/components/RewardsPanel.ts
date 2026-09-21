@@ -116,14 +116,16 @@ export class RewardsPanel extends LitElement {
         class="flex items-center justify-between gap-4 p-3 rounded-lg bg-white/5 border border-white/10"
       >
         <div class="flex items-center gap-3 min-w-0">
-          ${isHard
-            ? html`<plutonium-icon .size=${20}></plutonium-icon>`
-            : html`<cap-icon .size=${20}></cap-icon>`}
+          ${
+            isHard
+              ? html`<plutonium-icon .size=${20}></plutonium-icon>`
+              : html`<cap-icon .size=${20}></cap-icon>`
+          }
           <div class="flex flex-col min-w-0">
             <span
-              class="text-sm font-bold ${isHard
-                ? "text-green-400"
-                : "text-amber-700"}"
+              class="text-sm font-bold ${
+                isHard ? "text-green-400" : "text-amber-700"
+              }"
               >+${this.formatAmount(reward.amount)}</span
             >
             <span class="text-xs text-white/60 truncate"
@@ -148,18 +150,20 @@ export class RewardsPanel extends LitElement {
       <div class="bg-white/5 rounded-xl border border-white/10 p-6">
         <div class="flex items-center justify-between gap-4 mb-4">
           <h3 class="text-lg font-bold text-white flex items-center gap-2">
-            <span>🎁</span>
+            <span>Rewards</span>
             ${translateText("account_modal.unclaimed_rewards")}
           </h3>
-          ${this.rewards.length > 1
-            ? html`<o-button
-                variant="primary"
-                size="xs"
-                translationKey="account_modal.claim_all"
-                .disable=${this.claiming}
-                @click=${this.handleClaimAll}
-              ></o-button>`
-            : ""}
+          ${
+            this.rewards.length > 1
+              ? html`<o-button
+                  variant="primary"
+                  size="xs"
+                  translationKey="account_modal.claim_all"
+                  .disable=${this.claiming}
+                  @click=${this.handleClaimAll}
+                ></o-button>`
+              : ""
+          }
         </div>
         <div class="flex flex-col gap-2">
           ${this.rewards.map((r) => this.renderReward(r))}

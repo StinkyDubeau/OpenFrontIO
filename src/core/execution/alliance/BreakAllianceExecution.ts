@@ -31,6 +31,14 @@ export class BreakAllianceExecution implements Execution {
       throw new Error("Not initialized");
     }
     const alliance = this.requestor.allianceWith(this.recipient);
+    if (
+      alliance &&
+      this.mg.config().gameConfig().continuousPressure &&
+      ticks < alliance.expiresAt()
+    ) {
+      this.active = false;
+      return;
+    }
     if (alliance === null) {
       console.warn("cant break alliance, not allied");
     } else {

@@ -76,7 +76,7 @@ describe("attack-ratio-dial", () => {
     expect(control.getAttribute("aria-valuemin")).toBe("1");
     expect(control.getAttribute("aria-valuemax")).toBe("100");
     expect(control.getAttribute("aria-valuenow")).toBe("35");
-    expect(control.getAttribute("aria-valuetext")).toBe("35%");
+    expect(control.getAttribute("aria-valuetext")).toContain("35%; 84K");
     expect(
       element.querySelector(".atlas-attack-dial__value")?.textContent,
     ).toBe("84K");
@@ -84,6 +84,22 @@ describe("attack-ratio-dial", () => {
       element.querySelector(".atlas-attack-dial__ratio")?.textContent,
     ).toBe("35%");
     expect(element.querySelector("input")).toBeNull();
+  });
+
+  test("supports a zero military target without changing attack minimum", async () => {
+    const control = await mount(50);
+    element.min = 0;
+    await element.updateComplete;
+    control.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Home", bubbles: true }),
+    );
+    await element.updateComplete;
+    expect(element.value).toBe(0);
+    expect(control.getAttribute("aria-valuemin")).toBe("0");
+    control.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    );
+    expect(element.value).toBe(1);
   });
 
   test("keeps the percentage alongside troop counts at rest and after a gesture", async () => {

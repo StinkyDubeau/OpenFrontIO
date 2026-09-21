@@ -19,11 +19,22 @@ import {
   CancelAttackIntentEvent,
   CancelBoatIntentEvent,
   SendAttackIntentEvent,
+  SendMobilisationIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
-import { renderTroops, translateText } from "../../Utils";
+import { renderNumber, renderTroops, translateText } from "../../Utils";
 import { GameView, PlayerView, UnitView } from "../../view";
+import {
+  allianceIcon,
+  atomBombIcon,
+  defensePostIcon,
+  goldCoinIcon,
+  hydrogenBombIcon,
+  mirvIcon,
+} from "../HotbarIcons";
 import { getColoredSprite } from "../SpriteLoader";
+import type { ActionableEvents } from "./ActionableEvents";
+import type { EventsDisplay } from "./EventsDisplay";
 const soldierIcon = assetUrl("images/SoldierIcon.svg");
 const swordIcon = assetUrl("images/SwordIcon.svg");
 
@@ -42,6 +53,73 @@ export class AttacksDisplay extends LitElement implements Controller {
   @state() private outgoingLandAttacks: AttackUpdate[] = [];
   @state() private outgoingBoats: UnitView[] = [];
   @state() private incomingBoats: UnitView[] = [];
+  @state() private outgoingExpanded = false;
+  @state() private incomingExpanded = false;
+  @state() private goldExpanded = false;
+  @state() private tickerTypes: MessageType[] = [];
+  private alertHomes = new Map<
+    HTMLElement,
+    { parent: Node; next: ChildNode | null }
+  >();
+  private mobileLayout =
+    typeof matchMedia === "function" ? matchMedia("(max-width: 1023px)") : null;
+  private layoutChanged = () => this.requestUpdate();
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.mobileLayout?.addEventListener("change", this.layoutChanged);
+  }
+
+  private restoreAlerts() {
+    for (const [alert, home] of this.alertHomes) {
+      if (alert.tagName === "EVENTS-DISPLAY")
+        (alert as EventsDisplay).tickerFilter = "all";
+      home.parent.insertBefore(
+        alert,
+        home.next?.parentNode === home.parent ? home.next : null,
+      );
+    }
+    this.alertHomes.clear();
+  }
+
+  protected willUpdate() {
+    // Preserve the live controllers and their event history before Lit removes
+    // the flyout. Never create duplicate notification controllers.
+    this.restoreAlerts();
+  }
+
+  protected updated() {
+    if (
+      (!this.incomingExpanded && !this.goldExpanded) ||
+      !this.mobileLayout?.matches
+    )
+      return;
+    const details = this.querySelector(".atlas-flow-details");
+    const hud = this.closest("atlas-game-hud");
+    if (!details || !hud) return;
+    for (const alert of hud.querySelectorAll<HTMLElement>(
+      "events-display, actionable-events",
+    )) {
+      if (this.goldExpanded && alert.tagName === "ACTIONABLE-EVENTS") continue;
+      if (alert.tagName === "EVENTS-DISPLAY")
+        (alert as EventsDisplay).tickerFilter = this.goldExpanded
+          ? "gold"
+          : "defense";
+      if (!this.alertHomes.has(alert) && alert.parentNode) {
+        this.alertHomes.set(alert, {
+          parent: alert.parentNode,
+          next: alert.nextSibling,
+        });
+        details.append(alert);
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    this.restoreAlerts();
+    this.mobileLayout?.removeEventListener("change", this.layoutChanged);
+    super.disconnectedCallback();
+  }
 
   createRenderRoot() {
     return this;
@@ -51,6 +129,15 @@ export class AttacksDisplay extends LitElement implements Controller {
 
   tick() {
     this.active = true;
+    const hud = this.closest("atlas-game-hud");
+    this.tickerTypes = [
+      ...(hud
+        ?.querySelector<EventsDisplay>("events-display")
+        ?.tickerEvents?.() ?? []),
+      ...(hud
+        ?.querySelector<ActionableEvents>("actionable-events")
+        ?.tickerEvents?.() ?? []),
+    ].map((event) => event.type);
 
     if (!this._isVisible && !this.game.inSpawnPhase()) {
       this._isVisible = true;
@@ -229,27 +316,31 @@ export class AttacksDisplay extends LitElement implements Controller {
                   this.game.playerBySmallID(attack.attackerID) as PlayerView
                 )?.displayName()}</span
               >
-              ${attack.retreating
-                ? `(${translateText("events_display.retreating")}...)`
-                : ""} `,
+              ${
+                attack.retreating
+                  ? `(${translateText("events_display.retreating")}...)`
+                  : ""
+              } `,
             onClick: () => this.attackWarningOnClick(attack),
             className:
               "text-left text-red-400 inline-flex items-center gap-0.5 lg:gap-1 min-w-0",
             translate: false,
           })}
-          ${!attack.retreating
-            ? this.renderButton({
-                content: html`<img
-                  src="${swordIcon}"
-                  class="h-4 w-4"
-                  style="filter: brightness(0) saturate(100%) invert(27%) sepia(91%) saturate(4551%) hue-rotate(348deg) brightness(89%) contrast(97%)"
-                />`,
-                onClick: () => this.handleRetaliate(attack),
-                className:
-                  "ml-auto inline-flex items-center justify-center cursor-pointer bg-red-900/50 hover:bg-red-800/70 sm:rounded-lg px-1.5 py-1 border border-red-700/50",
-                translate: false,
-              })
-            : ""}
+          ${
+            !attack.retreating
+              ? this.renderButton({
+                  content: html`<img
+                    src="${swordIcon}"
+                    class="h-4 w-4"
+                    style="filter: brightness(0) saturate(100%) invert(27%) sepia(91%) saturate(4551%) hue-rotate(348deg) brightness(89%) contrast(97%)"
+                  />`,
+                  onClick: () => this.handleRetaliate(attack),
+                  className:
+                    "ml-auto inline-flex items-center justify-center cursor-pointer bg-red-900/50 hover:bg-red-800/70 sm:rounded-lg px-1.5 py-1 border border-red-700/50",
+                  translate: false,
+                })
+              : ""
+          }
         </div>
       `,
     );
@@ -281,16 +372,18 @@ export class AttacksDisplay extends LitElement implements Controller {
               "text-left text-aquarius inline-flex items-center gap-0.5 lg:gap-1 min-w-0",
             translate: false,
           })}
-          ${!attack.retreating
-            ? this.renderButton({
-                content: "❌",
-                onClick: () => this.emitCancelAttackIntent(attack.id),
-                className: "ml-auto text-left shrink-0",
-                disabled: attack.retreating,
-              })
-            : html`<span class="ml-auto truncate text-aquarius"
-                >(${translateText("events_display.retreating")}...)</span
-              >`}
+          ${
+            !attack.retreating
+              ? this.renderButton({
+                  content: "×",
+                  onClick: () => this.emitCancelAttackIntent(attack.id),
+                  className: "ml-auto text-left shrink-0",
+                  disabled: attack.retreating,
+                })
+              : html`<span class="ml-auto truncate text-aquarius"
+                  >(${translateText("events_display.retreating")}...)</span
+                >`
+          }
         </div>
       `,
     );
@@ -317,16 +410,18 @@ export class AttacksDisplay extends LitElement implements Controller {
               "text-left text-aquarius inline-flex items-center gap-0.5 lg:gap-1 min-w-0",
             translate: false,
           })}
-          ${!landAttack.retreating
-            ? this.renderButton({
-                content: "❌",
-                onClick: () => this.emitCancelAttackIntent(landAttack.id),
-                className: "ml-auto text-left shrink-0",
-                disabled: landAttack.retreating,
-              })
-            : html`<span class="ml-auto truncate text-aquarius"
-                >(${translateText("events_display.retreating")}...)</span
-              >`}
+          ${
+            !landAttack.retreating
+              ? this.renderButton({
+                  content: "×",
+                  onClick: () => this.emitCancelAttackIntent(landAttack.id),
+                  className: "ml-auto text-left shrink-0",
+                  disabled: landAttack.retreating,
+                })
+              : html`<span class="ml-auto truncate text-aquarius"
+                  >(${translateText("events_display.retreating")}...)</span
+                >`
+          }
         </div>
       `,
     );
@@ -394,16 +489,18 @@ export class AttacksDisplay extends LitElement implements Controller {
               "text-left text-aquarius inline-flex items-center gap-0.5 lg:gap-1 min-w-0",
             translate: false,
           })}
-          ${boat.transportShipState().isRetreating
-            ? html`<span class="ml-auto truncate text-aquarius"
-                >(${translateText("events_display.retreating")}...)</span
-              >`
-            : this.renderButton({
-                content: "\u274C",
-                onClick: () => this.emitBoatCancelIntent(boat.id()),
-                className: "ml-auto text-left shrink-0",
-                disabled: boat.transportShipState().isRetreating,
-              })}
+          ${
+            boat.transportShipState().isRetreating
+              ? html`<span class="ml-auto truncate text-aquarius"
+                  >(${translateText("events_display.retreating")}...)</span
+                >`
+              : this.renderButton({
+                  content: "×",
+                  onClick: () => this.emitBoatCancelIntent(boat.id()),
+                  className: "ml-auto text-left shrink-0",
+                  disabled: boat.transportShipState().isRetreating,
+                })
+          }
         </div>
       `,
     );
@@ -438,30 +535,363 @@ export class AttacksDisplay extends LitElement implements Controller {
     );
   }
 
+  private renderAttackGauge(
+    direction: "incoming" | "outgoing",
+    troops: number,
+    count: number,
+  ) {
+    const incoming = direction === "incoming";
+    const expanded = incoming ? this.incomingExpanded : this.outgoingExpanded;
+    return html`<button
+      type="button"
+      class="atlas-flow-gauge atlas-instrument-readout"
+      style="--flow-color:${incoming ? "#e8a28f" : "#a5cbd1"}"
+      aria-label=${`${incoming ? "Defense" : "Attack"}: ${count} fronts, ${renderTroops(troops)} troops`}
+      aria-expanded=${expanded}
+      @pointerdown=${(event: PointerEvent) => event.stopPropagation()}
+      @click=${(event: Event) => {
+        event.stopPropagation();
+        this.goldExpanded = false;
+        if (incoming) {
+          this.incomingExpanded = !expanded;
+          this.outgoingExpanded = false;
+        } else {
+          this.outgoingExpanded = !expanded;
+          this.incomingExpanded = false;
+        }
+      }}
+    >
+      <img
+        src=${incoming ? defensePostIcon : swordIcon}
+        width="16"
+        height="16"
+        alt=""
+      />
+      <strong>${renderTroops(troops)}</strong>
+      ${this.renderIndicators(incoming ? "defense" : "attack")}
+    </button>`;
+  }
+
+  private renderIndicators(kind: "gold" | "defense" | "attack") {
+    const icons: { icon?: string; label: string; urgent?: boolean }[] = [];
+    if (kind === "attack") {
+      if (this.outgoingAttacks.length + this.outgoingLandAttacks.length)
+        icons.push({ icon: soldierIcon, label: "Outgoing fronts" });
+      if (this.outgoingBoats.length)
+        icons.push({ label: "Travelling transports" });
+    } else if (kind === "gold") {
+      if (this.tickerTypes.includes(MessageType.DONATION_RECEIVED))
+        icons.push({ icon: goldCoinIcon, label: "Donation received" });
+    } else {
+      if (this.incomingAttacks.length)
+        icons.push({
+          icon: soldierIcon,
+          label: "Incoming fronts",
+          urgent: true,
+        });
+      if (this.incomingBoats.length)
+        icons.push({ label: "Incoming transports", urgent: true });
+      const types = new Set(
+        this.tickerTypes.filter(
+          (type) => type !== MessageType.DONATION_RECEIVED,
+        ),
+      );
+      for (const [type, icon, label] of [
+        [MessageType.NUKE_INBOUND, atomBombIcon, "Incoming atom bomb"],
+        [
+          MessageType.HYDROGEN_BOMB_INBOUND,
+          hydrogenBombIcon,
+          "Incoming hydrogen bomb",
+        ],
+        [MessageType.MIRV_INBOUND, mirvIcon, "Incoming MIRV"],
+      ] as const) {
+        if (types.delete(type)) icons.push({ icon, label, urgent: true });
+      }
+      if (types.delete(MessageType.ALLIANCE_REQUEST))
+        icons.push({ icon: allianceIcon, label: "Alliance request" });
+      if (types.delete(MessageType.RENEW_ALLIANCE))
+        icons.push({
+          icon: allianceIcon,
+          label: "Expiring alliance",
+          urgent: true,
+        });
+      if (types.delete(MessageType.CHAT))
+        icons.push({
+          icon: assetUrl("images/ChatIconWhite.svg"),
+          label: "Chat message",
+        });
+      if (types.delete(MessageType.UNIT_DESTROYED))
+        icons.push({
+          icon: assetUrl("images/EmbargoWhiteIcon.svg"),
+          label: "Unit lost / trade interrupted",
+        });
+      types.delete(MessageType.NAVAL_INVASION_INBOUND);
+      if (types.size) icons.push({ label: "Other event notices" });
+    }
+    return html`<span class="atlas-ticker-indicators"
+      >${icons.map((item) =>
+        item.icon
+          ? html`<img
+              src=${item.icon}
+              class=${item.urgent ? "is-urgent" : ""}
+              title=${item.label}
+              alt=${item.label}
+            />`
+          : html`<span
+              class="atlas-ticker-dot ${item.urgent ? "is-urgent" : ""}"
+              role="img"
+              aria-label=${item.label}
+              title=${item.label}
+            ></span>`,
+      )}</span
+    >`;
+  }
+
   render() {
     if (!this.active || !this._isVisible) {
       return html``;
     }
 
-    const hasAnything =
-      this.outgoingAttacks.length > 0 ||
-      this.outgoingLandAttacks.length > 0 ||
-      this.outgoingBoats.length > 0 ||
-      this.incomingAttacks.length > 0 ||
-      this.incomingBoats.length > 0;
-
-    if (!hasAnything) {
-      return html``;
-    }
-
-    return html`
+    const outgoing = [...this.outgoingAttacks, ...this.outgoingLandAttacks];
+    const outgoingTroops =
+      outgoing.reduce((sum, attack) => sum + attack.troops, 0) +
+      this.outgoingBoats.reduce((sum, boat) => sum + boat.troops(), 0);
+    const incomingTroops =
+      this.incomingAttacks.reduce((sum, attack) => sum + attack.troops, 0) +
+      this.incomingBoats.reduce((sum, boat) => sum + boat.troops(), 0);
+    const player = this.game.myPlayer();
+    return html` <style>
+        body.atlas-theme.in-game .atlas-flow-cluster .atlas-flow-gauge {
+          color: var(--flow-color) !important;
+        }
+        .atlas-flow-gauge > img {
+          filter: brightness(0) invert(1);
+          opacity: 0.9;
+        }
+        .atlas-flow-gauge > strong {
+          color: var(--flow-color) !important;
+        }
+        .atlas-instrument-readout {
+          position: relative;
+        }
+        .atlas-ticker-indicators {
+          position: absolute;
+          bottom: 2px;
+          left: 0;
+          right: 0;
+          display: flex;
+          justify-content: center;
+          gap: 3px;
+          pointer-events: none;
+        }
+        .atlas-ticker-indicators img {
+          width: 7px;
+          height: 7px;
+          object-fit: contain;
+          filter: brightness(0) invert(1);
+        }
+        .atlas-ticker-dot {
+          display: block;
+          width: 5px;
+          height: 5px;
+          margin: 1px;
+          border-radius: 50%;
+          background: currentColor;
+        }
+        .atlas-ticker-indicators .is-urgent {
+          animation: atlas-ticker-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes atlas-ticker-pulse {
+          50% {
+            opacity: 0.3;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .atlas-ticker-indicators .is-urgent {
+            animation: none;
+          }
+        }
+        .atlas-flow-cluster {
+          position: relative;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px;
+          margin: 4px 0;
+          pointer-events: auto;
+        }
+        .atlas-flow-gauge {
+          cursor: pointer;
+          color: var(--flow-color);
+        }
+        .atlas-flow-gauge:focus-visible {
+          outline: 2px solid #e1c787;
+          outline-offset: 2px;
+        }
+        .atlas-flow-gauge[aria-expanded="true"] {
+          box-shadow: inset 0 2px 5px #0009;
+          border-color: var(--flow-color);
+        }
+        .atlas-flow-gauge__face {
+          position: relative;
+          display: block;
+          flex: 0 0 38px;
+          height: 38px;
+          border: 2px solid #8d9385;
+          border-radius: 50%;
+          overflow: hidden;
+          background:
+            radial-gradient(circle, #142420 52%, transparent 54%),
+            repeating-conic-gradient(
+              from -110deg,
+              #ced1b6 0deg 2deg,
+              #1b2a24 2deg 22deg
+            );
+          box-shadow:
+            inset 0 2px 4px #000,
+            0 1px 1px #000;
+        }
+        .atlas-flow-gauge__needle {
+          position: absolute;
+          left: calc(50% - 1px);
+          bottom: 50%;
+          width: 2px;
+          height: 14px;
+          background: var(--flow-color);
+          transform-origin: 50% 100%;
+          transform: rotate(var(--flow-angle));
+          transition: transform 240ms ease-out;
+        }
+        .atlas-flow-gauge__hub {
+          position: absolute;
+          left: calc(50% - 3px);
+          top: calc(50% - 3px);
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #b7b9a5;
+          box-shadow: 0 1px 2px #000;
+        }
+        .atlas-flow-gauge__readout {
+          display: grid;
+          text-align: left;
+          min-width: 0;
+          font-variant-numeric: tabular-nums;
+          line-height: 1.2;
+        }
+        .atlas-flow-gauge__readout small {
+          font-size: 10px;
+          color: #c2cbbb;
+        }
+        .atlas-flow-gauge__readout strong {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--flow-color);
+        }
+        .atlas-flow-details {
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 10;
+          display: grid;
+          gap: 4px;
+          max-height: min(28vh, 180px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 6px;
+          border: 1px solid #889585;
+          border-radius: 8px;
+          background: #14211ff5;
+          color: #eee8d7;
+          box-shadow: 0 4px 14px #0008;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .atlas-flow-gauge__needle {
+            transition: none;
+          }
+        }
+        .atlas-flow-cluster {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        body.atlas-theme.in-game
+          .atlas-flow-cluster
+          > .atlas-instrument-readout {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          min-width: 0;
+          min-height: 36px;
+          padding: 4px 6px;
+          font-size: 14px;
+          font-variant-numeric: tabular-nums;
+        }
+      </style>
       <div
-        class="w-full mb-1 mt-1 sm:mt-0 pointer-events-auto grid grid-cols-2 gap-1 text-white text-sm lg:text-base max-h-[7rem] overflow-y-auto"
+        class="atlas-flow-cluster"
+        @keydown=${(event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          this.goldExpanded = false;
+          this.incomingExpanded = false;
+          this.outgoingExpanded = false;
+          event.stopPropagation();
+        }
+      }}
       >
-        ${this.renderOutgoingAttacks()} ${this.renderOutgoingLandAttacks()}
-        ${this.renderBoats()} ${this.renderIncomingAttacks()}
-        ${this.renderIncomingBoats()}
-      </div>
-    `;
+        <button
+          type="button"
+          class="atlas-instrument-readout atlas-instrument-readout--gold"
+          aria-label="Gold"
+          aria-expanded=${this.goldExpanded}
+          @click=${() => {
+          this.goldExpanded = !this.goldExpanded;
+          this.incomingExpanded = false;
+          this.outgoingExpanded = false;
+        }}
+        >
+          <img src=${goldCoinIcon} width="16" height="16" alt="" /><strong
+            >${renderNumber(player?.gold() ?? 0n)}</strong
+          >${this.renderIndicators("gold")}
+        </button>
+        ${this.renderAttackGauge("incoming", incomingTroops, this.incomingAttacks.length + this.incomingBoats.length)}
+        ${this.renderAttackGauge("outgoing", outgoingTroops, outgoing.length + this.outgoingBoats.length)}
+        ${
+          this.goldExpanded || this.incomingExpanded || this.outgoingExpanded
+            ? html`<div
+                class="atlas-flow-details"
+                role="region"
+                aria-label=${this.goldExpanded ? "Gold events" : this.incomingExpanded ? "Defense fronts" : "Attack fronts"}
+              >
+                <strong style="font-size:12px"
+                  >${this.goldExpanded ? "Gold · donations" : this.incomingExpanded ? "Defense · ongoing fronts" : "Attack · ongoing fronts"}</strong
+                >
+                ${
+            this.incomingExpanded && player?.pressure
+              ? html`<div
+                  style="display:grid;gap:4px;padding-bottom:6px;border-bottom:1px solid #ffffff20"
+                >
+                  <button
+                    type="button"
+                    class="atlas-instrument-readout"
+                    style="min-height:36px"
+                    aria-label="Auto-defend while active"
+                    aria-pressed=${player.pressure.autoDefenceEnabled === true}
+                    @click=${() => this.eventBus.emit(new SendMobilisationIntentEvent(player.pressure!.target, player.pressure!.autoDefenceEnabled !== true))}
+                  >
+                    Auto-defend while active ·
+                    ${player.pressure.autoDefenceEnabled === true ? "On" : "Off"}
+                  </button>
+                  <small
+                    >Always on while AFK. Mobilisation follows game
+                    speed.</small
+                  >
+                </div>`
+              : ""
+          }
+                ${this.goldExpanded ? html`<span>${renderNumber(player?.gold() ?? 0n)} gold${this.tickerTypes.includes(MessageType.DONATION_RECEIVED) ? "" : " · No new donations"}</span>` : this.incomingExpanded ? html`${this.renderIncomingAttacks()}${this.renderIncomingBoats()}${incomingTroops === 0 ? "No incoming attacks" : ""}` : html`${this.renderOutgoingAttacks()}${this.renderOutgoingLandAttacks()}${this.renderBoats()}${outgoingTroops === 0 ? "No outgoing attacks" : ""}`}
+              </div>`
+            : ""
+        }
+      </div>`;
   }
 }

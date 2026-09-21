@@ -29,6 +29,7 @@ import {
 import { buildNukeTrajectory, MapRenderer } from "../render/gl";
 import type { SAMInfo } from "../render/gl/utils/NukeTrajectory";
 import type { GhostPreviewData } from "../render/types";
+import { StructureDragEvent } from "../StructureDrag";
 import { TransformHandler } from "../TransformHandler";
 import {
   BuildUnitIntentEvent,
@@ -104,6 +105,43 @@ export class BuildPreviewController implements Controller {
   ) {}
 
   init() {
+    this.eventBus.on(StructureDragEvent, async (event) => {
+      if (event.phase === "cancel") {
+        this.removeGhostStructure();
+        return;
+      }
+      this.mousePos.x = event.x;
+      this.mousePos.y = event.y;
+      this.uiState.ghostStructure = event.type;
+      this.syncGhostState();
+      if (event.phase === "move") {
+        this.renderGhost();
+        return;
+      }
+      const point = this.transformHandler.screenToWorldCoordinates(
+        event.x,
+        event.y,
+      );
+      this.removeGhostStructure();
+      if (!this.game.isValidCoord(point.x, point.y)) return;
+      if (
+        [UnitType.AtomBomb, UnitType.HydrogenBomb, UnitType.MIRV].includes(
+          event.type,
+        )
+      )
+        return;
+      const tile = this.game.ref(point.x, point.y);
+      // Validate the release tile, never the previous asynchronous hover result.
+      const units = await this.game.myPlayer()?.buildables(tile, [event.type]);
+      const unit = units?.find((unit) => unit.type === event.type);
+      if (!unit) return;
+      if (unit.canUpgrade !== false)
+        this.eventBus.emit(
+          new SendUpgradeStructureIntentEvent(unit.canUpgrade, event.type, 1),
+        );
+      else if (unit.canBuild)
+        this.eventBus.emit(new BuildUnitIntentEvent(event.type, tile));
+    });
     this.eventBus.on(MouseMoveEvent, (e) => this.moveGhost(e));
     this.eventBus.on(MouseUpEvent, (e) => this.requestConfirmStructure(e));
     this.eventBus.on(ConfirmGhostStructureEvent, () =>

@@ -1,4 +1,5 @@
 import { Execution, Game } from "../game/Game";
+import { notePressureActivity } from "../game/PressurePopulation";
 import { PseudoRandom } from "../PseudoRandom";
 import { ClientID, GameID, StampedIntent, Turn } from "../Schemas";
 import { simpleHash } from "../Util";
@@ -16,6 +17,7 @@ import { EmbargoAllExecution } from "./EmbargoAllExecution";
 import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
+import { MobilisationExecution } from "./MobilisationExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
@@ -56,7 +58,15 @@ export class Executor {
     }
 
     // create execution
+    if (intent.type !== "mark_disconnected")
+      notePressureActivity(this.mg, player);
     switch (intent.type) {
+      case "mobilisation":
+        return new MobilisationExecution(
+          player,
+          intent.target,
+          intent.autoDefenceEnabled,
+        );
       case "attack": {
         return new AttackExecution(
           intent.troops,

@@ -8,6 +8,7 @@ import {
   UnitType,
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import { hasPressureGrace } from "../game/PressureDiplomacy";
 import { UniversalPathFinding } from "../pathfinding/PathFinder";
 import { ParabolaUniversalPathFinder } from "../pathfinding/PathFinder.Parabola";
 import { PathStatus } from "../pathfinding/types";
@@ -55,6 +56,20 @@ export class MirvExecution implements Execution {
     this.random = new PseudoRandom(mg.ticks() + simpleHash(this.player.id()));
     this.mg = mg;
     this.targetPlayer = this.mg.owner(this.dst);
+    if (hasPressureGrace(mg, this.targetPlayer)) {
+      this.active = false;
+      return;
+    }
+    if (
+      this.mg.config().gameConfig().continuousPressure &&
+      this.targetPlayer.isPlayer()
+    ) {
+      const protectedAlliance = this.player.allianceWith(this.targetPlayer);
+      if (protectedAlliance && ticks < protectedAlliance.expiresAt()) {
+        this.active = false;
+        return;
+      }
+    }
     this.speed = this.mg.config().nukeSpeed(UnitType.MIRV);
     this.pathFinder = UniversalPathFinding.Parabola(mg, {
       increment: this.speed,

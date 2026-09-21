@@ -51,6 +51,7 @@ export class AiAttackBehavior {
   ) {}
 
   maybeAttack() {
+    if (this.game.config().gameConfig().continuousPressure) return;
     if (this.player === null || this.allianceBehavior === undefined) {
       throw new Error("not initialized");
     }

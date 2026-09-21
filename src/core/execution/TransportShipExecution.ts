@@ -235,7 +235,7 @@ export class TransportShipExecution implements Execution {
 
     const result = this.pathFinder.next(this.boat.tile(), this.dst);
     switch (result.status) {
-      case PathStatus.COMPLETE:
+      case PathStatus.COMPLETE: {
         if (this.mg.owner(this.dst) === this.attacker) {
           const deaths = this.boat.troops() * (malusForRetreat / 100);
           const survivors = this.boat.troops() - deaths;
@@ -256,6 +256,20 @@ export class TransportShipExecution implements Execution {
               { troops: renderTroops(deaths) },
             );
           }
+          return;
+        }
+        const landingOwner = this.mg.owner(this.dst);
+        if (
+          this.mg.config().gameConfig().continuousPressure &&
+          landingOwner.isPlayer() &&
+          (this.attacker.isFriendly(landingOwner) ||
+            !this.attacker.canAttackPlayer(landingOwner))
+        ) {
+          // An alliance may have formed while this transport was at sea.
+          // Return its conserved troops without stealing the allied coast tile.
+          this.attacker.addTroops(this.boat.troops());
+          this.boat.delete(false);
+          this.active = false;
           return;
         }
         this.attacker.conquer(this.dst);
@@ -280,6 +294,7 @@ export class TransportShipExecution implements Execution {
           .stats()
           .boatArriveTroops(this.attacker, this.target, this.boat.troops());
         return;
+      }
       case PathStatus.NEXT:
         this.boat.move(result.node);
         break;

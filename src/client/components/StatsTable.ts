@@ -109,13 +109,13 @@ export abstract class StatsTable extends LitElement {
     this.scrollOffsetPx = (event.target as HTMLElement).scrollTop;
   }
 
-  refresh() {
-    if (this.visible) this.updateStats();
+  refresh(force = false) {
+    if (this.visible || force) this.updateStats();
   }
 
   /**
    * Columns this render shows: every non-hideable column plus the hideable
-   * ones the ⚙️ menu has selected, in registry order.
+   * ones the ≡ menu has selected, in registry order.
    */
   private visibleColumns(): readonly ColumnDef[] {
     const selected = this.userSettings.statsColumns(this.tableKind);
@@ -165,6 +165,11 @@ export abstract class StatsTable extends LitElement {
               direction *
               ((a.values.get(sortKey) ?? 0) - (b.values.get(sortKey) ?? 0)),
           );
+    this.dispatchEvent(
+      new CustomEvent("leaderboard-rank", {
+        detail: { rank: this.rows.findIndex((row) => row.pinned) + 1 || null },
+      }),
+    );
     this.requestUpdate();
   }
 
@@ -174,23 +179,24 @@ export abstract class StatsTable extends LitElement {
     if (visual.kind === "text") return html`<span>${visual.text}</span>`;
     return html`<span class="inline-flex items-start">
       <img
-        class="size-[1.1rem] object-contain ${visual.white === true
-          ? "brightness-0 invert"
-          : ""}"
+        class="size-[1.1rem] object-contain ${
+          visual.white === true ? "brightness-0 invert" : ""
+        }"
         src=${visual.src}
         alt=""
         aria-hidden="true"
-      />${visual.superscript
-        ? html`<img
-            class="size-[0.825rem] object-contain -ml-0.5 ${visual.superscript
-              .white === true
-              ? "brightness-0 invert"
-              : ""}"
-            src=${visual.superscript.src}
-            alt=""
-            aria-hidden="true"
-          />`
-        : nothing}
+      />${
+        visual.superscript
+          ? html`<img
+              class="size-[0.825rem] object-contain -ml-0.5 ${
+              visual.superscript.white === true ? "brightness-0 invert" : ""
+            }"
+              src=${visual.superscript.src}
+              alt=""
+              aria-hidden="true"
+            />`
+          : nothing
+      }
     </span>`;
   }
 
@@ -200,34 +206,39 @@ export abstract class StatsTable extends LitElement {
     const sorted = this.sortKey === column.id;
     return html`
       <div
-        class="stats-table-header-cell ${CELL_CLASS} justify-center text-center whitespace-nowrap border-b border-b-slate-500 ${index >
-        0
-          ? HEADER_DIVIDER_CLASS
-          : ""}"
+        class="stats-table-header-cell ${CELL_CLASS} justify-center text-center whitespace-nowrap border-b border-b-slate-500 ${
+          index > 0 ? HEADER_DIVIDER_CLASS : ""
+        }"
         role="columnheader"
         title=${label}
-        aria-sort=${column.isOrderable
-          ? sorted
-            ? this.sortOrder === "asc"
-              ? "ascending"
-              : "descending"
-            : "none"
-          : nothing}
+        aria-sort=${
+          column.isOrderable
+            ? sorted
+              ? this.sortOrder === "asc"
+                ? "ascending"
+                : "descending"
+              : "none"
+            : nothing
+        }
       >
-        ${column.isOrderable
-          ? html`<button
-              class="inline-flex items-center justify-center gap-1 hover:text-sky-200 transition-colors"
-              aria-label=${label}
-              @click=${() => this.setSort(column.id)}
-            >
-              ${visual}
-              ${sorted
-                ? html`<span class="text-sky-300" aria-hidden="true"
-                    >${this.sortOrder === "asc" ? "↑" : "↓"}</span
-                  >`
-                : nothing}
-            </button>`
-          : visual}
+        ${
+          column.isOrderable
+            ? html`<button
+                class="inline-flex items-center justify-center gap-1 hover:text-sky-200 transition-colors"
+                aria-label=${label}
+                @click=${() => this.setSort(column.id)}
+              >
+                ${visual}
+                ${
+                sorted
+                  ? html`<span class="text-sky-300" aria-hidden="true"
+                      >${this.sortOrder === "asc" ? "↑" : "↓"}</span
+                    >`
+                  : nothing
+              }
+              </button>`
+            : visual
+        }
       </div>
     `;
   }
@@ -240,9 +251,9 @@ export abstract class StatsTable extends LitElement {
   ) {
     return html`
       <div
-        class="stats-table-cell ${CELL_CLASS} ${ALIGNMENT_CLASS[
-          column.align
-        ]} tabular-nums ${index > 0 ? DIVIDER_CLASS : ""} ${borderClass}"
+        class="stats-table-cell ${CELL_CLASS} ${
+          ALIGNMENT_CLASS[column.align]
+        } tabular-nums ${index > 0 ? DIVIDER_CLASS : ""} ${borderClass}"
         role="cell"
       >
         <span class="block w-full truncate">${text}</span>
@@ -259,11 +270,11 @@ export abstract class StatsTable extends LitElement {
   ) {
     return html`
       <div
-        class="stats-table-row grid col-span-full hover:bg-slate-600/60 ${pinned
-          ? "stats-table-pinned-row bg-gray-700/95"
-          : ""} ${row.emphasized ? "font-bold" : ""} ${row.onClick
-          ? "cursor-pointer"
-          : ""}"
+        class="stats-table-row grid col-span-full hover:bg-slate-600/60 ${
+          pinned ? "stats-table-pinned-row bg-gray-700/95" : ""
+        } ${row.emphasized ? "font-bold stats-table-emphasized" : ""} ${
+          row.onClick ? "cursor-pointer" : ""
+        }"
         style="grid-template-columns: subgrid; grid-column: 1 / -1;"
         role="row"
         @click=${row.onClick ?? nothing}
@@ -341,7 +352,7 @@ export abstract class StatsTable extends LitElement {
     return html`
       <div class="stats-table relative mt-1 text-white text-xs lg:text-sm">
         <div
-          class="overflow-x-auto rounded-lg bg-gray-800/85"
+          class="stats-table-well overflow-x-auto rounded-lg bg-gray-800/85"
           @contextmenu=${(event: Event) => event.preventDefault()}
         >
           <div
@@ -380,13 +391,15 @@ export abstract class StatsTable extends LitElement {
               role="rowgroup"
               @scroll=${this.onScroll}
             >
-              ${topSpacerPx > 0
-                ? html`<div
-                    class="stats-table-spacer col-span-full"
-                    style="height: ${topSpacerPx}px"
-                    aria-hidden="true"
-                  ></div>`
-                : nothing}
+              ${
+                topSpacerPx > 0
+                  ? html`<div
+                      class="stats-table-spacer col-span-full"
+                      style="height: ${topSpacerPx}px"
+                      aria-hidden="true"
+                    ></div>`
+                  : nothing
+              }
               ${repeat(
                 scrollableRows,
                 (placed) => placed.row.key,
@@ -402,18 +415,22 @@ export abstract class StatsTable extends LitElement {
                       : "",
                   ),
               )}
-              ${bottomSpacerPx > 0
-                ? html`<div
-                    class="stats-table-spacer col-span-full"
-                    style="height: ${bottomSpacerPx}px"
-                    aria-hidden="true"
-                  ></div>`
-                : nothing}
+              ${
+                bottomSpacerPx > 0
+                  ? html`<div
+                      class="stats-table-spacer col-span-full"
+                      style="height: ${bottomSpacerPx}px"
+                      aria-hidden="true"
+                    ></div>`
+                  : nothing
+              }
             </div>
 
-            ${pinnedRow === null
-              ? nothing
-              : this.renderRow(game, columns, pinnedRow, "", true)}
+            ${
+              pinnedRow === null
+                ? nothing
+                : this.renderRow(game, columns, pinnedRow, "", true)
+            }
           </div>
         </div>
       </div>

@@ -11,6 +11,10 @@ import {
   UnitType,
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import {
+  hasPressureGrace,
+  hasProtectedAlliance,
+} from "../game/PressureDiplomacy";
 import { UniversalPathFinding } from "../pathfinding/PathFinder";
 import { ParabolaUniversalPathFinder } from "../pathfinding/PathFinder.Parabola";
 import { PathStatus } from "../pathfinding/types";
@@ -183,6 +187,13 @@ export class NukeExecution implements Execution {
 
   tick(ticks: number): void {
     if (this.nuke === null) {
+      if (
+        hasPressureGrace(this.mg, this.mg.owner(this.dst)) ||
+        hasProtectedAlliance(this.mg, this.player, this.mg.owner(this.dst))
+      ) {
+        this.active = false;
+        return;
+      }
       const spawn = this.player.canBuild(this.nukeType, this.dst);
       if (spawn === false) {
         console.warn(`cannot build Nuke`);
@@ -381,6 +392,15 @@ export class NukeExecution implements Execution {
     const tilesPerPlayers = new Map<Player, number>();
     for (const tile of toDestroy) {
       const owner = mg.owner(tile);
+      if (
+        hasPressureGrace(mg, owner) ||
+        hasProtectedAlliance(mg, this.player, owner)
+      )
+        continue;
+      if (config.gameConfig().continuousPressure && owner.isPlayer()) {
+        const alliance = this.player.allianceWith(owner);
+        if (alliance) this.player.breakAlliance(alliance);
+      }
       if (owner.isPlayer()) {
         owner.relinquish(tile);
         tilesPerPlayers.set(owner, (tilesPerPlayers.get(owner) ?? 0) + 1);
@@ -447,6 +467,11 @@ export class NukeExecution implements Execution {
     const dst = this.dst;
     const destroyer = this.player;
     for (const unit of mg.units()) {
+      if (
+        hasPressureGrace(mg, unit.owner()) ||
+        hasProtectedAlliance(mg, this.player, unit.owner())
+      )
+        continue;
       const type = unit.type();
       if (
         type === UnitType.AtomBomb ||

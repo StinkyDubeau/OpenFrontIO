@@ -112,7 +112,7 @@ describe("persistent-world runtime bridge", () => {
     expect(ensure.mock.calls[1][0].id).toBe(second.id);
   });
 
-  it("pins scheduled worlds to 4x area regardless of operator scale, retaining persisted maps", async () => {
+  it("pins new one-day scheduled worlds to 9x regardless of operator scale, retaining persisted maps", async () => {
     const { world } = setup();
     const dispatch = vi.fn(
       async (
@@ -135,7 +135,7 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorld,
+      GameMapType.ExpandedGiantWorldLargeHDv1,
     );
     vi.stubEnv("IDLE_WORLD_MAP_SCALE", "2");
     await new PersistentWorldRuntimeBridge(
@@ -144,7 +144,7 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(dispatch.mock.calls[1][0].gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorld,
+      GameMapType.ExpandedGiantWorldLargeHDv1,
     );
   });
 
@@ -171,7 +171,7 @@ describe("persistent-world runtime bridge", () => {
       dispatch,
     ).ensure(world);
     expect(repository.getRuntime(world.id)?.gameConfig.gameMap).toBe(
-      GameMapType.ExpandedGiantWorld,
+      GameMapType.ExpandedGiantWorldLargeHDv1,
     );
   });
 
@@ -304,10 +304,14 @@ describe("persistent-world runtime bridge", () => {
     expect(runtime.state).toBe("ready");
     expect(runtime.expiresAt - runtime.startsAt).toBe(24 * 60 * 60 * 1000);
     expect(runtime.gameConfig).toMatchObject({
+      pressurePacing: {
+        populationDoublingSeconds: 7200,
+        mobilisationHalfLifeSeconds: 10,
+      },
       gameType: GameType.Private,
       maxPlayers: 4,
       gameMode: GameMode.FFA,
-      gameMap: GameMapType.ExpandedGiantWorld,
+      gameMap: GameMapType.ExpandedGiantWorldLargeHDv1,
       bots: 2000,
       randomSpawn: false,
       publicGameModifiers: expect.objectContaining({ isRandomSpawn: false }),

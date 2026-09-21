@@ -652,6 +652,11 @@ export class PersistentWorldRepository {
     const columns = this.db
       .prepare("PRAGMA table_info(persistent_worlds)")
       .all() as SqlRow[];
+    if (!columns.some((column) => column.name === "pressure_pacing")) {
+      this.db.exec(
+        "ALTER TABLE persistent_worlds ADD COLUMN pressure_pacing TEXT",
+      );
+    }
     if (columns.some((column) => column.name === "start_mode")) return;
     this.transaction(() => {
       this.db.exec(`
@@ -1801,6 +1806,8 @@ export class PersistentWorldRepository {
           existing.name === input.name &&
           existing.startMode === (input.startMode ?? "scheduled") &&
           existing.gamePreset === input.gamePreset &&
+          JSON.stringify(existing.pressurePacing) ===
+            JSON.stringify(input.pressurePacing) &&
           existing.targetDuration === input.targetDuration &&
           existing.access === input.access &&
           existing.mode === input.mode &&
@@ -1831,8 +1838,8 @@ export class PersistentWorldRepository {
           `INSERT INTO persistent_worlds(
             id, name, target_duration, access, mode, max_humans, phase,
             starts_at, join_closes_at, host_identity_id,
-            invitation_secret_hash, created_at, updated_at, start_mode, game_preset
-          ) VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            invitation_secret_hash, created_at, updated_at, start_mode, game_preset, pressure_pacing
+          ) VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -1851,6 +1858,7 @@ export class PersistentWorldRepository {
           now,
           input.startMode ?? "scheduled",
           input.gamePreset ?? null,
+          input.pressurePacing ? JSON.stringify(input.pressurePacing) : null,
         );
       this.db
         .prepare(
@@ -2062,8 +2070,15 @@ export class PersistentWorldRepository {
 
   private worldFromRow(row: SqlRow): PersistentWorld {
     return PersistentWorldSchema.parse({
+      pressurePacing:
+        row.pressure_pacing === null || row.pressure_pacing === undefined
+          ? undefined
+          : JSON.parse(String(row.pressure_pacing)),
       startMode: String(row.start_mode),
-      gamePreset: row.game_preset == null ? undefined : String(row.game_preset),
+      gamePreset:
+        row.game_preset === null || row.game_preset === undefined
+          ? undefined
+          : String(row.game_preset),
       id: String(row.id),
       name: String(row.name),
       targetDuration: String(row.target_duration),

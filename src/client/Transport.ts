@@ -98,6 +98,13 @@ export class SendSpawnIntentEvent implements GameEvent {
   constructor(public readonly tile: TileRef) {}
 }
 
+export class SendMobilisationIntentEvent implements GameEvent {
+  constructor(
+    public readonly target: number,
+    public readonly autoDefenceEnabled?: boolean,
+  ) {}
+}
+
 export class SendAttackIntentEvent implements GameEvent {
   constructor(
     public readonly targetID: PlayerID | null,
@@ -267,6 +274,15 @@ export class Transport {
       this.onSendSpawnIntentEvent(e),
     );
     this.eventBus.on(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
+    this.eventBus.on(SendMobilisationIntentEvent, (e) =>
+      this.sendIntent({
+        type: "mobilisation",
+        target: e.target,
+        ...(e.autoDefenceEnabled === undefined
+          ? {}
+          : { autoDefenceEnabled: e.autoDefenceEnabled }),
+      }),
+    );
     this.eventBus.on(SendUpgradeStructureIntentEvent, (e) =>
       this.onSendUpgradeStructureIntent(e),
     );
@@ -472,7 +488,8 @@ export class Transport {
         // Finish queued server messages first: the server sends the useful
         // error before closing. Do not stack a second alert over that panel.
         void incoming.then(() => {
-          if (this.socket !== socket || document.querySelector("#error-modal")) return;
+          if (this.socket !== socket || document.querySelector("#error-modal"))
+            return;
           showInGameAlert(
             "Someone with that username is currently playing. Disconnect on your other device, then try again.",
           );

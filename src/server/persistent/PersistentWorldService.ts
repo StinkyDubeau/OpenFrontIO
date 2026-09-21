@@ -22,6 +22,12 @@ import {
   type PersistentWorldQuickChat,
   type PersistentWorldReminderSelection,
 } from "../../core/PersistentWorldSchemas";
+import { pressurePacingForDuration } from "../../core/PressurePacing";
+import {
+  isCurrentWorldPreset,
+  presetForDuration,
+  WORLD_PRESETS,
+} from "../../core/WorldPresets";
 import { issueGuestPlayToken } from "../GuestPlayToken";
 import {
   PersistentWorldRepository,
@@ -275,10 +281,19 @@ export class PersistentWorldService {
     const input = CreatePersistentWorldRequestSchema.parse(inputValue);
     const now = this.now();
     const custom = input.startMode === "host";
+    const currentPreset = isCurrentWorldPreset(input.gamePreset);
+    if (!custom && input.pressurePacing) {
+      throw new PersistentWorldServiceError(
+        400,
+        "SCHEDULED_PACING",
+        "Scheduled games use their duration's pacing settings",
+      );
+    }
     if (
-      custom
+      !currentPreset &&
+      (custom
         ? !input.gamePreset || input.gamePreset === "scheduled-earth"
-        : input.gamePreset && input.gamePreset !== "scheduled-earth"
+        : input.gamePreset && input.gamePreset !== "scheduled-earth")
     ) {
       throw new PersistentWorldServiceError(
         400,
@@ -286,11 +301,7 @@ export class PersistentWorldService {
         "Choose a valid mode for this game",
       );
     }
-    if (
-      !custom &&
-      (input.mode !== "ffa" || input.targetDuration !== "1d") &&
-      input.startMode === "scheduled"
-    ) {
+    if (!custom && input.mode !== "ffa" && input.startMode === "scheduled") {
       throw new PersistentWorldServiceError(
         400,
         "FIXED_MODE",
@@ -326,12 +337,30 @@ export class PersistentWorldService {
     const passwordHash = password ? hashWorldPassword(password) : null;
     const world = this.repository.createWorld({
       ...worldInput,
+      pressurePacing:
+        currentPreset || !custom
+          ? custom && input.pressurePacing
+            ? input.pressurePacing
+            : pressurePacingForDuration(
+                custom && isCurrentWorldPreset(input.gamePreset)
+                  ? WORLD_PRESETS[input.gamePreset].duration
+                  : input.targetDuration,
+              )
+          : undefined,
       startMode: custom ? "host" : "scheduled",
-      gamePreset: custom ? input.gamePreset : "scheduled-earth",
+      gamePreset: custom
+        ? input.gamePreset
+        : presetForDuration(input.targetDuration),
       startsAt: custom ? now : input.startsAt,
-      ...(!custom
-        ? { targetDuration: "1d" as const, mode: "ffa" as const }
+      ...(currentPreset && custom
+        ? {
+            targetDuration:
+              WORLD_PRESETS[
+                input.gamePreset as "quickplay" | "longplay" | "idlefront"
+              ].duration,
+          }
         : {}),
+      ...(!custom ? { mode: "ffa" as const } : {}),
       id,
       host: session.identity,
       hostTeamId: custom ? teamId : null,
@@ -720,6 +749,7 @@ export class PersistentWorldService {
 
   private worldView(world: PersistentWorld) {
     return PersistentWorldViewSchema.parse({
+      pressurePacing: world.pressurePacing,
       startMode: world.startMode,
       gamePreset: world.gamePreset,
       id: world.id,
