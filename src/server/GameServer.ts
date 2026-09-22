@@ -133,7 +133,11 @@ export class GameServer {
   private viewConnections = new Map<WebSocket, ViewConnection>();
   private viewSeats = new Map<WebSocket, string>();
   private viewGeneration = new Map<WebSocket, number>();
-  private viewHistory: { tick: number; bytes: Uint8Array; clientID?: string }[] = [];
+  private viewHistory: {
+    tick: number;
+    bytes: Uint8Array;
+    clientID?: string;
+  }[] = [];
   private readonly startupReady: Promise<void>;
   private resolveStartupReady!: () => void;
   private rejectStartupReady!: (error: Error) => void;
@@ -236,7 +240,11 @@ export class GameServer {
       )
         return;
       for (const frame of this.viewHistory)
-        if (frame.tick > baseTick && (!this.gameConfig.fogOfWar || frame.clientID === viewerClientID)) connection.enqueue(frame.bytes, frame.tick);
+        if (
+          frame.tick > baseTick &&
+          (!this.gameConfig.fogOfWar || frame.clientID === viewerClientID)
+        )
+          connection.enqueue(frame.bytes, frame.tick);
       if (!connection.isClosed) this.viewConnections.set(ws, connection);
     } catch (error) {
       connection.stop();
@@ -245,7 +253,12 @@ export class GameServer {
   }
 
   private publishView(result: TickResult): void {
-    const frames = result.views?.flatMap(view => (view.packets ?? [view.bytes]).map(bytes => ({ clientID: view.clientID, bytes }))) ?? [{ bytes: result.bytes, clientID: undefined }];
+    const frames = result.views?.flatMap((view) =>
+      (view.packets ?? [view.bytes]).map((bytes) => ({
+        clientID: view.clientID,
+        bytes,
+      })),
+    ) ?? [{ bytes: result.bytes, clientID: undefined }];
     for (const frame of frames) {
       this.viewHistory.push({ tick: result.tick, ...frame });
       this.viewHistoryBytes += frame.bytes.byteLength;
@@ -256,9 +269,18 @@ export class GameServer {
     ) {
       this.viewHistoryBytes -= this.viewHistory.shift()!.bytes.byteLength;
     }
-    const scoped = result.views && new Map(result.views.map(view => [view.clientID, view.packets ?? [view.bytes]]));
+    const scoped =
+      result.views &&
+      new Map(
+        result.views.map((view) => [
+          view.clientID,
+          view.packets ?? [view.bytes],
+        ]),
+      );
     for (const [ws, connection] of this.viewConnections) {
-      const packets = scoped ? scoped.get(this.viewSeats.get(ws) ?? "") : [result.bytes];
+      const packets = scoped
+        ? scoped.get(this.viewSeats.get(ws) ?? "")
+        : [result.bytes];
       if (packets) connection.enqueueBatch(packets, result.tick);
     }
     if (result.stats) {
@@ -277,7 +299,10 @@ export class GameServer {
         navigationPreparationMs: result.navigationPreparationMs,
         navigation: result.navigationMetrics,
         viewEncodingMs: result.encodingDuration,
-        frameBytes: frames.reduce((sum, frame) => sum + frame.bytes.byteLength, 0),
+        frameBytes: frames.reduce(
+          (sum, frame) => sum + frame.bytes.byteLength,
+          0,
+        ),
         tileDeltas: result.tileDeltaCount,
         motionPlanBytes: result.motionPlanBytes,
         unitUpdates: result.unitUpdateCount,
@@ -1305,7 +1330,11 @@ export class GameServer {
           if (message.type === "view_ack") {
             this.viewConnections.get(client.ws)?.acknowledge(message.sequence);
           } else if (message.type === "view_subscribe") {
-            await this.subscribeView(client.ws, message.afterTick, client.clientID);
+            await this.subscribeView(
+              client.ws,
+              message.afterTick,
+              client.clientID,
+            );
           } else {
             // Bound expensive queries separately from gameplay intent budgets.
             const now = Date.now();
@@ -1325,7 +1354,10 @@ export class GameServer {
                 : { at: now, count: 1 },
             );
             try {
-              const result = await this.simulation.query(message.query, client.clientID);
+              const result = await this.simulation.query(
+                message.query,
+                client.clientID,
+              );
               if (client.ws.readyState === WebSocket.OPEN)
                 client.ws.send(Buffer.concat([Buffer.alloc(4), result.bytes]));
             } catch (error) {
@@ -1482,7 +1514,8 @@ export class GameServer {
       this.viewConnections.delete(client.ws);
       this.viewGeneration.delete(client.ws);
       this.viewSeats.delete(client.ws);
-      if (this.gameConfig.fogOfWar) void this.simulation?.forgetViewer(client.clientID).catch(() => {});
+      if (this.gameConfig.fogOfWar)
+        void this.simulation?.forgetViewer(client.clientID).catch(() => {});
       this.log.info("client disconnected", {
         clientID: client.clientID,
         persistentID: client.persistentID,
@@ -2239,7 +2272,7 @@ export class GameServer {
       }
     }
     this.activeClients = alive;
-    // Persistent-world duration is a pacing target, not a wall-clock cutoff.
+    // Managed match duration is a pacing target, not a wall-clock cutoff.
     if (!this.managedOptions && now > this.createdAt + this.maxGameDuration) {
       this.log.warn("game past max duration", {
         gameID: this.id,

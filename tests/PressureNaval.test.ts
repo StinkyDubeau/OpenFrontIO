@@ -1,4 +1,8 @@
+import { PseudoRandom } from "../src/core/PseudoRandom";
+import { navalPacingScale } from "../src/core/execution/NavalPacing";
 import { TransportShipExecution } from "../src/core/execution/TransportShipExecution";
+import type { NationEmojiBehavior } from "../src/core/execution/nation/NationEmojiBehavior";
+import { NationWarshipBehavior } from "../src/core/execution/nation/NationWarshipBehavior";
 import { AiAttackBehavior } from "../src/core/execution/utils/AiAttackBehavior";
 import {
   PlayerType,
@@ -7,7 +11,6 @@ import {
   type Player,
 } from "../src/core/game/Game";
 import { canBuildTransportShip } from "../src/core/game/TransportShipUtils";
-import { PseudoRandom } from "../src/core/PseudoRandom";
 vi.mock("../src/core/game/TransportShipUtils", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   canBuildTransportShip: vi.fn(() => 10),
@@ -23,6 +26,7 @@ function scenario() {
     numTilesOwned: () => 100,
     incomingAttacks: () => [],
     unitCount: () => 0,
+    units: () => [],
     isFriendly: () => false,
     canAttackPlayer: () => true,
     isPlayer: () => true,
@@ -104,6 +108,82 @@ test("an invasion gets a follow-up wave, then switches away after no progress", 
   advance();
   behavior.maybeAttack();
   expect(vi.mocked(canBuildTransportShip).mock.calls[2][2]).not.toBe(first);
+});
+
+test("prefers a weak coastal target within its bounded sample", () => {
+  const { behavior, game } = scenario();
+  vi.spyOn(game.players()[4], "troops").mockReturnValue(1);
+  behavior.maybeAttack();
+  expect(vi.mocked(canBuildTransportShip).mock.calls[0][2]).toBe(104);
+});
+
+test("does not abandon a three-wave campaign while transports are still crossing", () => {
+  const { behavior, player, advance, game } = scenario();
+  behavior.maybeAttack();
+  const tile = vi.mocked(canBuildTransportShip).mock.calls[0][2];
+  vi.spyOn(player, "units").mockReturnValue([
+    {
+      isActive: () => true,
+      targetTile: () => tile,
+      transportShipState: () => ({ isRetreating: false }),
+    } as never,
+  ]);
+  for (let i = 0; i < 5; i++) {
+    advance();
+    behavior.maybeAttack();
+  }
+  expect(game.addExecution).toHaveBeenCalledTimes(3);
+  expect(
+    vi
+      .mocked(canBuildTransportShip)
+      .mock.calls.every((call) => call[2] === tile),
+  ).toBe(true);
+});
+
+test("naval preparation cadence follows mobilisation pace", () => {
+  const { game, config } = scenario();
+  expect(navalPacingScale(game)).toBe(1);
+  Object.assign(config, {
+    pressurePacing: { mobilisationHalfLifeSeconds: 10 },
+  });
+  expect(navalPacingScale(game)).toBe(2);
+  Object.assign(config, {
+    pressurePacing: { mobilisationHalfLifeSeconds: 3600 },
+  });
+  expect(navalPacingScale(game)).toBe(720);
+});
+
+test("assigns at most two existing warships to escort a live invasion", () => {
+  const { game, player } = scenario();
+  const ships = Array.from({ length: 3 }, () => ({
+    isActive: () => true,
+    isUnderConstruction: () => false,
+    updateWarshipState: vi.fn(),
+  }));
+  vi.spyOn(player, "units").mockImplementation((type) => {
+    if (type === UnitType.Warship) return ships as never;
+    if (type === UnitType.TransportShip)
+      return [
+        {
+          isActive: () => true,
+          transportShipState: () => ({ isRetreating: false }),
+          tile: () => 99,
+          targetTile: () => 104,
+        },
+      ] as never;
+    return [];
+  });
+  Object.assign(game, { isWater: () => true });
+  const navy = new NationWarshipBehavior(
+    new PseudoRandom(42),
+    game,
+    player,
+    {} as NationEmojiBehavior,
+  );
+  navy.maybeSpawnWarship();
+  expect(ships[0].updateWarshipState).toHaveBeenCalledWith({ patrolTile: 99 });
+  expect(ships[1].updateWarshipState).toHaveBeenCalledWith({ patrolTile: 99 });
+  expect(ships[2].updateWarshipState).not.toHaveBeenCalled();
 });
 
 test.each(["allied", "grace", "fleet limit"])(

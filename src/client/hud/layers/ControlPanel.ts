@@ -15,6 +15,7 @@ import { GameUpdateType } from "../../../core/game/GameUpdates";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { ClientID } from "../../../core/Schemas";
 import "../../components/AttackRatioDial";
+import "../../components/FleetPanel";
 import "../../components/PopulationRatioSlider";
 import { Controller } from "../../Controller";
 import { AttackRatioEvent, ToggleStructureEvent } from "../../InputHandler";
@@ -637,6 +638,7 @@ export class ControlPanel extends LitElement implements Controller {
         @contextmenu=${(e: MouseEvent) => e.preventDefault()}
       >
         ${this.renderNotification()} ${this.renderMobilisation()}
+        ${this._isVisible && this.game.config().gameConfig().fleetAutomation === "v26.3" ? html`<fleet-panel .game=${this.game} .eventBus=${this.eventBus} .tick=${Math.floor(this.game.ticks() / 10)}></fleet-panel>` : ""}
         ${
           !this.game?.myPlayer()?.pressure
             ? html`<div class="lg:hidden">${this.renderMobile()}</div>

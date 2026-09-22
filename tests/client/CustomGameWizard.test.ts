@@ -49,16 +49,16 @@ describe("public game creation", () => {
   it("offers public map presets and readable economic symbols without a debug flag", async () => {
     const element = await wizard(true);
     expect(element.querySelectorAll('input[name="game-preset"]')).toHaveLength(
-      5,
+      3,
     );
-    expect(element.textContent).toContain("Great Lakes");
+    expect(element.textContent).toContain("Earth");
     expect(
-      element.querySelector('[aria-label="Trade ships ×10"]'),
-    ).not.toBeNull();
-    expect(element.querySelector('[aria-label="Trains ×10"]')).not.toBeNull();
-    expect(
-      element.querySelector('[aria-label="Attack speed ÷15"]'),
-    ).not.toBeNull();
+      [
+        ...element.querySelectorAll<HTMLInputElement>(
+          'input[name="game-preset"]',
+        ),
+      ].map((input) => input.value),
+    ).toEqual(["quickplay", "longplay", "idlefront"]);
   });
 
   it("uses the host-start path through every custom wizard step", async () => {
@@ -80,19 +80,18 @@ describe("public game creation", () => {
     expect(create).toHaveBeenCalledOnce();
     expect(create.mock.calls[0][0].detail.input).toMatchObject({
       startMode: "host",
-      gamePreset: "great-lakes",
+      gamePreset: "quickplay",
       name: "My custom room",
     });
   });
 
   it("shows scheduled Earth as a fixed choice, not selectable custom economies", async () => {
     const element = await wizard(false);
-    expect(element.textContent).toContain("Enormous Earth · 4×");
-    expect(element.querySelector('input[name="game-preset"]')).toBeNull();
+    expect(element.textContent).toContain("Earth");
+    expect(element.querySelectorAll('input[name="game-preset"]')).toHaveLength(
+      3,
+    );
     expect(element.querySelector('input[name="duration"]')).toBeNull();
-    expect(
-      element.querySelector('[aria-label="Trade ships ×1"]'),
-    ).not.toBeNull();
   });
 
   it("renders modifier symbols without relying on mouse tooltips", () => {

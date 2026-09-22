@@ -18,6 +18,7 @@ describe("HoverHighlightController", () => {
     );
 
     eventBus = { on: vi.fn() };
+    game.isTileVisible = () => true;
     transformHandler = {
       screenToWorldCoordinatesFloat: vi
         .fn()

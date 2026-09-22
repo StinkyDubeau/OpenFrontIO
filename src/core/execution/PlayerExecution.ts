@@ -21,6 +21,7 @@ import {
 } from "../game/TileTraversalScratch";
 import { calculateBoundingBox, getMode, inscribed, simpleHash } from "../Util";
 import { applyContinuousPressure } from "./ContinuousPressure";
+import { updateFleet } from "./FleetAutomation";
 
 export class PlayerExecution implements Execution {
   private readonly ticksPerClusterCalc = 20;
@@ -101,6 +102,7 @@ export class PlayerExecution implements Execution {
     // Record stats
     this.mg.stats().goldWork(this.player, goldFromWorkers);
     applyContinuousPressure(this.mg, this.player, ticks);
+    updateFleet(this.mg, this.player);
 
     for (const alliance of this.player.alliances()) {
       if (

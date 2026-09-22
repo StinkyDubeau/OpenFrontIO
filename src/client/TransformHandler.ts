@@ -1,5 +1,5 @@
 import { EventBus, GameEvent } from "../core/EventBus";
-import { Cell } from "../core/game/Game";
+import { Cell, UnitType } from "../core/game/Game";
 import {
   CenterCameraEvent,
   DragEvent,
@@ -19,6 +19,9 @@ export class GoToPositionEvent implements GameEvent {
   constructor(
     public x: number,
     public y: number,
+    public zoom?: number,
+    public wide = false,
+    public zoomSpeed = 6,
   ) {}
 }
 
@@ -26,14 +29,39 @@ export class GoToUnitEvent implements GameEvent {
   constructor(public unit: UnitView) {}
 }
 
+export class CinematicFollowEvent implements GameEvent {
+  constructor(
+    public unit: UnitView,
+    public zoom = 4.8,
+  ) {}
+}
+
+/** Resolve a UI map pick using the same camera as normal game input. */
+export class ResolveMapPositionEvent implements GameEvent {
+  constructor(
+    public x: number,
+    public y: number,
+    public resolve: (cell: Cell) => void,
+  ) {}
+}
+
 /** Show the complete board while an initial/reconnecting view paints in. */
 export class FitMapEvent implements GameEvent {}
+/** Camera-only state: never changes the server player or other devices. */
+export class IdleCameraEvent implements GameEvent {
+  constructor(public readonly enabled: boolean) {}
+}
 
 export const GOTO_INTERVAL_MS = 16;
 export const CAMERA_MAX_SPEED = 15;
 export const CAMERA_SMOOTHING = 0.03;
 
 export class TransformHandler {
+  private cinematicSubject?: UnitView;
+  private cinematicImpactZoom = false;
+  private targetZoomSpeed = 6;
+  private idleDetailZoom = 4.8;
+  private idleCameraRestore?: { x: number; y: number; scale: number };
   public scale: number = 1.8;
   private _boundingRect: DOMRect;
   public offsetX: number = -350;
@@ -56,6 +84,38 @@ export class TransformHandler {
     this.eventBus.on(GoToPlayerEvent, (e) => this.onGoToPlayer(e));
     this.eventBus.on(GoToPositionEvent, (e) => this.onGoToPosition(e));
     this.eventBus.on(GoToUnitEvent, (e) => this.onGoToUnit(e));
+    this.eventBus.on(CinematicFollowEvent, (e) => {
+      if (!this.idleCameraRestore) return;
+      if (this.cinematicSubject === e.unit) return;
+      this.clearTarget();
+      this.cinematicSubject = e.unit;
+      this.idleDetailZoom = e.zoom;
+      this.targetScale = e.zoom;
+      this.target = new Cell(
+        this.game.x(e.unit.tile()),
+        this.game.y(e.unit.tile()),
+      );
+      this.intervalID = setInterval(() => this.goTo(), GOTO_INTERVAL_MS);
+    });
+    this.eventBus.on(ResolveMapPositionEvent, (e) => {
+      e.resolve(this.screenToWorldCoordinates(e.x, e.y));
+    });
+    this.eventBus.on(IdleCameraEvent, (e) => {
+      if (e.enabled && !this.idleCameraRestore) {
+        this.idleDetailZoom = 4.8;
+        this.idleCameraRestore = {
+          x: this.offsetX,
+          y: this.offsetY,
+          scale: this.scale,
+        };
+        this.clearTarget();
+        this.constrainIdleCamera();
+      } else if (!e.enabled && this.idleCameraRestore) {
+        const saved = this.idleCameraRestore;
+        this.idleCameraRestore = undefined;
+        this.override(saved.x, saved.y, saved.scale);
+      }
+    });
     this.eventBus.on(CenterCameraEvent, () => this.centerCamera());
     this.eventBus.on(FitMapEvent, () => {
       this.updateCanvasBoundingRect();
@@ -64,7 +124,47 @@ export class TransformHandler {
   }
 
   public updateCanvasBoundingRect() {
-    this._boundingRect = this.canvas.getBoundingClientRect();
+    // CSS perspective changes the visual bounding box, not the renderer's viewport.
+    // Feeding that enlarged box back into camera math moves the followed subject off-center.
+    if (this.idleCameraRestore) {
+      this._boundingRect = new DOMRect(
+        this._boundingRect.left,
+        this._boundingRect.top,
+        this.canvas.clientWidth || this._boundingRect.width,
+        this.canvas.clientHeight || this._boundingRect.height,
+      );
+    } else this._boundingRect = this.canvas.getBoundingClientRect();
+    if (this.idleCameraRestore) this.constrainIdleCamera();
+  }
+
+  /** Keep the complete cinematic viewport inside the board, including orbit overscan. */
+  private constrainIdleCamera() {
+    const { width, height } = this.boundingRect();
+    const mapWidth = this.game.width(),
+      mapHeight = this.game.height();
+    const radius = Math.hypot(width, height) * 0.6;
+    const minimum = Math.max(
+      this.idleDetailZoom,
+      (radius * 2 + 4) / Math.min(mapWidth, mapHeight),
+    );
+    const oldScale = this.scale;
+    this.scale = Math.max(this.scale, minimum);
+    this.offsetX +=
+      (width - mapWidth) * (1 / (2 * oldScale) - 1 / (2 * this.scale));
+    this.offsetY +=
+      (height - mapHeight) * (1 / (2 * oldScale) - 1 / (2 * this.scale));
+    if (this.targetScale !== null)
+      this.targetScale = Math.max(this.targetScale, minimum);
+    const margin = radius / this.scale + 1;
+    const centerX =
+      this.offsetX + mapWidth / 2 + (width - mapWidth) / (2 * this.scale);
+    const centerY =
+      this.offsetY + mapHeight / 2 + (height - mapHeight) / (2 * this.scale);
+    this.offsetX +=
+      Math.max(margin, Math.min(mapWidth - margin, centerX)) - centerX;
+    this.offsetY +=
+      Math.max(margin, Math.min(mapHeight - margin, centerY)) - centerY;
+    this.changed = true;
   }
 
   boundingRect(): DOMRect {
@@ -203,6 +303,18 @@ export class TransformHandler {
   }
 
   screenCenter(): { screenX: number; screenY: number } {
+    if (this.idleCameraRestore) {
+      return {
+        screenX:
+          this.offsetX +
+          this.game.width() / 2 +
+          (this.width() - this.game.width()) / (2 * this.scale),
+        screenY:
+          this.offsetY +
+          this.game.height() / 2 +
+          (this.boundingRect().height - this.game.height()) / (2 * this.scale),
+      };
+    }
     const [upperLeft, bottomRight] = this.screenBoundingRect();
     return {
       screenX: upperLeft.x + Math.floor((bottomRight.x - upperLeft.x) / 2),
@@ -218,12 +330,33 @@ export class TransformHandler {
     }
     this.target = new Cell(nameLocation.x, nameLocation.y);
     this.targetScale = event.zoom ?? null;
+    if (this.idleCameraRestore) {
+      // Use the existing server-fitted label rectangle; no territory tile scan.
+      const labelWidth = Math.max(
+        1,
+        nameLocation.bounds?.width ??
+          nameLocation.size * Math.max(1, event.player.name().length),
+      );
+      const labelHeight = Math.max(
+        1,
+        nameLocation.bounds?.height ?? nameLocation.size * 3,
+      );
+      this.idleDetailZoom = 0.1;
+      this.targetScale = Math.min(
+        4.8,
+        (this.width() * 0.55) / labelWidth,
+        (this.boundingRect().height * 0.45) / labelHeight,
+      );
+    }
     this.intervalID = setInterval(() => this.goTo(), GOTO_INTERVAL_MS);
   }
 
   onGoToPosition(event: GoToPositionEvent) {
+    this.idleDetailZoom = event.wide ? 0.1 : 4.8;
     this.clearTarget();
+    this.targetZoomSpeed = event.zoomSpeed;
     this.target = new Cell(event.x, event.y);
+    this.targetScale = event.zoom ?? null;
     this.intervalID = setInterval(() => this.goTo(), GOTO_INTERVAL_MS);
   }
 
@@ -246,6 +379,63 @@ export class TransformHandler {
   }
 
   private goTo() {
+    if (this.cinematicSubject) {
+      const unit = this.cinematicSubject;
+      if (
+        !unit.isActive() ||
+        !this.game.isTileVisible(unit.tile()) ||
+        (this.game.unit && this.game.unit(unit.id()) !== unit)
+      ) {
+        this.clearTarget();
+        return;
+      }
+      const alpha = Math.max(
+        0,
+        Math.min(
+          1,
+          (performance.now() - this.game.lastViewUpdateMs) /
+            this.game.config().msPerTick(),
+        ),
+      );
+      const previous = unit.state.lastPos;
+      const tile = unit.tile();
+      this.target = new Cell(
+        this.game.x(previous) +
+          (this.game.x(tile) - this.game.x(previous)) * alpha,
+        this.game.y(previous) +
+          (this.game.y(tile) - this.game.y(previous)) * alpha,
+      );
+      const type = unit.type?.();
+      const impact = unit.targetTile?.();
+      if (
+        (type === UnitType.HydrogenBomb || type === UnitType.AtomBomb) &&
+        impact !== undefined &&
+        this.game.isTileVisible(impact)
+      ) {
+        const speed = Math.max(
+          1,
+          Math.hypot(
+            this.game.x(tile) - this.game.x(previous),
+            this.game.y(tile) - this.game.y(previous),
+          ),
+        );
+        const distance = Math.hypot(
+          this.game.x(impact) - this.target.x,
+          this.game.y(impact) - this.target.y,
+        );
+        if (distance <= speed * 3) {
+          this.cinematicImpactZoom = true;
+          this.idleDetailZoom = 0.1;
+          const diameter = this.game.config().nukeMagnitudes(type).outer * 2;
+          this.targetScale = Math.min(
+            1.8,
+            (this.width() * 0.22) / diameter,
+            (this.boundingRect().height * 0.22) / diameter,
+          );
+        }
+      }
+    }
+    if (this.idleCameraRestore) this.constrainIdleCamera();
     const { screenX, screenY } = this.screenCenter();
 
     if (this.target === null) throw new Error("null target");
@@ -255,7 +445,7 @@ export class TransformHandler {
     const scaleClose =
       this.targetScale === null ||
       Math.abs(this.scale - this.targetScale) < 0.01;
-    if (positionClose && scaleClose) {
+    if (positionClose && scaleClose && !this.cinematicSubject) {
       this.clearTarget();
       return;
     }
@@ -269,7 +459,10 @@ export class TransformHandler {
     }
     this.lastGoToCallTime = now;
 
-    const r = 1 - Math.pow(CAMERA_SMOOTHING, dt / 1000);
+    // Follow moving subjects tightly; scenic transitions retain their gentle easing.
+    const r =
+      1 -
+      Math.pow(this.cinematicSubject ? 0.000001 : CAMERA_SMOOTHING, dt / 1000);
 
     this.offsetX += Math.max(
       Math.min((this.target.x - screenX) * r, CAMERA_MAX_SPEED),
@@ -287,7 +480,11 @@ export class TransformHandler {
       const diff = this.targetScale - this.scale;
       const smoothStep = diff * zoomR;
       const minStep =
-        Math.sign(diff) * Math.min(Math.abs(diff), (6.0 * dt) / 1000);
+        Math.sign(diff) *
+        Math.min(
+          Math.abs(diff),
+          ((this.cinematicImpactZoom ? 24 : this.targetZoomSpeed) * dt) / 1000,
+        );
       this.scale +=
         Math.abs(smoothStep) >= Math.abs(minStep) ? smoothStep : minStep;
       // Keep screen center pinned as scale changes: (canvasSize - mapSize) / (2 * scale)
@@ -301,6 +498,7 @@ export class TransformHandler {
         (1 / (2 * oldScale) - 1 / (2 * this.scale));
     }
 
+    if (this.idleCameraRestore) this.constrainIdleCamera();
     this.changed = true;
   }
 
@@ -380,6 +578,9 @@ export class TransformHandler {
   }
 
   private clearTarget() {
+    this.cinematicSubject = undefined;
+    this.cinematicImpactZoom = false;
+    this.targetZoomSpeed = 6;
     if (this.intervalID !== null) {
       clearInterval(this.intervalID);
       this.intervalID = null;

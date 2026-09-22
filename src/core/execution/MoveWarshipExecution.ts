@@ -1,11 +1,13 @@
 import { Execution, Game, Player, UnitType } from "../game/Game";
 import { TileRef } from "../game/GameMap";
+import { manuallyCommandFleetShip } from "./FleetAutomation";
 
 export class MoveWarshipExecution implements Execution {
   constructor(
     private readonly owner: Player,
     private readonly unitIds: number[],
     private readonly position: TileRef,
+    private readonly manual = true,
   ) {}
 
   init(mg: Game, _ticks: number): void {
@@ -37,6 +39,7 @@ export class MoveWarshipExecution implements Execution {
       warship.updateWarshipState({
         patrolTile: this.position,
       });
+      if (this.manual) manuallyCommandFleetShip(this.owner, unitId);
       warship.setTargetTile(undefined);
     }
   }

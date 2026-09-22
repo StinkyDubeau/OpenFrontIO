@@ -66,6 +66,7 @@ export interface MenuElement {
   icon?: string;
   text?: string;
   fontSize?: string;
+  priceLabel?: (params: MenuElementParams) => string;
   tooltipItems?: TooltipItem[];
   tooltipKeys?: TooltipKey[];
 
@@ -445,6 +446,8 @@ function createMenuElements(
               : COLORS.building
             : COLORS.building,
         icon: item.icon,
+        priceLabel: (p: MenuElementParams) =>
+          `${renderNumber(p.buildMenu.cost(item))}${p.myPlayer.gold() < p.buildMenu.cost(item) ? " · short" : ""}`,
         tooltipItems: [
           { text: translateText(item.key ?? ""), className: "title" },
           {

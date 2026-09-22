@@ -678,6 +678,21 @@ export class RadialMenu implements Controller {
           }
         }
 
+        if (d.data.priceLabel && this.params) {
+          content
+            .append("text")
+            .attr("class", "radial-price")
+            .attr("text-anchor", "middle")
+            .attr("x", arc.centroid(d)[0])
+            .attr("y", arc.centroid(d)[1] + this.config.iconSize / 2 + 13)
+            .attr("font-size", "10px")
+            .attr("font-weight", "bold")
+            .attr("fill", "#fff4ca")
+            .attr("stroke", "#07130f")
+            .attr("stroke-width", "3px")
+            .attr("paint-order", "stroke")
+            .text(d.data.priceLabel(this.params));
+        }
         this.menuIcons.set(contentId, content as any);
       });
   }
@@ -1143,6 +1158,8 @@ export class RadialMenu implements Controller {
         // Update icon/text appearance using the same logic as renderIconsAndText
         const icon = this.menuIcons.get(itemId);
         if (icon) {
+          if (item.priceLabel && this.params)
+            icon.select(".radial-price").text(item.priceLabel(this.params));
           if (item.renderType === "allyExtend" && this.params) {
             this.refreshAllyExtendIcon(item, disabled, icon);
           } else {

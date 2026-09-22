@@ -67,7 +67,7 @@ export class ParallelWaterRoutes {
     return result;
   }
   private async initialize(): Promise<void> {
-    if (!this.shared) this.shared = shareWaterTerrain(this.game.map());
+    this.shared ??= shareWaterTerrain(this.game.map());
     if (!this.workers.length) {
       const ready: Promise<void>[] = [];
       for (let i = 0; i < this.count; i++) {
@@ -147,9 +147,8 @@ export class ParallelWaterRoutes {
               }) => {
                 if (message.id !== id) return;
                 cleanup();
-                message.error
-                  ? reject(new Error(message.error))
-                  : resolve(message.route);
+                if (message.error) reject(new Error(message.error));
+                else resolve(message.route);
               };
               worker.on("message", receive);
               worker.once("error", fail);

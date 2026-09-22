@@ -95,6 +95,7 @@ describe("RadialMenuElements", () => {
       isPlayer: vi.fn(() => true),
       isTraitor: vi.fn(() => false),
       isDisconnected: vi.fn(() => false),
+      gold: vi.fn(() => 1000n),
     } as unknown as PlayerView;
 
     mockGame = {
@@ -102,6 +103,7 @@ describe("RadialMenuElements", () => {
       owner: vi.fn(() => mockPlayer),
       isLand: vi.fn(() => true),
       config: vi.fn(() => ({
+        gameConfig: () => ({}),
         theme: () => ({
           territoryColor: () => ({
             lighten: () => ({ alpha: () => ({ toRgbString: () => "#fff" }) }),
@@ -256,6 +258,16 @@ describe("RadialMenuElements", () => {
   });
 
   describe("buildMenuElement", () => {
+    it("shows live native build costs and marks insufficient gold in text", () => {
+      const subMenu = buildMenuElement.subMenu!(mockParams);
+      const item = subMenu[0];
+      mockBuildMenu.cost.mockReturnValue(123n);
+      expect(item.priceLabel?.(mockParams)).toContain("123");
+      vi.mocked(mockPlayer.gold).mockReturnValue(1n);
+      expect(item.priceLabel?.(mockParams)).toContain("short");
+      mockBuildMenu.cost.mockReturnValue(456n);
+      expect(item.priceLabel?.(mockParams)).toContain("456");
+    });
     it("should have correct basic properties", () => {
       expect(buildMenuElement.id).toBe(Slot.Build);
       expect(buildMenuElement.name).toBe("build");

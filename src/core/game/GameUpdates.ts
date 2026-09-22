@@ -252,6 +252,7 @@ export interface AttackUpdate {
  */
 export interface PlayerUpdate {
   pressure?: import("./PressurePopulation").PressureView;
+  fleet?: import("../FleetOrders").FleetView;
   type: GameUpdateType.Player;
   id: PlayerID;
   nameViewData?: NameViewData;

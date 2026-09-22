@@ -33,6 +33,7 @@ export class IconProgram {
 
   // Dynamic uniform locations
   private uCamera: WebGLUniformLocation;
+  private uIdleLabels: WebGLUniformLocation;
   private uTime: WebGLUniformLocation;
   private uLerpSpeed: WebGLUniformLocation;
   private uCullThreshold: WebGLUniformLocation;
@@ -93,6 +94,7 @@ export class IconProgram {
 
     // Dynamic uniform locations
     this.uCamera = gl.getUniformLocation(this.program, "uCamera")!;
+    this.uIdleLabels = gl.getUniformLocation(this.program, "uIdleLabels")!;
     this.uTime = gl.getUniformLocation(this.program, "uTime")!;
     this.uLerpSpeed = gl.getUniformLocation(this.program, "uLerpSpeed")!;
     this.uCullThreshold = gl.getUniformLocation(
@@ -157,6 +159,10 @@ export class IconProgram {
     gl.useProgram(this.program);
 
     gl.uniformMatrix3fv(this.uCamera, false, cameraMatrix);
+    gl.uniform1f(
+      this.uIdleLabels,
+      document.body.classList.contains("idlefront-dashboard-active") ? 1 : 0,
+    );
     gl.uniform1f(this.uTime, performance.now() / 1000);
     gl.uniform1f(this.uLerpSpeed, ns.lerpSpeed);
     gl.uniform1f(this.uCullThreshold, ns.cullThreshold);

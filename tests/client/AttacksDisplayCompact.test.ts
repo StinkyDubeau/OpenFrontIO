@@ -48,7 +48,16 @@ test("mobile defense relocates live alerts and restores them when closed", async
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     },
-    game: { myPlayer: () => ({ gold: () => 0n, troops: () => 100 }) },
+    game: {
+      myPlayer: () => ({
+        gold: () => 0n,
+        troops: () => 100,
+        isAlive: () => true,
+        units: () => [],
+      }),
+      config: () => ({ gameConfig: () => ({ fleetAutomation: "v26.3" }) }),
+      ticks: () => 100,
+    },
   });
   hud.append(display, notices);
   document.body.append(hud);
@@ -57,8 +66,9 @@ test("mobile defense relocates live alerts and restores them when closed", async
     display.querySelector<HTMLButtonElement>(".atlas-flow-gauge")!;
   defense.click();
   await display.updateComplete;
+  expect(display.querySelector("fleet-target-slider")).not.toBeNull();
   expect(alerts.parentElement).toBe(
-    display.querySelector(".atlas-flow-details"),
+    display.querySelector(".atlas-defense-fronts"),
   );
   // Alliance actions stay in the visible popup, even while defense is open.
   expect(actions.parentElement).toBe(notices);
@@ -77,6 +87,7 @@ test("outgoing attacks are collapsed but cancellation stays accessible", async (
     _isVisible: true,
     outgoingLandAttacks: [{ id: "expansion", troops: 200, retreating: false }],
     game: {
+      config: () => ({ gameConfig: () => ({}) }),
       myPlayer: () => ({
         gold: () => 1500n,
         troops: () => 1000,

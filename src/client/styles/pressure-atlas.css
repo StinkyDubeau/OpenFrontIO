@@ -1102,9 +1102,22 @@ body.atlas-theme.in-game .atlas-map-annotation {
 }
 
 .atlas-main-scroll {
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  scroll-behavior: auto;
   padding-inline: clamp(0rem, 1.2vw, 1rem);
   scrollbar-color: rgb(217 182 100 / 0.28) transparent;
   scrollbar-width: thin;
+}
+
+/* Native scrolling belongs to the panel, never the map underneath it. Avoid
+   scripted momentum and preserve horizontal scrolling for the standings. */
+.atlas-settings-modal,
+.atlas-settings-list,
+.atlas-action-notices {
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  scroll-behavior: auto;
 }
 
 .atlas-play-page {

@@ -13,6 +13,25 @@ import {
 } from "../src/core/game/GameUpdates";
 import { makePlayerUpdate } from "./util/viewStubs";
 
+it("diffs fleet setting revisions while leaving unchanged orders off the wire", () => {
+  const fleet = {
+    enabled: true,
+    target: 2,
+    reserve: 1000,
+    ports: [1],
+    order: "defend" as const,
+    revision: 1,
+    status: "target met" as const,
+    pending: 0,
+  };
+  const base = makePlayerUpdate({ fleet });
+  expect(diffPlayerUpdate(base, { ...base, fleet: { ...fleet } })).toBeNull();
+  const changed = { ...fleet, target: 3, revision: 2 };
+  expect(diffPlayerUpdate(base, { ...base, fleet: changed })?.fleet).toEqual(
+    changed,
+  );
+});
+
 it("updates renderer population even when only civilians change", () => {
   const state = makePlayerState({ troops: 100 });
   const pressure = {

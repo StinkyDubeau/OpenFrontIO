@@ -38,6 +38,7 @@ export function diffPlayerUpdate(
   // changed player.
   if (
     samePressure(prev.pressure, next.pressure) &&
+    prev.fleet?.revision === next.fleet?.revision &&
     prev.clientID === next.clientID &&
     prev.name === next.name &&
     prev.displayName === next.displayName &&
@@ -97,6 +98,7 @@ export function diffPlayerUpdate(
   setIfDifferent("isAlive", prev.isAlive === next.isAlive);
   setIfDifferent("isDisconnected", prev.isDisconnected === next.isDisconnected);
   setIfDifferent("pressure", samePressure(prev.pressure, next.pressure));
+  setIfDifferent("fleet", prev.fleet?.revision === next.fleet?.revision);
   setIfDifferent("killedBy", prev.killedBy === next.killedBy);
   setIfDifferent("deathPosition", prev.deathPosition === next.deathPosition);
   // tilesOwned / gold / troops intentionally absent — see EXCEPTION above.

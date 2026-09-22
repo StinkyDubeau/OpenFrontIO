@@ -22,7 +22,7 @@ const self = new Map(),
   inclusive = new Map();
 const key = (id) => {
   const f = nodes.get(id).callFrame;
-  return `${f.functionName || "(anonymous)"} ${f.url}:${f.lineNumber + 1}`;
+  return `${f.functionName === "" ? "(anonymous)" : f.functionName} ${f.url}:${f.lineNumber + 1}`;
 };
 let totalUs = 0;
 let sampleStart = profile.startTime;

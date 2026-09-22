@@ -109,6 +109,7 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
 
 export class PlayerView {
   public pressure?: import("../../core/game/PressurePopulation").PressureView;
+  public fleet?: import("../../core/FleetOrders").FleetView;
   public anonymousName: string | null = null;
   private decoder?: PatternDecoder;
 
@@ -141,6 +142,7 @@ export class PlayerView {
   ) {
     this.state = stateFromUpdate(data);
     this.pressure = data.pressure;
+    this.fleet = data.fleet;
     this.static = staticFromUpdate(data);
 
     // First emission always carries name + playerType (see staticFromUpdate).
@@ -275,6 +277,7 @@ export class PlayerView {
    */
   applyUpdate(pu: PlayerUpdate): void {
     if (pu.pressure) this.pressure = pu.pressure;
+    if (pu.fleet) this.fleet = pu.fleet;
     applyStateUpdate(this.state, pu);
     // applyStateUpdate refreshes outgoingEmojis every tick; re-apply the
     // "Disable emojis" setting so live emojis stay hidden when it's off (#4430).

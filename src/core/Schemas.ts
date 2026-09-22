@@ -7,6 +7,7 @@ import {
   PatternDataSchema,
 } from "./CosmeticSchemas";
 import type { GameEvent } from "./EventBus";
+import { FleetOrdersSchema, type FleetOrders } from "./FleetOrders";
 import {
   AllPlayers,
   Difficulty,
@@ -30,6 +31,8 @@ export type GameID = string;
 export type ClientID = string;
 
 export type Intent =
+  | { type: "fleet_orders"; orders: FleetOrders }
+  | { type: "idle_mode"; idle: boolean }
   | { type: "mobilisation"; target: number; autoDefenceEnabled?: boolean }
   | SpawnIntent
   | AttackIntent
@@ -397,6 +400,7 @@ export const GameConfigSchema = z.object({
   // Persisted tuning for the upcoming pressure rules. Presence alone does not
   // activate the new population/combat model in an existing replay.
   pressurePacing: PressurePacingSchema.optional(),
+  fleetAutomation: z.literal("v26.3").optional(),
   continuousPressure: z.literal("v1").optional(),
   allianceProtectionMinutes: z.number().int().min(1).max(10080).optional(),
   pressureGraceSeconds: z.number().int().min(0).max(86400).optional(),
@@ -624,6 +628,10 @@ export const ToggleGameStartTimerIntentSchema = z.object({
 });
 
 export const IntentSchema = z.discriminatedUnion("type", [
+  z
+    .object({ type: z.literal("fleet_orders"), orders: FleetOrdersSchema })
+    .strict(),
+  z.object({ type: z.literal("idle_mode"), idle: z.boolean() }).strict(),
   z.object({
     type: z.literal("mobilisation"),
     target: z.number().finite().min(0).max(1),

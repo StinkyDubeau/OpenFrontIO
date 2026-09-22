@@ -16,6 +16,8 @@ import { DonateTroopsExecution } from "./DonateTroopExecution";
 import { EmbargoAllExecution } from "./EmbargoAllExecution";
 import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
+import { FleetOrdersExecution } from "./FleetAutomation";
+import { IdleModeExecution } from "./IdleModeExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MobilisationExecution } from "./MobilisationExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
@@ -58,9 +60,13 @@ export class Executor {
     }
 
     // create execution
-    if (intent.type !== "mark_disconnected")
+    if (intent.type !== "mark_disconnected" && intent.type !== "idle_mode")
       notePressureActivity(this.mg, player);
     switch (intent.type) {
+      case "fleet_orders":
+        return new FleetOrdersExecution(player, intent.orders);
+      case "idle_mode":
+        return new IdleModeExecution(player, intent.idle);
       case "mobilisation":
         return new MobilisationExecution(
           player,

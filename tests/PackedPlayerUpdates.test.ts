@@ -110,16 +110,18 @@ describe("GameRunner payload cadence", () => {
     game.endSpawnPhase();
     for (let t = 3; t <= 61; t++) tick();
 
-    // ticks < 3 always rebuild; every 30th tick rebuilds; everything else
-    // omits the record. (The in-tick spawn-end rebuild also sets the flag,
-    // but ending the spawn phase between ticks doesn't exercise it here.)
-    expect(byTick.get(1)!.playerNameViewData).toBeDefined();
+    // Before spawn there is no visible player placement. After spawn the
+    // 30-tick rebuild is staggered by player ID rather than globally synchronized.
+    expect(byTick.get(1)!.playerNameViewData).toBeUndefined();
     expect(byTick.get(2)!.playerNameViewData).toBeDefined();
     expect(byTick.get(4)!.playerNameViewData).toBeUndefined();
     expect(byTick.get(29)!.playerNameViewData).toBeUndefined();
-    expect(byTick.get(30)!.playerNameViewData).toBeDefined();
-    expect(byTick.get(31)!.playerNameViewData).toBeUndefined();
-    expect(byTick.get(60)!.playerNameViewData).toBeDefined();
+    const phase = game.player("alice_id").smallID() % 30;
+    for (let t = 3; t <= 61; t++) {
+      expect(byTick.get(t)!.playerNameViewData !== undefined).toBe(
+        t % 30 === phase,
+      );
+    }
   });
 
   test("stat churn arrives as packedPlayerUpdates quads on the view data", () => {

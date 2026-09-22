@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PlayerView } from "../../client/view";
 import { AssetManifest } from "../AssetUrls";
+import { warshipCost } from "../FleetAffordability";
 import { DoomsdayClockSpeed } from "../game/DoomsdayClock";
 import {
   Difficulty,
@@ -397,10 +398,7 @@ export class Config {
         break;
       case UnitType.Warship:
         info = {
-          cost: this.costWrapper(
-            (numUnits: number) => Math.min(1_000_000, (numUnits + 1) * 250_000),
-            UnitType.Warship,
-          ),
+          cost: this.costWrapper(warshipCost, UnitType.Warship),
           maxHealth: 1000,
         };
         break;

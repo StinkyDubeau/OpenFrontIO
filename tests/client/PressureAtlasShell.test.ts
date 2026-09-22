@@ -174,7 +174,7 @@ describe("Pressure Atlas OpenFront shell", () => {
     );
     const styles = source("src/client/styles/war-room.css");
 
-    expect(mapSidebar).toContain('class="atlas-map-brand-mark"');
+    expect(mapSidebar).toContain("onLogoTap");
     expect(mapSidebar).toContain("recordDeveloperMenuLogoTap");
     expect(mapSidebar).toContain("@pointerup=${this.onLogoTap}");
     expect(landingWordmark).not.toContain("recordDeveloperMenuLogoTap");

@@ -10,6 +10,7 @@ uniform sampler2D uPlayerData; // 8 × MAX_PLAYERS, RGBA32F
 
 // Uniforms
 uniform mat3  uCamera;
+uniform float uIdleLabels;
 uniform float uTime;
 uniform float uLerpSpeed;
 uniform float uCullThreshold;
@@ -155,6 +156,22 @@ void main() {
   float nameSize      = max(4.0, floor(baseSize * uNameScaleFactor));
   float nameScale     = min(baseSize * 0.25, uNameScaleCap);
   float nameWorldScale = (nameSize * nameScale) / uFontSize;
+  if (uIdleLabels > 0.5) {
+    float sx = max(abs(uCamera[0][0]), 0.00001);
+    float sy = max(abs(uCamera[1][1]), 0.00001);
+    // Cap the entire plate including flags, before the cinematic CSS magnification.
+    nameWorldScale = min(nameWorldScale * 0.35,
+      min(0.022 / (uFontBase * sy), 0.24 / (max(1.0, pd3.w * 2.0 + uFontBase * 3.0) * sx)));
+    vec2 anchor = (uCamera * vec3(wx, wy, 1.0)).xy;
+    // Nearby labels can slide with the shot; distant names are never pulled in.
+    if (abs(anchor.x) < 0.5 && abs(anchor.y) < 0.5) {
+      vec2 pinned = clamp(anchor, vec2(-0.20, -0.22), vec2(0.20, 0.22));
+      if (abs(pinned.y) < 0.08) pinned.y = 0.12;
+      vec2 shift = pinned - anchor;
+      wx += shift.x / uCamera[0][0];
+      wy += shift.y / uCamera[1][1];
+    }
+  }
 
   // Zoom-based culling (same as name shader)
   float cameraScale = length(vec2(uCamera[0][0], uCamera[1][0]));

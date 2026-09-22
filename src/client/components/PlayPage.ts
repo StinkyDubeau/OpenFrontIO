@@ -38,7 +38,7 @@ export class PlayPage extends LitElement {
               class="atlas-compliance-rail"
               aria-label="Attribution and source"
             >
-              <span aria-label="version">v26.2</span>
+              <span aria-label="version">v26.3</span>
               <span>© OpenFront and Contributors</span>
               <span class="atlas-compliance-rail__disclosure"
                 >Independent modification</span

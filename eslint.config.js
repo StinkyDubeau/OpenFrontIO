@@ -68,6 +68,8 @@ export default [
     // untyped parser also avoids exhausting projectService's intentionally
     // small allowDefaultProject budget.
     files: [
+      "scripts/**/*.{js,mjs,cjs,ts}",
+      "apps/mobile/src/*.js",
       "resources/idle/app.js",
       "scripts/idle-db-backup.mjs",
       "scripts/idle-public-gateway.mjs",
@@ -75,8 +77,14 @@ export default [
       "scripts/idle-windows-launcher.mjs",
       "scripts/generate-expanded-earth.mjs",
       "src/server/simulation/Simulation.worker.mjs",
+      "src/server/simulation/WaterRoute.worker.mjs",
+      "src/server/simulation/WildernessPlanner.worker.mjs",
     ],
     languageOptions: { parserOptions: { projectService: false } },
     rules: { "@typescript-eslint/prefer-nullish-coalescing": "off" },
+  },
+  {
+    files: ["**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
 ];

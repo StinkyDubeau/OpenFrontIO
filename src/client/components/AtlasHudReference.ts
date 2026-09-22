@@ -98,6 +98,7 @@ export function createHudReferenceGame(): GameView {
     numLandTiles: () => 1_000_000,
     numTilesWithFallout: () => 0,
     isValidCoord: () => true,
+    isTileVisible: () => true,
     ref: () => 1,
   } as unknown as GameView;
 }

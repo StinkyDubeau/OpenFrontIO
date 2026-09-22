@@ -8,6 +8,7 @@ import {
   toInt,
   within,
 } from "../Util";
+import { fleetHash, fleetView } from "../execution/FleetAutomation";
 import { AttackImpl } from "./AttackImpl";
 import {
   Alliance,
@@ -345,6 +346,7 @@ export class PlayerImpl implements Player {
       gold: this._gold,
       troops: this.troops(),
       pressure: pressureView(this),
+      fleet: fleetView(this),
       allies: allies,
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
@@ -1666,6 +1668,7 @@ export class PlayerImpl implements Player {
   hash(): number {
     return (
       pressureHash(this) +
+      fleetHash(this) +
       simpleHash(this.id()) * (this.troops() + this.numTilesOwned()) +
       this._units.reduce((acc, unit) => acc + unit.hash(), 0)
     );

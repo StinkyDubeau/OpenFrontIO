@@ -8,6 +8,7 @@ import {
   GameUpdateType,
   UnitIncomingUpdate,
 } from "../../../core/game/GameUpdates";
+import "../../components/FleetTargetSlider";
 import { Controller } from "../../Controller";
 import { themeProvider } from "../../theme/ThemeProvider";
 import {
@@ -94,7 +95,9 @@ export class AttacksDisplay extends LitElement implements Controller {
       !this.mobileLayout?.matches
     )
       return;
-    const details = this.querySelector(".atlas-flow-details");
+    const details = this.querySelector(
+      this.incomingExpanded ? ".atlas-defense-fronts" : ".atlas-flow-details",
+    );
     const hud = this.closest("atlas-game-hud");
     if (!details || !hud) return;
     for (const alert of hud.querySelectorAll<HTMLElement>("events-display")) {
@@ -803,6 +806,36 @@ export class AttacksDisplay extends LitElement implements Controller {
           color: #eee8d7;
           box-shadow: 0 4px 14px #0008;
         }
+        .atlas-flow-details.atlas-defense-details {
+          border: 0;
+          box-shadow: none;
+          padding: 0;
+          gap: 6px;
+          background: transparent;
+        }
+        .atlas-defense-details .fleet-control-region {
+          margin: 0;
+          box-shadow: none;
+        }
+        .atlas-defense-fronts {
+          min-width: 0;
+          display: grid;
+          gap: 4px;
+        }
+        .atlas-defense-details .atlas-defense-fronts {
+          padding: 6px 8px;
+          border: 1px solid var(--atlas-line, #65726866);
+          border-radius: 8px;
+          background: var(--atlas-surface, #09151066);
+        }
+        .atlas-defense-fronts .atlas-auto-defend {
+          border: 0;
+          box-shadow: none;
+          background: transparent;
+          padding: 4px 0;
+          text-align: left;
+          min-height: 36px;
+        }
         @media (prefers-reduced-motion: reduce) {
           .atlas-flow-gauge__needle {
             transition: none;
@@ -856,37 +889,51 @@ export class AttacksDisplay extends LitElement implements Controller {
         ${
           this.goldExpanded || this.incomingExpanded || this.outgoingExpanded
             ? html`<div
-                class="atlas-flow-details"
+                class="atlas-flow-details ${this.incomingExpanded ? "atlas-defense-details" : ""}"
                 role="region"
                 aria-label=${this.goldExpanded ? "Gold events" : this.incomingExpanded ? "Defense fronts" : "Attack fronts"}
               >
-                <strong style="font-size:12px"
-                  >${this.goldExpanded ? "Gold · donations" : this.incomingExpanded ? "Defense · ongoing fronts" : "Attack · ongoing fronts"}</strong
-                >
                 ${
-                  this.incomingExpanded && player?.pressure
-                    ? html`<div
-                        style="display:grid;gap:4px;padding-bottom:6px;border-bottom:1px solid #ffffff20"
-                      >
-                        <button
-                          type="button"
-                          class="atlas-instrument-readout"
-                          style="min-height:36px"
-                          aria-label="Auto-defend while active"
-                          aria-pressed=${player.pressure.autoDefenceEnabled === true}
-                          @click=${() => this.eventBus.emit(new SendMobilisationIntentEvent(player.pressure!.target, player.pressure!.autoDefenceEnabled !== true))}
-                        >
-                          Auto-defend while active ·
-                          ${player.pressure.autoDefenceEnabled === true ? "On" : "Off"}
-                        </button>
-                        <small
-                          >Always on while AFK. Mobilisation follows game
-                          speed.</small
-                        >
-                      </div>`
+                  this.incomingExpanded &&
+                  this.game.config().gameConfig().fleetAutomation === "v26.3"
+                    ? html`<fleet-target-slider
+                        .game=${this.game}
+                        .eventBus=${this.eventBus}
+                        .tick=${this.game.ticks()}
+                        .actualCount=${player?.units(UnitType.Warship).length ?? 0}
+                      ></fleet-target-slider>`
                     : ""
                 }
-                ${this.goldExpanded ? html`<span>${renderNumber(player?.gold() ?? 0n)} gold${this.tickerTypes.includes(MessageType.DONATION_RECEIVED) ? "" : " · No new donations"}</span>` : this.incomingExpanded ? html`${this.renderIncomingAttacks()}${this.renderIncomingBoats()}${incomingTroops === 0 ? "No incoming attacks" : ""}` : html`${this.renderOutgoingAttacks()}${this.renderOutgoingLandAttacks()}${this.renderBoats()}${outgoingTroops === 0 ? "No outgoing attacks" : ""}`}
+                <section
+                  class="atlas-defense-fronts"
+                  aria-label=${this.incomingExpanded ? "ongoing fronts" : "activity"}
+                >
+                  <strong style="font-size:12px"
+                    >${this.goldExpanded ? "gold · donations" : this.incomingExpanded ? "ongoing fronts" : "attack · ongoing fronts"}</strong
+                  >
+                  ${
+                    this.incomingExpanded && player?.pressure
+                      ? html`<div style="display:grid;gap:2px">
+                          <button
+                            type="button"
+                            class="atlas-auto-defend"
+                            style="min-height:36px"
+                            aria-label="Auto-defend while active"
+                            aria-pressed=${player.pressure.autoDefenceEnabled === true}
+                            @click=${() => this.eventBus.emit(new SendMobilisationIntentEvent(player.pressure!.target, player.pressure!.autoDefenceEnabled !== true))}
+                          >
+                            Auto-defend while active ·
+                            ${player.pressure.autoDefenceEnabled === true ? "On" : "Off"}
+                          </button>
+                          <small
+                            >Always on while AFK. Mobilisation follows game
+                            speed.</small
+                          >
+                        </div>`
+                      : ""
+                  }
+                  ${this.goldExpanded ? html`<span>${renderNumber(player?.gold() ?? 0n)} gold${this.tickerTypes.includes(MessageType.DONATION_RECEIVED) ? "" : " · No new donations"}</span>` : this.incomingExpanded ? html`${this.renderIncomingAttacks()}${this.renderIncomingBoats()}${incomingTroops === 0 ? "No incoming attacks" : ""}` : html`${this.renderOutgoingAttacks()}${this.renderOutgoingLandAttacks()}${this.renderBoats()}${outgoingTroops === 0 ? "No outgoing attacks" : ""}`}
+                </section>
               </div>`
             : ""
         }

@@ -32,6 +32,7 @@ import {
   EMOJI_ASSIST_TARGET_ME,
   NationEmojiBehavior,
 } from "../nation/NationEmojiBehavior";
+import { navalPacingScale } from "../NavalPacing";
 import { TransportShipExecution } from "../TransportShipExecution";
 import { closestTwoTiles } from "../Util";
 
@@ -41,6 +42,7 @@ const NEIGHBOR_SCRATCH: TileRef[] = [0, 0, 0, 0];
 export class AiAttackBehavior {
   private botAttackTroopsSent: number = 0;
   private nextNavalCampaignTick = 0;
+  private navalRosterCursor = 0;
   private navalObjective: {
     tile: TileRef;
     started: number;
@@ -132,7 +134,9 @@ export class AiAttackBehavior {
     if (this.player.type() !== PlayerType.Nation) return;
     const tick = this.game.ticks();
     if (tick < this.nextNavalCampaignTick) return;
-    this.nextNavalCampaignTick = tick + 300 + (this.player.smallID() % 100);
+    const pace = navalPacingScale(this.game);
+    this.nextNavalCampaignTick =
+      tick + Math.ceil((150 + (this.player.smallID() % 50)) * pace);
     if (
       this.game.inSpawnPhase() ||
       hasPressureGrace(this.game, this.player) ||
@@ -142,7 +146,10 @@ export class AiAttackBehavior {
     )
       return;
     const free = this.player.troops();
-    if (free < 1000) return;
+    if (free < 1000) {
+      setAiMobilisationTarget(this.player, 0.75);
+      return;
+    }
     const incoming = this.player
       .incomingAttacks()
       .filter((a) => a.isActive() && !a.retreating())
@@ -150,7 +157,12 @@ export class AiAttackBehavior {
     if (incoming > free * 0.25) return;
     const roster = this.game.players();
     if (!roster.length) return;
-    const start = this.random.nextInt(0, roster.length);
+    // Round-robin sampling guarantees coverage instead of repeatedly missing
+    // a weak island. Keep both roster work and path queries bounded.
+    const start =
+      (this.navalRosterCursor + this.player.smallID()) % roster.length;
+    this.navalRosterCursor =
+      (this.navalRosterCursor + Math.min(12, roster.length)) % roster.length;
     let queries = 0;
     const tryLanding = (tile: TileRef): boolean => {
       if (
@@ -180,11 +192,24 @@ export class AiAttackBehavior {
     const objective = this.navalObjective;
     if (objective) {
       const owner = this.game.owner(objective.tile);
+      const enRoute = this.player
+        .units(UnitType.TransportShip)
+        .some(
+          (ship) =>
+            ship.isActive() &&
+            ship.targetTile() === objective.tile &&
+            !ship.transportShipState().isRetreating,
+        );
       const stalled =
-        tick - objective.started >= 900 &&
+        !enRoute &&
+        tick - objective.started >= 900 * pace &&
         this.player.numTilesOwned() <= objective.initialLand;
+      if (enRoute && objective.attempts >= 3) return;
       if (stalled || objective.attempts >= 3) {
-        this.failedNavalTile = { tile: objective.tile, until: tick + 1800 };
+        this.failedNavalTile = {
+          tile: objective.tile,
+          until: tick + 1800 * pace,
+        };
         this.navalObjective = null;
       } else if (
         (!owner.isPlayer() ||
@@ -199,6 +224,7 @@ export class AiAttackBehavior {
         this.navalObjective = null;
       }
     }
+    const candidates: { tile: TileRef; score: number }[] = [];
     for (let offset = 0; offset < Math.min(12, roster.length); offset++) {
       const target = roster[(start + offset) % roster.length];
       if (
@@ -226,7 +252,17 @@ export class AiAttackBehavior {
           }
         }
       }
-      if (tile !== undefined && tryLanding(tile)) return;
+      if (tile !== undefined)
+        candidates.push({
+          tile,
+          score:
+            (1 + Math.min(ports.length, 10)) / Math.max(1, target.troops()),
+        });
+    }
+    // Prefer valuable, weakly defended coasts without privileging humans.
+    candidates.sort((a, b) => b.score - a.score);
+    for (const candidate of candidates) {
+      if (tryLanding(candidate.tile)) return;
       if (queries >= 2) return;
     }
     // Also discover undeveloped islands, rather than requiring an enemy port.

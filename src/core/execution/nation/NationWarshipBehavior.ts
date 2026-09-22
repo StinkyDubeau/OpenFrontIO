@@ -11,6 +11,7 @@ import {
 import { TileRef } from "../../game/GameMap";
 import { PseudoRandom } from "../../PseudoRandom";
 import { ConstructionExecution } from "../ConstructionExecution";
+import { navalPacingScale } from "../NavalPacing";
 import {
   EMOJI_WARSHIP_RETALIATION,
   NationEmojiBehavior,
@@ -43,7 +44,11 @@ export class NationWarshipBehavior {
     if (pressure && this.game.ticks() < this.nextFleetBuildTick) return false;
     if (pressure)
       this.nextFleetBuildTick =
-        this.game.ticks() + 300 + (this.player.smallID() % 100);
+        this.game.ticks() +
+        Math.ceil(
+          (150 + (this.player.smallID() % 50)) * navalPacingScale(this.game),
+        );
+    if (pressure) this.escortInvasion();
     if (!pressure && !this.random.chance(50)) {
       return false;
     }
@@ -53,7 +58,7 @@ export class NationWarshipBehavior {
       ports.length > 0 &&
       ships.length <
         (pressure
-          ? Math.min(4, Math.max(1, Math.ceil(ports.length / 3)))
+          ? Math.min(4, Math.max(2, Math.ceil(ports.length / 3)))
           : 1) &&
       this.player.gold() > this.cost(UnitType.Warship)
     ) {
@@ -95,6 +100,33 @@ export class NationWarshipBehavior {
       return tile;
     }
     return null;
+  }
+
+  /** Patrol ahead of a live transport; native navigation and combat still apply. */
+  private escortInvasion(): void {
+    const transport = this.player
+      .units(UnitType.TransportShip)
+      .find(
+        (ship) => ship.isActive() && !ship.transportShipState().isRetreating,
+      );
+    const destination = transport?.targetTile();
+    if (!transport || destination === undefined) return;
+    const owner = this.game.owner(destination);
+    if (
+      owner === this.player ||
+      (owner.isPlayer() && this.player.isFriendly(owner))
+    )
+      return;
+    // Use the transport's current water tile: it already lies on a navigable
+    // route, unlike an arbitrary point across an island or disconnected lake.
+    const tile = transport.tile();
+    if (!this.game.isWater(tile)) return;
+    let assigned = 0;
+    for (const ship of this.player.units(UnitType.Warship)) {
+      if (!ship.isActive() || ship.isUnderConstruction()) continue;
+      ship.updateWarshipState({ patrolTile: tile });
+      if (++assigned === 2) break;
+    }
   }
 
   trackShipsAndRetaliate(): void {

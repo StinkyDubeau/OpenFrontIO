@@ -563,11 +563,9 @@ export class PerformanceOverlay extends LitElement implements Controller {
   };
 
   init() {
-    // Profiling hooks and the overlay itself are inaccessible outside runtime
-    // debug mode. Development builds and `?debug=1` auto-open it for the
-    // current performance investigation; production remains silent by default.
-    const debug = runtimeDebugEnabled();
-    this.setVisible(debug);
+    // Debug mode permits diagnostics, but never opens a panel over gameplay.
+    // Opening the overlay requires an explicit settings/keyboard action.
+    this.setVisible(false);
 
     if (this.subscribedEventBus && this.subscribedEventBus !== this.eventBus) {
       this.subscribedEventBus.off(

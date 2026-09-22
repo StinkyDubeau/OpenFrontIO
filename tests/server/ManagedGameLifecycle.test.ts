@@ -198,7 +198,7 @@ describe("managed GameServer lifecycle", () => {
     expect(game.joinClient(intruder)).toBe("rejected");
   });
 
-  it("honors its external start and expiry without empty-client teardown", () => {
+  it("honors its external start and treats duration as pacing, not forced teardown", () => {
     const game = managedGame();
     expect(game.phase()).toBe(GamePhase.Lobby);
 
@@ -206,7 +206,7 @@ describe("managed GameServer lifecycle", () => {
     expect(game.phase()).toBe(GamePhase.Active);
 
     vi.setSystemTime(managedCommand.expiresAt + 1);
-    expect(game.phase()).toBe(GamePhase.Finished);
+    expect(game.phase()).toBe(GamePhase.Active);
   });
 
   it("continues at the restored turn high-watermark and journals intents immediately", () => {

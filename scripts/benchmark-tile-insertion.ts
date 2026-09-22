@@ -27,7 +27,7 @@ const before: number[] = [],
   after: number[] = [];
 for (let repeat = 0; repeat < 7; repeat++) {
   const first = measure(Boolean(repeat % 2)),
-    second = measure(!Boolean(repeat % 2));
+    second = measure(!(repeat % 2));
   const old = repeat % 2 ? second : first,
     optimized = repeat % 2 ? first : second;
   assert.deepEqual(old.result, optimized.result);

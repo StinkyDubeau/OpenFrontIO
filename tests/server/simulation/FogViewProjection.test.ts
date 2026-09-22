@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { configureFleet } from "../../../src/core/execution/FleetAutomation";
 import {
   PlayerInfo,
   PlayerType,
@@ -49,6 +50,14 @@ it("redacts hidden activity, reveals units without needing a fresh engine diff, 
   fog.advance();
   const project = new FogViewProjection(game, fog.forClient("seat1"));
   const source = emptyView(1);
+  for (const player of [a, b])
+    configureFleet(game, player, {
+      enabled: true,
+      target: 2,
+      reserve: 1000,
+      ports: [],
+      order: "defend",
+    });
   source.updates[GameUpdateType.Player] = game
     .allPlayers()
     .map((p) => (p as PlayerImpl).toFullUpdate());
@@ -75,6 +84,13 @@ it("redacts hidden activity, reveals units without needing a fresh engine diff, 
     },
   ]);
   const hidden = project.project(source);
+  expect(
+    hidden.updates[GameUpdateType.Player].find((p) => p.id === a.id())?.fleet
+      ?.enabled,
+  ).toBe(true);
+  expect(
+    hidden.updates[GameUpdateType.Player].find((p) => p.id === b.id())?.fleet,
+  ).toBeUndefined();
   expect(hidden.updates[GameUpdateType.Unit]).toHaveLength(0);
   expect(hidden.packedPlayerUpdates).toEqual(
     new Float64Array([a.smallID(), 1, 50, 100]),

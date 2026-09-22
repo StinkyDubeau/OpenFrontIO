@@ -8,6 +8,7 @@ import {
 import { mobilisePopulation } from "./PopulationMobilisation";
 
 export interface PressureView {
+  explicitIdle?: boolean;
   civilians: number;
   military: number;
   target: number;
@@ -45,6 +46,7 @@ export function pressureView(player: Player): PressureView | undefined {
   return (
     s && {
       civilians: Math.floor(s.civilians),
+      explicitIdle: s.explicitIdle === true,
       military: Math.floor(player.troops() + deployedTroops(player)),
       target: s.target,
       effectiveTarget: s.effectiveTarget,
@@ -72,6 +74,7 @@ export function samePressure(a?: PressureView, b?: PressureView): boolean {
       a.effectiveTarget === b.effectiveTarget &&
       a.growthPerSecond === b.growthPerSecond &&
       a.autoDefenceEnabled === b.autoDefenceEnabled &&
+      a.explicitIdle === b.explicitIdle &&
       a.automatic === b.automatic)
   );
 }
@@ -100,7 +103,21 @@ export function setMobilisationTarget(
 export function notePressureActivity(game: Game, player: Player): void {
   // Do not initialise population before spawn has supplied the starting army.
   const state = populations.get(player);
-  if (state) state.lastManualTick = game.ticks();
+  if (state) {
+    state.lastManualTick = game.ticks();
+    state.explicitIdle = false;
+  }
+}
+export function setExplicitIdle(
+  game: Game,
+  player: Player,
+  idle: boolean,
+): void {
+  if (!game.config().gameConfig().continuousPressure || !player.isAlive())
+    return;
+  const state = pressurePopulation(game, player);
+  state.explicitIdle = idle;
+  if (!idle) state.lastManualTick = game.ticks();
 }
 /** Native attacks and transports already debit the free troop pool. */
 export function deployedTroops(player: Player): number {
@@ -145,6 +162,7 @@ export function updatePressurePopulation(game: Game, player: Player): void {
   s.growthPerSecond = seconds > 0 ? (grown - population) / seconds : 0;
   s.civilians += grown - population;
   const automatic =
+    s.explicitIdle === true ||
     player.type() !== PlayerType.Human ||
     s.autoDefenceEnabled === true ||
     player.isDisconnected() ||
@@ -189,6 +207,7 @@ export function pressureHash(player: Player): number {
   const s = populations.get(player);
   return s
     ? Math.floor(s.civilians * 1000) +
+        (s.explicitIdle ? 314187 : 0) +
         s.lastManualTick * 31 +
         Math.round(s.target * 10000) +
         s.lastTick * 17 +

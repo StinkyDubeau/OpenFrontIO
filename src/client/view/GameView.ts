@@ -1,5 +1,4 @@
 import { Config } from "../../core/configuration/Config";
-import { resolveFogTapTarget } from "./FogTapTarget";
 import {
   Cell,
   GameUpdates,
@@ -40,6 +39,7 @@ import { SpiralTrails } from "../render/frame/SpiralTrails";
 import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES } from "../render/types";
+import { resolveFogTapTarget } from "./FogTapTarget";
 import { PlayerView } from "./PlayerView";
 import { UnitView } from "./UnitView";
 
@@ -320,7 +320,12 @@ export class GameView implements GameMap {
   private fogGlobal = false;
 
   isTileVisible(tile: TileRef): boolean {
-    return this.isValidRef(tile) && (!this.fogEnabled || this.fogGlobal || (this._map.tileState(tile) & 0x8000) !== 0);
+    return (
+      this.isValidRef(tile) &&
+      (!this.fogEnabled ||
+        this.fogGlobal ||
+        (this._map.tileState(tile) & 0x8000) !== 0)
+    );
   }
 
   public resolveFogTap(tile: TileRef): TileRef | null {
@@ -329,12 +334,15 @@ export class GameView implements GameMap {
   }
 
   public update(gu: GameUpdateViewData) {
+    this.lastViewUpdateMs = performance.now();
     if (gu.fog) {
       this.fogEnabled = gu.fog.enabled;
       this.fogGlobal = gu.fog.global;
       this.fogHiddenPlayers = new Set(gu.fog.hiddenPlayers);
       this._namesDirty = true;
-      const forget = gu.fog.resetUnits ? [...this._units.keys()] : gu.fog.forgottenUnits;
+      const forget = gu.fog.resetUnits
+        ? [...this._units.keys()]
+        : gu.fog.forgottenUnits;
       for (const id of forget) {
         const unit = this._units.get(id);
         if (unit) this.unitGrid.removeUnit(unit);
@@ -346,7 +354,8 @@ export class GameView implements GameMap {
         this._nukeUnitIds.delete(id);
         this._transportUnitIds.delete(id);
         if (unit) this._updatedUnits.delete(unit);
-        if (this.unitMotionPlans.delete(id)) this.markMotionPlannedUnitIdsDirty();
+        if (this.unitMotionPlans.delete(id))
+          this.markMotionPlannedUnitIdsDirty();
         this.clearTrainPlanForUnit(id);
         this.toDelete.delete(id);
         this._structuresDirty = true;
@@ -851,6 +860,16 @@ export class GameView implements GameMap {
         gold: Number(b.gold),
         troops: b.troops,
       });
+      if (b.player === myID && b.gold > 0n && this.isTileVisible(b.tile)) {
+        this.cinematicDeliveries.push({
+          id: ++this.cinematicDeliveryId,
+          tick: this.ticks(),
+          tile: b.tile,
+          gold: Number(b.gold),
+        });
+        if (this.cinematicDeliveries.length > 32)
+          this.cinematicDeliveries.shift();
+      }
     }
   }
 
@@ -1179,7 +1198,9 @@ export class GameView implements GameMap {
   }
 
   players(): PlayerView[] {
-    return Array.from(this._players.values()).filter(player => !this.fogHiddenPlayers.has(player.smallID()));
+    return Array.from(this._players.values()).filter(
+      (player) => !this.fogHiddenPlayers.has(player.smallID()),
+    );
   }
 
   /**
@@ -1260,6 +1281,33 @@ export class GameView implements GameMap {
   config(): Config {
     return this._config;
   }
+  public lastViewUpdateMs = 0;
+  /** Existing train plan length; no route search or path copying for the camera. */
+  cinematicTrainRouteLength(unitId: number): number {
+    const engine = this.trainUnitToEngine.get(unitId) ?? unitId;
+    return this.trainMotionPlans.get(engine)?.path.length ?? 0;
+  }
+  private cinematicDeliveryId = 0;
+  public cinematicDeliveries: {
+    id: number;
+    tick: number;
+    tile: TileRef;
+    gold: number;
+  }[] = [];
+
+  /** Bounded cinematic candidates from the existing missile index, never the whole world. */
+  cinematicNukes(): UnitView[] {
+    const result: UnitView[] = [];
+    let inspected = 0;
+    for (const id of this._nukeUnitIds) {
+      if (++inspected > 512) break;
+      const unit = this._units.get(id);
+      if (unit?.isActive() && this.isTileVisible(unit.tile()))
+        result.push(unit);
+    }
+    return result;
+  }
+
   units(...types: UnitType[]): UnitView[] {
     if (types.length === 0) {
       return Array.from(this._units.values()).filter((u) => u.isActive());

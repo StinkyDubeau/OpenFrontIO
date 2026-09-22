@@ -261,6 +261,7 @@ export class PersistentWorldRuntimeBridge implements PersistentWorldRuntimeCoord
       ...("allianceProtectionMinutes" in preset
         ? {
             continuousPressure: "v1",
+            fleetAutomation: "v26.3",
             allianceProtectionMinutes: preset.allianceProtectionMinutes,
             pressureGraceSeconds: preset.pressureGraceSeconds,
             passiveWildernessExpansion: true,

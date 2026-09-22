@@ -46,6 +46,15 @@ export class FogViewProjection {
     if (this.fog.global)
       return {
         ...source,
+        updates: {
+          ...source.updates,
+          [GameUpdateType.Player]: source.updates[GameUpdateType.Player].map(
+            (update) =>
+              update.id === this.fog.player.id()
+                ? update
+                : { ...update, fleet: undefined },
+          ),
+        },
         fog: {
           enabled: true,
           global: true,
@@ -296,6 +305,7 @@ export class FogViewProjection {
     if (visible)
       return {
         ...update,
+        fleet: undefined,
         spawnTile:
           update.spawnTile !== undefined && this.fog.isVisible(update.spawnTile)
             ? update.spawnTile

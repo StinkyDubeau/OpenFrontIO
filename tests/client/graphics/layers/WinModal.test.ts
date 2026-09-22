@@ -134,7 +134,7 @@ describe("WinModal pattern promotion", () => {
     modal = undefined;
   });
 
-  it("renders three card-and-purchase promotions from four purchasable patterns", async () => {
+  it("keeps upstream cosmetic purchase promotions out of the match result", async () => {
     const purchasablePatterns: ResolvedCosmetic[] = [
       "aurora",
       "blaze",
@@ -169,9 +169,9 @@ describe("WinModal pattern promotion", () => {
     await modal.updateComplete;
 
     const promotions = modal.querySelectorAll("[data-win-cosmetic-promo]");
-    expect(promotions).toHaveLength(3);
-    expect(modal.querySelectorAll("cosmetic-card")).toHaveLength(3);
-    expect(modal.querySelectorAll("purchase-button")).toHaveLength(3);
+    expect(promotions).toHaveLength(0);
+    expect(modal.querySelectorAll("cosmetic-card")).toHaveLength(0);
+    expect(modal.querySelectorAll("purchase-button")).toHaveLength(0);
     for (const button of modal.querySelectorAll<PurchaseButton>(
       "purchase-button",
     )) {

@@ -29,12 +29,24 @@ export class WarshipExecution implements Execution {
 
   constructor(
     private input: (UnitParams<UnitType.Warship> & OwnerComp) | Unit,
+    private automation?: {
+      allowed: () => boolean;
+      finished: (unit?: Unit) => void;
+    },
   ) {}
 
   init(mg: Game, ticks: number): void {
     this.mg = mg;
     this.pathfinder = new WaterPathFinder(mg);
     this.random = new PseudoRandom(mg.ticks());
+    if (
+      this.automation &&
+      (!this.automation.allowed() ||
+        mg.config().isUnitDisabled(UnitType.Warship))
+    ) {
+      this.automation.finished();
+      return;
+    }
     if (isUnit(this.input)) {
       this.warship = this.input;
     } else {
@@ -43,6 +55,7 @@ export class WarshipExecution implements Execution {
         this.input.patrolTile,
       );
       if (spawn === false) {
+        this.automation?.finished();
         console.warn(
           `Failed to spawn warship for ${this.input.owner.name()} at ${this.input.patrolTile}`,
         );
@@ -55,6 +68,7 @@ export class WarshipExecution implements Execution {
       );
     }
     this.lastObservedPatrolTile = this.warship.warshipState().patrolTile;
+    this.automation?.finished(this.warship);
   }
 
   tick(ticks: number): void {

@@ -1,6 +1,7 @@
 import { ClientEnv } from "src/client/ClientEnv";
 import { z } from "zod";
 import { EventBus, GameEvent } from "../core/EventBus";
+import type { FleetOrders } from "../core/FleetOrders";
 import {
   AllPlayers,
   GameType,
@@ -225,7 +226,17 @@ export class SendToggleGameStartTimer implements GameEvent {
   constructor() {}
 }
 
+export class SendFleetOrdersEvent implements GameEvent {
+  constructor(public readonly orders: FleetOrders) {}
+}
+export class SendIdleModeEvent implements GameEvent {
+  constructor(public readonly idle: boolean) {}
+}
+export class GameSessionEndedEvent implements GameEvent {}
+
 export class Transport {
+  private idleControlsLocked = false;
+  private idlePresencePending = false;
   private viewReceiver?: (sequence: number, packet: ViewPacket) => void;
   setViewReceiver(
     receiver: ((sequence: number, packet: ViewPacket) => void) | undefined,
@@ -257,6 +268,14 @@ export class Transport {
     this.isLocal =
       lobbyConfig.gameRecord !== undefined ||
       lobbyConfig.gameStartInfo?.config.gameType === GameType.Singleplayer;
+    this.eventBus.on(SendFleetOrdersEvent, (e) =>
+      this.sendIntent({ type: "fleet_orders", orders: e.orders }),
+    );
+    this.eventBus.on(SendIdleModeEvent, (e) => {
+      this.idleControlsLocked = e.idle;
+      this.idlePresencePending = true;
+      this.sendIntent({ type: "idle_mode", idle: e.idle });
+    });
 
     this.eventBus.on(SendAllianceRequestIntentEvent, (e) =>
       this.onSendAllianceRequest(e),
@@ -410,6 +429,9 @@ export class Transport {
     this.onmessage = onmessage;
     socket.onopen = () => {
       if (this.socket !== socket) return;
+      // Reassert an explicitly chosen local mode after the authenticated view
+      // arrives, never before join/authentication and never on every heartbeat.
+      if (this.idleControlsLocked) this.idlePresencePending = true;
       console.log("Connected to game server!");
       if (this.socket === null) {
         console.error("socket is null");
@@ -440,6 +462,11 @@ export class Transport {
               throw new Error("View packet is missing its sequence header");
             const sequence = new DataView(binary).getUint32(0);
             this.viewReceiver?.(sequence, decodeViewPacket(binary.slice(4)));
+            if (this.idlePresencePending)
+              this.sendIntent({
+                type: "idle_mode",
+                idle: this.idleControlsLocked,
+              });
             return;
           }
           if (typeof event.data !== "string")
@@ -545,6 +572,7 @@ export class Transport {
   }
 
   leaveGame() {
+    this.eventBus.emit(new GameSessionEndedEvent());
     if (this.isLocal) {
       this.localServer.endGame();
       return;
@@ -788,6 +816,7 @@ export class Transport {
   }
 
   private sendIntent(intent: Intent) {
+    if (this.idleControlsLocked && intent.type !== "idle_mode") return;
     if (intent.type === "spawn") {
       window.dispatchEvent(
         new CustomEvent("idlefront:diagnostic", {
@@ -799,6 +828,7 @@ export class Transport {
       );
     }
     if (this.isLocal || this.socket?.readyState === WebSocket.OPEN) {
+      if (intent.type === "idle_mode") this.idlePresencePending = false;
       const msg = {
         type: "intent",
         intent: intent,
