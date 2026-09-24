@@ -665,11 +665,7 @@ export class ControlPanel extends LitElement implements Controller {
       class="atlas-mobilisation-compact"
       style="display:grid;gap:4px;padding:2px 4px;color:inherit;font-size:12px"
     >
-      <div
-        style="display:flex;align-items:center;justify-content:space-between;gap:8px"
-      >
-        ${pressure.automatic ? html`<span>Auto-defending</span>` : ""}
-      </div>
+      ${pressure.automatic ? html`<div>auto-defending</div>` : ""}
       <style>
         .atlas-pressure-dials {
           display: grid;
@@ -740,6 +736,18 @@ export class ControlPanel extends LitElement implements Controller {
         .atlas-structure-register button[aria-pressed="true"] {
           background: #a8c7ad30;
           box-shadow: inset 0 0 0 1px #a8c7ad;
+        }
+        .atlas-structure-register button:first-child {
+          border-bottom-left-radius: min(
+            24px,
+            var(--atlas-device-bottom-radius, 12px)
+          );
+        }
+        .atlas-structure-register button:last-child {
+          border-bottom-right-radius: min(
+            24px,
+            var(--atlas-device-bottom-radius, 12px)
+          );
         }
         @media (min-width: 769px) {
           .atlas-structure-register {

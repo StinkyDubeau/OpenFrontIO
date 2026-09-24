@@ -33,7 +33,7 @@ it("enters idle after two minutes of actual input inactivity, not simulation ina
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("shows only idle, without a separate fleet control surface", async () => {
+it("shows focus and idle, without a separate fleet control surface", async () => {
   const el = document.createElement("fleet-panel") as FleetPanel;
   el.game = {
     myPlayer: () => ({ isAlive: () => true, pressure: {} }),
@@ -43,6 +43,9 @@ it("shows only idle, without a separate fleet control surface", async () => {
   await el.updateComplete;
   expect(
     [...el.querySelectorAll("button")].map((b) => b.textContent?.trim()),
-  ).toEqual(["idle"]);
+  ).toEqual(["focus", "idle"]);
+  const emit = vi.spyOn(el.eventBus, "emit");
+  el.querySelector("button")!.click();
+  expect(emit).toHaveBeenCalledOnce();
   expect(el.querySelector(".fleet-dialog")).toBeNull();
 });

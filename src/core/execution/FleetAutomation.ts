@@ -66,13 +66,40 @@ export function configureFleet(
   player: Player,
   input: FleetOrders,
 ): void {
-  const parsed = FleetOrdersSchema.safeParse(input);
+  if (player.type() !== PlayerType.Human) return;
+  setFleetOrders(game, player, input);
+}
+
+/** Simulation-only entry point; client fleet intents remain human-only. */
+export function configureNationFleet(
+  game: Game,
+  player: Player,
+  input: FleetOrders,
+): void {
   if (
-    !parsed.success ||
-    player.type() !== PlayerType.Human ||
-    !player.isAlive()
+    player.type() !== PlayerType.Nation ||
+    game.config().gameConfig().nationStrategy !== "v2"
   )
     return;
+  const prior = fleetView(player);
+  if (
+    prior &&
+    prior.target === input.target &&
+    prior.reserve === input.reserve &&
+    prior.order === input.order &&
+    prior.enabled === input.enabled &&
+    prior.automaticPorts === input.automaticPorts &&
+    prior.patrolTile === input.patrolTile &&
+    prior.ports.length === input.ports.length &&
+    prior.ports.every((id, i) => id === input.ports[i])
+  )
+    return;
+  setFleetOrders(game, player, input);
+}
+
+function setFleetOrders(game: Game, player: Player, input: FleetOrders): void {
+  const parsed = FleetOrdersSchema.safeParse(input);
+  if (!parsed.success || !player.isAlive()) return;
   const orders = parsed.data;
   if (
     orders.order === "patrol" &&

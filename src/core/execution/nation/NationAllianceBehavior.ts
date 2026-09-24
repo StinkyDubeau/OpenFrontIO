@@ -18,12 +18,18 @@ import {
   EMOJI_SCARED_OF_THREAT,
   NationEmojiBehavior,
 } from "./NationEmojiBehavior";
+import { nationStrategy, usesNationStrategy } from "./NationStrategy";
 
 export class NationAllianceBehavior {
   private nextDiplomacyTick = 0;
   private contactedAt = new Map<string, number>();
 
   private pressurePartnerUseful(other: Player, renewing = false): boolean {
+    if (
+      usesNationStrategy(this.game, this.player) &&
+      !nationStrategy(this.game, this.player).usefulAlly(other)
+    )
+      return false;
     if (
       other === this.player ||
       !other.isAlive() ||

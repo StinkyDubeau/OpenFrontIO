@@ -19,6 +19,7 @@ import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
 import { NationMIRVBehavior } from "./nation/NationMIRVBehavior";
 import { NationNukeBehavior } from "./nation/NationNukeBehavior";
+import { nationStrategy, usesNationStrategy } from "./nation/NationStrategy";
 import { NationStructureBehavior } from "./nation/NationStructureBehavior";
 import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { SpawnExecution } from "./SpawnExecution";
@@ -178,6 +179,10 @@ export class NationExecution implements Execution {
       return;
     }
 
+    if (usesNationStrategy(this.mg, this.player)) {
+      nationStrategy(this.mg, this.player).tick();
+    }
+
     if (ticks % this.attackRate !== this.attackTick) {
       // Call handleStructures twice between regular attack ticks (at 1/3 and 2/3 of the interval)
       // Otherwise it is possible that we earn more gold than we can spend
@@ -203,9 +208,14 @@ export class NationExecution implements Execution {
     this.allianceBehavior.maybePressureDiplomacy();
     this.mirvBehavior.considerMIRV();
     this.structureBehavior.handleStructures();
-    this.warshipBehavior.maybeSpawnWarship();
+    if (
+      !usesNationStrategy(this.mg, this.player) ||
+      this.mg.config().gameConfig().nationStrategy === "v2"
+    )
+      this.warshipBehavior.maybeSpawnWarship();
     this.handleEmbargoesToHostileNations();
-    this.attackBehavior.maybeAttack();
+    if (!usesNationStrategy(this.mg, this.player))
+      this.attackBehavior.maybeAttack();
     this.warshipBehavior.counterWarshipInfestation();
     this.nukeBehavior.maybeSendNuke();
   }

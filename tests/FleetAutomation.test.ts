@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Executor } from "../src/core/execution/ExecutionManager";
 import {
   configureFleet,
+  configureNationFleet,
   fleetHash,
   fleetView,
   updateFleet,
@@ -64,6 +65,31 @@ function ticks(n: number) {
 }
 
 describe("authoritative fleet automation", () => {
+  it("lets v2 nations replenish through native purchases while client fleet commands stay human-only", () => {
+    vi.spyOn(player, "type").mockReturnValue(PlayerType.Nation);
+    game.config().gameConfig().nationStrategy = "v2";
+    configureFleet(game, player, orders);
+    expect(fleetView(player)).toBeUndefined();
+    configureNationFleet(game, player, orders);
+    const revision = fleetView(player)!.revision;
+    configureNationFleet(game, player, orders);
+    expect(fleetView(player)!.revision).toBe(revision);
+    const gold = player.gold();
+    ticks(150);
+    expect(player.unitCount(UnitType.Warship)).toBe(2);
+    expect(player.gold()).toBeLessThan(gold);
+    expect(player.gold()).toBeGreaterThanOrEqual(BigInt(orders.reserve));
+  });
+
+  it("does not enable nation replenishment in legacy games or for humans through the AI entry point", () => {
+    game.config().gameConfig().nationStrategy = "v2";
+    configureNationFleet(game, player, orders);
+    expect(fleetView(player)).toBeUndefined();
+    vi.spyOn(player, "type").mockReturnValue(PlayerType.Nation);
+    game.config().gameConfig().nationStrategy = "v1";
+    configureNationFleet(game, player, orders);
+    expect(fleetView(player)).toBeUndefined();
+  });
   it("uses current owned ports without selections and zero target spends nothing", () => {
     configureFleet(game, player, {
       ...orders,

@@ -81,6 +81,50 @@ describe("persistent-world runtime bridge", () => {
     return { host, gameplayHash, world };
   }
 
+  it.each(["quickplay", "longplay", "idlefront"] as const)(
+    "enables strategic nations for every new %s runtime",
+    async (gamePreset) => {
+      const host = service.createGuestSession({
+        displayName: "Strategy Tester",
+      });
+      service.bindGameplayIdentity(
+        host.bearerToken,
+        createHash("sha256").update(gamePreset).digest("hex"),
+      );
+      const created = service.createWorld(host.bearerToken, {
+        name: "Strategy Preview",
+        gamePreset,
+        targetDuration: "1h",
+        access: "private",
+        mode: "ffa",
+        maxHumans: 4,
+        startsAt: now + MINUTE,
+      });
+      now += MINUTE;
+      const world = repository.markActive(created.snapshot.world.id, now);
+      const dispatch = vi.fn(
+        async (
+          command: MasterCreateManagedGame,
+        ): Promise<WorkerManagedGameReady> => ({
+          type: "managedGameReady",
+          requestId: command.requestId,
+          gameID: command.gameID,
+          workerId: 0,
+          outcome: "created",
+        }),
+      );
+      await new PersistentWorldRuntimeBridge(
+        repository,
+        { gameConfig: async () => UPSTREAM_CONFIG } as unknown as MapPlaylist,
+        dispatch,
+      ).ensure(world);
+      expect(repository.getRuntime(world.id)?.gameConfig.nationStrategy).toBe(
+        "v2",
+      );
+      expect(dispatch.mock.calls[0][0].gameConfig.nationStrategy).toBe("v2");
+    },
+  );
+
   it("shares scheduler reconciliation and recovers old worlds sequentially", async () => {
     const { world } = setup();
     const second = { ...world, id: "second-world" };

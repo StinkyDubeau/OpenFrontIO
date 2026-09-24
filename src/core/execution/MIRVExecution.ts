@@ -14,6 +14,7 @@ import { ParabolaUniversalPathFinder } from "../pathfinding/PathFinder.Parabola"
 import { PathStatus } from "../pathfinding/types";
 import { PseudoRandom } from "../PseudoRandom";
 import { simpleHash } from "../Util";
+import { noteNationStrike } from "./nation/NationOpportunity";
 import { NukeExecution } from "./NukeExecution";
 
 export class MirvExecution implements Execution {
@@ -104,6 +105,7 @@ export class MirvExecution implements Execution {
         targetTile: this.dst,
       });
       this.mg.stats().bombLaunch(this.player, this.targetPlayer, UnitType.MIRV);
+      noteNationStrike(this.mg, this.player, this.targetPlayer);
       const x = Math.floor((this.baseX + this.mg.x(this.nuke.tile())) / 2);
       const y = Math.max(0, this.baseY - 500) + 50;
       this.separateDst = this.mg.ref(x, y);

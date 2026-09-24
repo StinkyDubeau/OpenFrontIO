@@ -1,10 +1,11 @@
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { EventBus } from "../../core/EventBus";
+import { GoToPlayerEvent } from "../TransformHandler";
 import type { GameView } from "../view";
 import "./IdleDashboard";
 
-/** Idle action only; fleet controls live in the defense slider. */
+/** Camera actions only; fleet controls live in the defense slider. */
 @customElement("fleet-panel")
 export class FleetPanel extends LitElement {
   @property({ attribute: false }) game: GameView;
@@ -55,17 +56,23 @@ export class FleetPanel extends LitElement {
         .fleet-actions {
           display: flex;
           gap: 8px;
-          justify-content: flex-end;
-          margin-top: 4px;
+          justify-content: stretch;
+          margin: 0;
         }
         .fleet-actions button {
-          min-height: 36px;
-          padding: 4px 12px;
+          min-height: 44px;
+          padding: 2px 12px;
+          flex: 1;
         }
       </style>
       ${
         player.pressure
           ? html`<div class="fleet-actions">
+              <button
+                @click=${() => this.eventBus.emit(new GoToPlayerEvent(player))}
+              >
+                focus
+              </button>
               <button
                 @click=${() => {
                   this.idle = true;

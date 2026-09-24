@@ -16,6 +16,7 @@ import {
 import { GameMap, TileRef } from "../game/GameMap";
 import { PseudoRandom } from "../PseudoRandom";
 import { assertNever } from "../Util";
+import { significantDiplomaticPush } from "./nation/NationOpportunity";
 import type { WildernessAttackPlan } from "./planning/WildernessAttackPlanner";
 import type { WildernessAttackInput } from "./planning/WildernessAttackState";
 import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
@@ -270,7 +271,16 @@ export class AttackExecution implements Execution {
       }
     }
 
-    if (this.target && this.target.isPlayer()) {
+    const diplomaticPush = significantDiplomaticPush(
+      this.mg,
+      this.target,
+      Math.min(
+        this.removeTroops ? this._owner.troops() : Infinity,
+        this.startTroops ??
+          this.mg.config().attackAmount(this._owner, this.target),
+      ),
+    );
+    if (diplomaticPush && this.target && this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
       if (
         targetPlayer.type() !== PlayerType.Bot &&
@@ -338,7 +348,7 @@ export class AttackExecution implements Execution {
       }
     }
 
-    if (this.target.isPlayer()) {
+    if (diplomaticPush && this.target.isPlayer()) {
       const difficulty = this.mg.config().gameConfig().difficulty;
       let relationChange: number;
       switch (difficulty) {

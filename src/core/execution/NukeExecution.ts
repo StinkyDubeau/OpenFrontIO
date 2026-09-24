@@ -20,6 +20,7 @@ import { ParabolaUniversalPathFinder } from "../pathfinding/PathFinder.Parabola"
 import { PathStatus } from "../pathfinding/types";
 import { PseudoRandom } from "../PseudoRandom";
 import { NukeType } from "../StatsSchemas";
+import { noteNationStrike } from "./nation/NationOpportunity";
 import { listNukeBreakAlliance } from "./Util";
 
 const SPRITE_RADIUS = 16;
@@ -227,6 +228,7 @@ export class NukeExecution implements Execution {
       this.recordMotionPlan(ticks);
       if (this.nuke.type() !== UnitType.MIRVWarhead) {
         this.maybeBreakAlliances();
+        noteNationStrike(this.mg, this.player, this.target());
       }
       if (this.mg.hasOwner(this.dst)) {
         const target = this.mg.owner(this.dst);

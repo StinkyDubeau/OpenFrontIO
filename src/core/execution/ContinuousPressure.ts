@@ -2,6 +2,7 @@ import type { Game, Player } from "../game/Game";
 import { hasPressureGrace } from "../game/PressureDiplomacy";
 import { AttackExecution } from "./AttackExecution";
 import { applyPressureStrategy } from "./PressureStrategy";
+import { usesNationStrategy } from "./nation/NationStrategy";
 
 /** One cached contact count per neighbour, not one execution per boundary tile.
  * Ownership/terrain changes invalidate only adjacent players. Military and
@@ -69,6 +70,7 @@ export function applyContinuousPressure(
 ): void {
   if (
     !game.config().gameConfig().continuousPressure ||
+    usesNationStrategy(game, player) ||
     game.inSpawnPhase() ||
     tick % 10 !== player.smallID() % 10
   )

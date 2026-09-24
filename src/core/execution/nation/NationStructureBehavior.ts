@@ -17,6 +17,7 @@ import { assertNever } from "../../Util";
 import { ConstructionExecution } from "../ConstructionExecution";
 import { UpgradeStructureExecution } from "../UpgradeStructureExecution";
 import { closestTile, closestTwoTiles } from "../Util";
+import { nationStrategy, usesNationStrategy } from "./NationStrategy";
 import { randTerritoryTileArray } from "./NationUtils";
 
 /**
@@ -451,6 +452,16 @@ export class NationStructureBehavior {
     this._sharedWaterComponents = this.game.sharedWaterComponents(this.player);
     const hasCoastalTiles = this._sharedWaterComponents !== null;
 
+    if (usesNationStrategy(this.game, this.player)) {
+      for (const type of nationStrategy(
+        this.game,
+        this.player,
+      ).preferredStructures(hasCoastalTiles)) {
+        if (!config.isUnitDisabled(type) && this.maybeSpawnStructure(type))
+          return true;
+      }
+    }
+
     const missileSilosEnabled = !config.isUnitDisabled(UnitType.MissileSilo);
 
     // High-starting-gold Hard/Impossible nations build a SAM first so their
@@ -651,6 +662,9 @@ export class NationStructureBehavior {
    */
   private getPerceivedCost(type: UnitType): Gold {
     const realCost = this.cost(type);
+    if (usesNationStrategy(this.game, this.player)) {
+      return realCost + nationStrategy(this.game, this.player).goldReserve;
+    }
     // Keep a modest cash cushion, not a stockpile that grows with every city.
     // Real construction/upgrade costs are still enforced by native executions.
     if (this.game.config().gameConfig().continuousPressure)

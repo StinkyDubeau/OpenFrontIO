@@ -401,6 +401,7 @@ export const GameConfigSchema = z.object({
   // activate the new population/combat model in an existing replay.
   pressurePacing: PressurePacingSchema.optional(),
   fleetAutomation: z.literal("v26.3").optional(),
+  nationStrategy: z.enum(["v1", "v2"]).optional(),
   continuousPressure: z.literal("v1").optional(),
   allianceProtectionMinutes: z.number().int().min(1).max(10080).optional(),
   pressureGraceSeconds: z.number().int().min(0).max(86400).optional(),
